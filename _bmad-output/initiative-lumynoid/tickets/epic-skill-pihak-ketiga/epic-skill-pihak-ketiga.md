@@ -4,7 +4,8 @@ title: "Pengguna memasang skill pihak ketiga"
 parent: initiative-lumynoid
 covers: [R7]
 sources: []
-companions: []
+companions:
+  - _bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md
 after: []
 refined: false
 risk: high
@@ -36,3 +37,4 @@ Pengguna menambah kemampuan baru ke asistennya dengan memasang skill pihak ketig
 
 - parent — `_bmad-output/initiative-lumynoid/initiative-lumynoid.md`, Requirements R7; Constraints; Notes
 - breakdown — `_bmad-output/initiative-lumynoid/tickets/tickets.toml`, epic `epic-skill-pihak-ketiga`
+- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-14, AD-15, AD-20, AD-21; Deferred (SkillPolicy baw)

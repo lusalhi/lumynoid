@@ -4,7 +4,8 @@ title: "Agent mencari dan membaca web untuk menjawab"
 parent: initiative-lumynoid
 covers: [R5, R10]
 sources: []
-companions: []
+companions:
+  - _bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md
 after: []
 refined: false
 risk: medium
@@ -35,6 +36,7 @@ Pengguna mendapat jawaban dari web terkini beserta sumbernya, tanpa agent mengen
 
 - parent — `_bmad-output/initiative-lumynoid/initiative-lumynoid.md`, Requirements R5, R10; Constraints; Notes
 - breakdown — `_bmad-output/initiative-lumynoid/tickets/tickets.toml`, epic `epic-browsing-web`
+- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-6, AD-7, AD-8, AD-9, AD-13, AD-15; Deferred (backend pencarian default)
 
 ## Notes
 

@@ -4,7 +4,8 @@ title: "Lumynoid v1 terbit untuk umum"
 parent: initiative-lumynoid
 covers: [R1]
 sources: []
-companions: []
+companions:
+  - _bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md
 after: []
 refined: false
 risk: medium
@@ -36,6 +37,7 @@ Orang awam bisa menemukan, memasang, dan memakai Lumynoid v1 dari GitHub Release
 
 - parent — `_bmad-output/initiative-lumynoid/initiative-lumynoid.md`, Requirements R1; Constraints; Notes
 - breakdown — `_bmad-output/initiative-lumynoid/tickets/tickets.toml`, epic `epic-rilis-publik`
+- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-17, AD-24, AD-25; Deferred (Play, verifikasi developer 2027, PSE Komdigi, retensi riwayat)
 
 ## Notes
 

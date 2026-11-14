@@ -4,7 +4,8 @@ title: "Orang awam punya asisten AI pribadi di HP Android-nya sendiri"
 sources:
   - _bmad-output/research-lumynoid-android-agent/research-lumynoid-android-agent.md
   - _bmad-output/lumynoid-decisions.md
-companions: []
+companions:
+  - _bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md
 after: []
 risk: high
 ---
@@ -81,6 +82,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 
 - research — `_bmad-output/research-lumynoid-android-agent/research-lumynoid-android-agent.md`, Ringkasan eksekutif; D1 (latar belakang 24 jam); D2 (kontrol HP, browser, distribusi); D3 (eksekusi kode); D4 (akses LLM gratis); D5 (peta proyek); Rekomendasi; Pertanyaan terbuka; Lampiran sumber [1]–[61]
 - decisions — `_bmad-output/lumynoid-decisions.md`, Visi; Keputusan K1–K12; Masih terbuka; Urutan berikutnya
+- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-1–AD-26; Consistency Conventions; Stack; Capability → Architecture Map; Deferred
 
 ## Notes
 
@@ -89,20 +91,23 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Assumption: Onboarding pengecualian baterai dan panduan autostart per merek (riset Rek 2) masuk v1, karena tugas terjadwal (K2) bergantung padanya.
 - Assumption: Model lokal untuk routing intent (riset Rek 5) tidak masuk v1; catatan keputusan tidak menyebutnya.
 - Assumption: Uji daya tahan tugas terjadwal 7 hari berturut-turut; riset hanya menyatakan daya tahan di Xiaomi/Samsung harus diuji sendiri, angka 7 hari usulan PO.
-- Open question: Distribusi Play: apakah FGS untuk tugas agent dan shell (binary dibundel + `npm install` saat runtime) lolos kebijakan Play [4][5][11]? Menunggu: distribusi dan architecture.
+- Assumption: minSdk 29, targetSdk 37, ABI rilis arm64-v8a (architecture, Stack); dikonfirmasi di story fondasi epic-chat-dan-provider sebelum rilis pertama.
+- Open question: Distribusi Play [4][5][11]: arsitektur v1 (`npm install` saat runtime, unduhan rootfs, FGS `specialUse`) tidak mengincar Play (architecture, Deferred). Menunggu: epic-rilis-publik.
 - Open question: Verifikasi developer 2027: akun penuh ($25 + identitas) atau advanced flow; jalur open-source registry dan APK bertanda tangan F-Droid [28][29][30]. Harus diputuskan sebelum rollout global 2027.
-- Open question: Layanan pencarian web untuk tool cari (gratis atau murah) belum diriset. Menunggu: R5.
-- Open question: Ukuran userland, strategi unduhnya, dan batas `npm install` di HP sungguhan (phantom process killer, memori Android 17) [3][10]. Menunggu: R4, R7.
-- Open question: Library agent Kotlin/JVM (Koog, LangChain4j, atau buatan sendiri) belum dievaluasi. Menunggu: architecture.
+- Open question: Ukuran userland, strategi unduhnya, dan batas `npm install` di HP sungguhan (phantom process killer, memori Android 17) [3][10]. Menunggu: spike pembuka epic-agent-shell.
 - Open question: Model gratis mana yang andal untuk tool calling? Belum ada benchmark; perlu uji sendiri. Angka free tier Groq/Gemini hanya terlihat di console [38][61]. Menunggu: R12 dan preset provider di R2.
 - Open question: Apakah app BYOK gratis wajib terdaftar sebagai PSE Komdigi?
-- Open question: Lisensi open source Lumynoid sendiri belum dipilih.
-- Open question: Aturan inklusi F-Droid (tanpa library non-free) belum dicek terhadap pilihan dependensi.
-- Open question: Penyimpanan API key dan riwayat chat: apakah semuanya tetap di HP, terenkripsi, dan bisa dibackup? Sumber tidak menyebutnya.
-- Open question: Bahasa UI v1 (Indonesia, Inggris, atau keduanya) dan versi Android minimum belum ditetapkan.
+- Open question: Lisensi open source Lumynoid belum dipilih; harus kompatibel dengan proot GPL-2.0 yang dibundel (architecture, Deferred). Menunggu: story hitl pertama epic-chat-dan-provider.
+- Open question: Retensi dan ekspor riwayat chat belum ditetapkan; penyimpanan key dan larangan backup awan sudah di architecture AD-15, AD-25. Menunggu: sebelum epic-rilis-publik.
+- Open question: Bahasa UI v1 (Indonesia, Inggris, atau keduanya) belum ditetapkan; semua string di `strings.xml` (architecture, Consistency Conventions).
 - Open question: Kebijakan `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dan angka konsumsi baterai belum ditemukan. Menunggu: R6.
 - Decision: 2026-11-14 — Urutan: slice dulu, lalu `bmad-architecture` di level initiative, lalu `bmad-ux` saat epic chat dan agent di-refine; alasannya risiko terbesar ada di sisi teknis dan komponen chat sudah ditetapkan K9.
 - Decision: 2026-11-14 — Slicing: epic dipotong per kemampuan karena Lumynoid satu app Android (satu batas deploy); tujuh epic dalam urutan build di `tickets/tickets.toml`, setiap epic merilis ke GitHub Releases.
 - Decision: 2026-11-14 — Fondasi platform adalah story pertama epic-chat-dan-provider, bukan epic tersendiri.
 - Decision: 2026-11-14 — Keputusan bersama (kontrak harness dan registry tool, adapter provider, siklus hidup userland, model kartu, penyimpanan key) ditetapkan di architecture spine `bmad-architecture`, lalu dirujuk epic pemakainya.
 - Decision: 2026-11-14 — Tabrakan kode dicegah lewat kontrak: epic 3 hanya memanggil task runner epic 2; epic 4 memiliki penyusunan konteks dengan titik sambung untuk epic 5 dan 6, yang karenanya menunggu epic 4.
+- Decision: 2026-11-14 — Architecture spine `architecture-lumynoid.md` diadopsi sebagai companion; epic merujuk AD yang mengikatnya di References.
+- Decision: 2026-11-14 — Replan (AD-2): epic-chat-dan-provider ikut membangun kerangka TaskRunner + AgentService tanpa tool, dan chat polos sudah lewat `TaskRunner.submit`; epic-agent-shell menambah loop tool call, registry, dan gerbang ke kerangka yang sama. Menggantikan "epic 3 hanya memanggil task runner epic 2": epic 3 memanggil TaskRunner yang kerangkanya dari epic 1 dan loop tool-nya dari epic 2. Alasan: mencegah epic 1 membangun jalur chat terpisah yang lalu dibongkar epic 2. Yang dibutuhkan tidak berubah, hanya cara mengirimnya.
+- Decision: 2026-11-14 — Pencarian web v1 memakai DuckDuckGo HTML sebagai backend default tanpa key, setelah dibandingkan dengan SearXNG, Marginalia, Wikipedia, Brave, dan Tavily; rapuh karena bot challenge, tetapi `SearchPort` membuat penggantiannya murah.
+- Decision: 2026-11-14 — Pertanyaan library agent dan aturan inklusi F-Droid ditutup oleh architecture AD-11 (adapter sendiri di atas Ktor, tanpa Koog/LangChain4j) dan AD-17 (stack sudah dicek lolos).
+- Decision: 2026-11-14 — Penanganan tool call kosong/rusak (AD-26) milik runner di epic-agent-shell; epic-hemat-kuota memegang retry karena limit lewat router.
