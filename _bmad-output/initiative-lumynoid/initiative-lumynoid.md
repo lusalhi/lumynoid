@@ -50,7 +50,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - C11 (K11; riset D4 [34][35][36][44]): Dirancang untuk kuota gratis: OpenRouter tanpa kredit 50 request/hari, sedangkan satu tugas butuh sekitar 10–20 panggilan LLM. Tool calling model gratis tidak andal (tool call kosong, "no endpoints support tool use") dan harus ditangani.
 - C12 (K8): Kotlin + Jetpack Compose, Android saja.
 - C13 (K12): App baru, bukan fork Operit; Operit (LGPL-3.0) hanya referensi teknis.
-- C14 (keputusan, Masih terbuka; riset D2 [29][31][32]): Distribusi pasti lewat GitHub Releases dan F-Droid (anti-fitur NonFreeNet); Play belum diputuskan.
+- C14 (keputusan 2026-11-14; riset D2 [29][31][32]): v1 hanya didistribusikan sebagai APK unduhan manual dari GitHub Releases; Google Play dan F-Droid di luar v1.
 
 ## Done when
 
@@ -59,7 +59,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Pada skenario uji, setiap aksi merusak, keuangan, atau pengiriman data keluar menunggu kartu konfirmasi dan tercatat di log aksi; halaman web uji berisi prompt injection tidak bisa memicu aksi tanpa konfirmasi.
 - Skill pihak ketiga berformat `SKILL.md` (acuan: Binance Agentic Wallet) terpasang dan dipakai agent sampai langkah transaksi `preview`, dan `execute` hanya jalan setelah konfirmasi.
 - Dengan dua key/provider gratis yang dikonfigurasi, tugas tetap selesai saat key pertama kena limit, dan app menampilkan sisa kuotanya.
-- Kode sumber terbit di GitHub, rilis v1 tersedia di GitHub Releases, dan app diajukan ke F-Droid.
+- Kode sumber terbit di GitHub, dan rilis v1 tersedia sebagai APK bertanda tangan di GitHub Releases dari developer Android terverifikasi.
 
 ## Boundaries
 
@@ -69,13 +69,14 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Tidak pernah: login memakai langganan Claude (K7).
 - Di luar v1: LLM yang "berpikir terus" 24 jam; model lokal sebagai otak agent (riset Ringkasan eksekutif 2, D4).
 - Di luar: iOS (K8); fork Operit (K12).
+- Di luar v1: distribusi lewat Google Play dan F-Droid (C14).
 - Touch point: API provider LLM (OpenAI-compatible, Anthropic, OpenRouter) — dipakai lewat API key pengguna; owner: epic-chat-dan-provider.
 - Touch point: endpoint sisa kuota provider (mis. OpenRouter) — dibaca untuk penghitung kuota; owner: epic-hemat-kuota.
 - Touch point: npm registry dan sumber unduhan rootfs userland — dipakai shell dan coding; owner: epic-agent-shell.
 - Touch point: layanan pencarian web — dipakai oleh tool cari; owner: epic-browsing-web.
 - Touch point: Binance Agentic Wallet (`baw` + `SKILL.md`) — skill acuan untuk R7; owner: epic-skill-pihak-ketiga.
 - Touch point: GitHub Releases — kanal rilis setiap epic; owner: epic-chat-dan-provider.
-- Touch point: F-Droid — pengajuan rilis v1; owner: epic-rilis-publik.
+- Touch point: verifikasi developer Android (akun developer Google milik pengguna) — pendaftaran nama package dan kunci tanda tangan; owner: epic-chat-dan-provider.
 - Tracer path: pengguna mengisi API key → mengirim chat → harness memanggil provider → agent menjalankan satu perintah di userland → kartu aktivitas dan, bila perlu, kartu konfirmasi tampil → jawaban mengalir ke chat.
 
 ## References
@@ -91,9 +92,8 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Assumption: Onboarding pengecualian baterai dan panduan autostart per merek (riset Rek 2) masuk v1, karena tugas terjadwal (K2) bergantung padanya.
 - Assumption: Model lokal untuk routing intent (riset Rek 5) tidak masuk v1; catatan keputusan tidak menyebutnya.
 - Assumption: Uji daya tahan tugas terjadwal 7 hari berturut-turut; riset hanya menyatakan daya tahan di Xiaomi/Samsung harus diuji sendiri, angka 7 hari usulan PO.
+- Assumption: Verifikasi developer mungkin sudah berlaku di Indonesia sejak September 2026 [28][29][30] (belum dicek ulang); pendaftaran dilakukan sebelum rilis pertama apa pun statusnya.
 - Assumption: minSdk 29, targetSdk 37, ABI rilis arm64-v8a (architecture, Stack); dikonfirmasi di story fondasi epic-chat-dan-provider sebelum rilis pertama.
-- Open question: Distribusi Play [4][5][11]: arsitektur v1 (`npm install` saat runtime, unduhan rootfs, FGS `specialUse`) tidak mengincar Play (architecture, Deferred). Menunggu: epic-rilis-publik.
-- Open question: Verifikasi developer 2027: akun penuh ($25 + identitas) atau advanced flow; jalur open-source registry dan APK bertanda tangan F-Droid [28][29][30]. Harus diputuskan sebelum rollout global 2027.
 - Open question: Ukuran userland, strategi unduhnya, dan batas `npm install` di HP sungguhan (phantom process killer, memori Android 17) [3][10]. Menunggu: spike pembuka epic-agent-shell.
 - Open question: Model gratis mana yang andal untuk tool calling? Belum ada benchmark; perlu uji sendiri. Angka free tier Groq/Gemini hanya terlihat di console [38][61]. Menunggu: R12 dan preset provider di R2.
 - Open question: Apakah app BYOK gratis wajib terdaftar sebagai PSE Komdigi?
@@ -109,5 +109,8 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Decision: 2026-11-14 — Replan (AD-2): epic-chat-dan-provider ikut membangun kerangka TaskRunner + AgentService tanpa tool, dan chat polos sudah lewat `TaskRunner.submit`; epic-agent-shell menambah loop tool call, registry, dan gerbang ke kerangka yang sama. Menggantikan "epic 3 hanya memanggil task runner epic 2": epic 3 memanggil TaskRunner yang kerangkanya dari epic 1 dan loop tool-nya dari epic 2. Alasan: mencegah epic 1 membangun jalur chat terpisah yang lalu dibongkar epic 2. Yang dibutuhkan tidak berubah, hanya cara mengirimnya.
 - Decision: 2026-11-14 — Pencarian web v1 memakai DuckDuckGo HTML sebagai backend default tanpa key, setelah dibandingkan dengan SearXNG, Marginalia, Wikipedia, Brave, dan Tavily; rapuh karena bot challenge, tetapi `SearchPort` membuat penggantiannya murah.
 - Decision: 2026-11-14 — Pertanyaan library agent dan aturan inklusi F-Droid ditutup oleh architecture AD-11 (adapter sendiri di atas Ktor, tanpa Koog/LangChain4j) dan AD-17 (stack sudah dicek lolos).
+- Decision: 2026-11-14 — v1 hanya lewat APK unduhan manual di GitHub Releases; Google Play dan F-Droid di luar v1 (C14). Menggantikan pengajuan F-Droid di Done when dan epic-rilis-publik.
+- Decision: 2026-11-14 — Verifikasi developer Android memakai akun developer Google milik pengguna; application id `dev.lusalhi.lumynoid`. Keduanya bersama kunci tanda tangan didaftarkan di story fondasi epic-chat-dan-provider, karena nama package tidak bisa diubah setelah terbit.
+- Decision: 2026-11-14 — Architecture spine sebagian usang: application id `app.lumynoid` (Consistency Conventions), F-Droid di AD-17, AD-25, dan topologi deployment, serta baris Play dan verifikasi di Deferred. Companion tidak diedit di sini; perbarui lewat `bmad-architecture`.
 - Decision: 2026-11-14 — Bahasa UI v1 adalah Inggris; semua string di `strings.xml`, jadi terjemahan bisa menyusul.
 - Decision: 2026-11-14 — Penanganan tool call kosong/rusak (AD-26) milik runner di epic-agent-shell; epic-hemat-kuota memegang retry karena limit lewat router.

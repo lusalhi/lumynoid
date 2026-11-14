@@ -15,30 +15,29 @@ risk: medium
 
 ## Description
 
-Penutup v1: sesi penguji awam di seluruh app, rilis v1, pengajuan ke F-Droid, dan keputusan distribusi yang tersisa. Bagian R1 di sini: penguji awam memastikan seluruh app, bukan hanya chat pertama, bisa dipakai tanpa terminal dan tanpa dokumentasi.
+Penutup v1: sesi penguji awam di seluruh app, dan rilis v1 sebagai APK di GitHub Releases. Bagian R1 di sini: penguji awam memastikan seluruh app, bukan hanya chat pertama, bisa dipakai tanpa terminal dan tanpa dokumentasi.
 
 ## Outcome
 
-Orang awam bisa menemukan, memasang, dan memakai Lumynoid v1 dari GitHub Releases dan F-Droid.
+Orang awam bisa menemukan, memasang, dan memakai Lumynoid v1 dari GitHub Releases.
 
 ## Done when
 
 - Penguji awam yang belum pernah melihat Lumynoid menyelesaikan satu chat, satu tugas coding lewat shell, satu jawaban dari web, dan satu tugas terjadwal tanpa terminal dan tanpa dokumentasi.
-- Rilis v1 tersedia di GitHub Releases.
-- App diajukan ke F-Droid.
-- Keputusan soal Play dan jalur verifikasi developer 2027 tercatat sebagai `Decision:`.
+- Rilis v1 tersedia sebagai APK bertanda tangan di GitHub Releases.
 
 ## Boundaries
 
 - Bukan di sini: fitur baru; temuan sesi penguji yang butuh fitur menjadi tiket di epic pemiliknya.
-- Touch point milik epic ini: F-Droid.
+- Bukan di v1: Google Play dan F-Droid (C14); verifikasi developer sudah di epic-chat-dan-provider.
 
 ## References
 
 - parent — `_bmad-output/initiative-lumynoid/initiative-lumynoid.md`, Requirements R1; Constraints; Notes
 - breakdown — `_bmad-output/initiative-lumynoid/tickets/tickets.toml`, epic `epic-rilis-publik`
-- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-17, AD-24, AD-25; Deferred (Play, verifikasi developer 2027, PSE Komdigi, retensi riwayat)
+- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-17, AD-24, AD-25; Deferred (PSE Komdigi, retensi riwayat)
 
 ## Notes
 
 - Decision: 2026-11-14 — Aturan inklusi F-Droid (tanpa library non-free) dicek saat architecture memilih dependensi, bukan di epic ini.
+- Decision: 2026-11-14 — Pengajuan F-Droid dan keputusan Play keluar dari epic ini: v1 hanya di GitHub Releases (C14); verifikasi developer pindah ke epic-chat-dan-provider.

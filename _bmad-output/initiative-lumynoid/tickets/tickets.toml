@@ -5,7 +5,7 @@
 id = 1
 slug = "epic-chat-dan-provider"
 title = "Orang awam chat dengan AI memakai key sendiri"
-description = "Repo publik berlisensi, CI, dan rilis APK bertanda tangan di GitHub Releases berjalan; penguji memasang APK, menambah provider (preset OpenAI-compatible, URL custom, atau Anthropic), mengetes koneksinya, lalu chat dengan jawaban streaming ber-markdown dan daftar percakapan yang bisa dilanjutkan. Setiap pesan chat berjalan lewat kerangka TaskRunner (tanpa tool) yang di-host AgentService (FGS) dan tercatat di event log, sehingga epic 2 dan 3 memakai jalur yang sama (AD-2). Bagian R1 di sini: dari pemasangan sampai jawaban chat pertama hanya lewat layar app."
+description = "Repo publik berlisensi, CI, dan rilis APK bertanda tangan di GitHub Releases berjalan; nama package `dev.lusalhi.lumynoid` dan kunci tanda tangan terdaftar di verifikasi developer Android; penguji memasang APK, menambah provider (preset OpenAI-compatible, URL custom, atau Anthropic), mengetes koneksinya, lalu chat dengan jawaban streaming ber-markdown dan daftar percakapan yang bisa dilanjutkan. Setiap pesan chat berjalan lewat kerangka TaskRunner (tanpa tool) yang di-host AgentService (FGS) dan tercatat di event log, sehingga epic 2 dan 3 memakai jalur yang sama (AD-2). Bagian R1 di sini: dari pemasangan sampai jawaban chat pertama hanya lewat layar app."
 covers = ["R1", "R2", "R3"]
 
 [[epic]]
@@ -58,11 +58,11 @@ after = [
 id = 7
 slug = "epic-rilis-publik"
 title = "Lumynoid v1 terbit untuk umum"
-description = "Penguji awam menyelesaikan chat, coding lewat shell, jawaban dari web, dan tugas terjadwal tanpa terminal dan tanpa dokumentasi; rilis v1 di GitHub Releases; app diajukan ke F-Droid; keputusan Play dan verifikasi developer 2027 tercatat. Bagian R1 di sini: penguji awam memastikan seluruh app, bukan hanya chat pertama, bisa dipakai tanpa terminal dan tanpa dokumentasi."
+description = "Penguji awam menyelesaikan chat, coding lewat shell, jawaban dari web, dan tugas terjadwal tanpa terminal dan tanpa dokumentasi; rilis v1 sebagai APK bertanda tangan di GitHub Releases. Bagian R1 di sini: penguji awam memastikan seluruh app, bukan hanya chat pertama, bisa dipakai tanpa terminal dan tanpa dokumentasi."
 covers = ["R1"]
 after = [
   { epic = 3, needs = "tugas terjadwal yang lulus uji 7 hari, untuk sesi penguji awam" },
   { epic = 4, needs = "rotasi kuota, agar penguji awam bisa memakai key gratis" },
   { epic = 5, needs = "browsing web, untuk sesi penguji awam" },
-  { epic = 6, needs = "skill pihak ketiga, untuk set fitur v1 yang lengkap sebelum diajukan ke F-Droid" },
+  { epic = 6, needs = "skill pihak ketiga, untuk set fitur v1 yang lengkap sebelum rilis v1" },
 ]
