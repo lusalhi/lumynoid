@@ -92,11 +92,11 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Assumption: Onboarding pengecualian baterai dan panduan autostart per merek (riset Rek 2) masuk v1, karena tugas terjadwal (K2) bergantung padanya.
 - Assumption: Model lokal untuk routing intent (riset Rek 5) tidak masuk v1; catatan keputusan tidak menyebutnya.
 - Assumption: Uji daya tahan tugas terjadwal 7 hari berturut-turut; riset hanya menyatakan daya tahan di Xiaomi/Samsung harus diuji sendiri, angka 7 hari usulan PO.
-- Assumption: minSdk 29, targetSdk 37, ABI rilis arm64-v8a (architecture, Stack); dikonfirmasi di story fondasi epic-chat-dan-provider sebelum rilis pertama.
+- Assumption: minSdk 29, targetSdk 37, ABI rilis arm64-v8a (architecture, Stack); dikonfirmasi di story 1.3 (rilis bertanda tangan) sebelum rilis pertama.
 - Open question: Ukuran userland, strategi unduhnya, dan batas `npm install` di HP sungguhan (phantom process killer, memori Android 17) [3][10]. Menunggu: spike pembuka epic-agent-shell.
 - Open question: Model gratis mana yang andal untuk tool calling? Belum ada benchmark; perlu uji sendiri. Angka free tier Groq/Gemini hanya terlihat di console [38][61]. Menunggu: R12 dan preset provider di R2.
 - Open question: Apakah app BYOK gratis wajib terdaftar sebagai PSE Komdigi?
-- Open question: Lisensi open source Lumynoid belum dipilih; harus kompatibel dengan proot GPL-2.0 yang dibundel (architecture, Deferred). Menunggu: story hitl pertama epic-chat-dan-provider.
+- Open question: Lisensi open source Lumynoid belum dipilih; harus kompatibel dengan proot GPL-2.0 yang dibundel (architecture, Deferred). Menunggu: story 1.2, sebelum repo dibuat publik.
 - Open question: Retensi dan ekspor riwayat chat belum ditetapkan; penyimpanan key dan larangan backup awan sudah di architecture AD-15, AD-25. Menunggu: sebelum epic-rilis-publik.
 - Open question: Kebijakan `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dan angka konsumsi baterai belum ditemukan. Menunggu: R6.
 - Decision: 2026-11-14 — Urutan: slice dulu, lalu `bmad-architecture` di level initiative, lalu `bmad-ux` saat epic chat dan agent di-refine; alasannya risiko terbesar ada di sisi teknis dan komponen chat sudah ditetapkan K9.
@@ -113,4 +113,5 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Decision: 2026-11-14 — Architecture spine diperbarui lewat `bmad-architecture`: application id, distribusi GitHub saja, kunci rilis dan verifikasi developer (AD-25), dependensi (AD-17), judul kartu dan deep-link (AD-10), serta konvensi identitas manifest, format angka/waktu, dan versi.
 - Decision: 2026-11-14 — Verifikasi developer di Indonesia sejak 30 September 2026 baru berlaku untuk instal dari app store; unduhan langsung dari GitHub baru diperiksa saat rollout global 2027. Pendaftaran tetap dilakukan sebelum APK bertanda tangan pertama, termasuk pre-release `v0.x` (AD-25).
 - Decision: 2026-11-14 — Bahasa UI v1 adalah Inggris; semua string di `strings.xml`, jadi terjemahan bisa menyusul.
+- Decision: 2026-11-14 — Story epic-chat-dan-provider: story 1 tracer bullet, lisensi di story 1.2, kunci rilis dan verifikasi developer di story 1.3; menggantikan "story fondasi" dan "story hitl pertama" di Decision di atas. ContextAssembler versi naif dibangun story 1.7 (riwayat chat saja); AD-13 menunggu pembaruan lewat `bmad-architecture`.
 - Decision: 2026-11-14 — Penanganan tool call kosong/rusak (AD-26) milik runner di epic-agent-shell; epic-hemat-kuota memegang retry karena limit lewat router.

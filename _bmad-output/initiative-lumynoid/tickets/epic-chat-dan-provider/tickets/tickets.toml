@@ -1,0 +1,134 @@
+# Story epic-chat-dan-provider, urutan build. Tabel pertama adalah tracer bullet.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Jawaban chat pertama mengalir lewat semua lapisan"
+description = "Pemilik proyek membuat repo GitHub privat dan menyalakan Actions (langkah hitl). Kerangka Gradle multi-modul `:core`, `:llm`, `:data`, `:app` (AD-1) dengan CI yang membangun APK debug dan menjalankan tes JVM `:core` memakai LlmPort palsu; satu formulir berisi URL dasar, API key, dan model OpenAI-compatible, dengan key lewat SecretPort (AD-15); pesan masuk lewat `TaskRunner.submit` di AgentService yang meng-host TaskRunner (AD-2; naik ke foreground dengan notifikasi adalah story 8); adapter OpenAI-compatible di atas Ktor men-stream jawaban (AD-11) lewat router pass-through (AD-12); event tersimpan di satu RoomDatabase dengan skema v1 di-export (AD-4, AD-19); layar chat menampilkan teks yang mengalir; build debug memakai `applicationIdSuffix \".debug\"` dan debug keystore bersama yang di-commit (AD-25). Story 4, 6, 7, 8, dan 10 membangun di atas jalur ini; riwayat percakapan di request adalah story 7."
+verify = "Di emulator atau HP dengan APK debug, penguji mengisi URL dan key OpenRouter, mengirim satu pesan, dan melihat jawabannya mengalir; setelah app ditutup paksa dan dibuka lagi, pesan dan jawaban masih ada; CI hijau."
+covers = ["R2", "R3"]
+after = []
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Repo publik berlisensi dengan gerbang CI"
+description = "Pemilik proyek memilih lisensi open source yang kompatibel dengan proot GPL-2.0 yang nanti dibundel (langkah hitl); file LICENSE dan README masuk, lalu repo dibuat publik. CI menambah gerbang: classpath runtime rilis tanpa grup Google terlarang dan semua dependensi berlisensi OSI (AD-17), dua PR tidak boleh mengklaim nomor versi DB yang sama (AD-19), dan setiap subtipe yang dipersist punya `@SerialName` eksplisit. Story 3 menerbitkan rilis dari repo publik ini."
+verify = "Repo bisa dibuka tanpa login dan menampilkan lisensinya; PR uji yang menambah dependensi `com.google.firebase`, dan PR uji yang mengklaim versi DB yang sudah dipakai, sama-sama gagal di CI."
+covers = []
+after = [1]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "APK rilis bertanda tangan terbit di GitHub Releases"
+description = "Pemilik proyek membuat kunci rilis secara offline, menyimpan dua cadangan terenkripsi di luar GitHub, mendaftarkan `dev.lusalhi.lumynoid` dan fingerprint SHA-256 kuncinya di Play Console, mengisi GitHub Environment `release`, dan mengonfirmasi minSdk 29, targetSdk 37, dan ABI arm64-v8a (langkah hitl). Workflow rilis di repo publik story 2 membangun dari tag di `main`, menolak `versionCode` yang tidak naik dan skema Room di luar garis migrasi `main`, lalu menerbitkan `lumynoid-<versionName>.apk` plus `SHA256SUMS` sebagai pre-release, dengan `mapping.txt` bila R8 aktif. Fingerprint tercatat di repo dan README; build memakai `allowBackup=false`, `dataExtractionRules`, dan `dependenciesInfo` dimatikan (AD-25). Story 9 dan 12 memakai workflow ini."
+verify = "Sebelum tag pertama, Play Console menunjukkan nama package dan fingerprint berstatus Registered; APK pre-release dari GitHub Releases terpasang di HP sungguhan; fingerprint kunci yang dipulihkan dari cadangan sama dengan README; tag dengan `versionCode` yang tidak naik ditolak workflow."
+covers = []
+after = [2]
+hitl = true
+risk = "high"
+unknown = "Apakah akun developer Google penuh milik pemilik proyek sudah ada dan terverifikasi?"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Pengguna menambah provider OpenAI-compatible dan mengetes koneksinya"
+description = "Memperluas formulir provider story 1 menjadi layar provider, dengan tabel ProviderConfig dan ModelProfile lewat `Migration` pertama yang diuji `MigrationTestHelper` (AD-19): preset OpenRouter, Groq, Google Gemini (endpoint OpenAI-compatible), dan OpenAI, plus URL custom; key lewat SecretPort; daftar model diambil dari provider dengan isian manual bila tidak ada; tes koneksi lewat `ProviderAdminPort` menunjukkan berhasil, atau gagal beserta alasan dari `LlmError` (AD-11, AD-23); pengguna memilih satu provider dan model aktif untuk seluruh app, berlaku mulai pesan berikutnya. Story 5 menambah Anthropic ke layar ini, dan story 9 memakainya di layar pertama."
+verify = "Di emulator atau HP dengan APK debug, penguji menambah OpenRouter dari preset dan satu URL custom; tes dengan key benar menunjukkan berhasil, dengan key salah menunjukkan gagal beserta alasannya; chat berikutnya memakai provider dan model yang dipilih."
+covers = ["R2"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Pengguna chat memakai API key Anthropic"
+description = "Adapter Anthropic Messages streaming di atas Ktor, dipetakan ke model pesan dan `LlmError` yang sama dengan adapter OpenAI-compatible (AD-11); Anthropic muncul di layar provider story 4 dengan tes koneksi dan pilihan model; hanya API key, tanpa login langganan Claude (C10). Story 9 menawarkannya di layar pertama."
+verify = "Dengan key Anthropic, tes koneksi berhasil dan chat menampilkan jawaban streaming; key salah menunjukkan gagal karena autentikasi."
+covers = ["R2"]
+after = [4]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Jawaban tampil sebagai markdown dengan blok kode"
+description = "Di layar chat story 1, bubble asisten me-render markdown dan blok kode sambil streaming (multiplatform-markdown-renderer); HTML mentah tidak di-render, gambar remote tampil sebagai tautan, dan setiap tautan yang diketuk dibuka lewat dialog app yang menampilkan URL penuh (AD-9). Story 8 menambah tombol berhenti di layar yang sama."
+verify = "Jawaban yang berisi judul, daftar, tabel, blok kode, tag HTML, gambar remote, dan tautan tampil benar: HTML sebagai teks, gambar sebagai tautan, dan tautan membuka dialog berisi URL penuh."
+covers = ["R3"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Percakapan tersimpan di daftar dan bisa dilanjutkan"
+description = "Request disusun dari riwayat percakapan di event log story 1, sehingga percakapan yang dibuka lagi bisa dilanjutkan. Daftar percakapan menampilkan yang terbaru lebih dulu, dengan judul dari pesan pertama; pengguna membuat percakapan baru, membuka yang lama untuk dilanjutkan, mengubah nama, dan menghapus lewat `ConversationPort`; hapus membuang semua event percakapan itu, dan blob serta workspace-nya begitu keduanya ada di epic-agent-shell (AD-4, AD-23). Skemanya menyusul Migration story 4. Story 9 membuka percakapan baru lewat daftar ini."
+verify = "Penguji membuat tiga percakapan, menutup app, membuka lagi, melanjutkan yang kedua dan mendapat jawaban yang memakai isi sebelumnya, mengganti nama yang pertama, dan menghapus yang ketiga sehingga hilang dari daftar."
+covers = ["R3"]
+after = [4]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 8
+type = "story"
+title = "Jawaban tetap selesai di background dan bisa dihentikan"
+description = "AgentService story 1 naik ke foreground dengan notifikasi channel `task_running` dan partial wake lock hanya selama ada tugas RUNNING, dengan antrean FIFO satu tugas (AD-2, AD-3); jawaban yang sedang streaming selesai dan tersimpan saat app dipindah ke background; tombol berhenti memanggil `TaskRunner.cancel`; saat app start, tugas tanpa event terminal ditutup `TaskFailed(INTERRUPTED)` (AD-22); jawaban yang gagal menampilkan alasannya di chat."
+verify = "Penguji mengirim pertanyaan berjawaban panjang lalu pindah ke app lain; saat kembali, jawaban lengkap tersimpan dan notifikasi tugas sudah hilang (dicek di daftar app aktif sistem bila izin notifikasi belum diberikan); tombol berhenti menghentikan jawaban; key yang dicabut menampilkan alasan gagal di chat."
+covers = ["R3"]
+after = [6, 7]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 9
+type = "story"
+title = "Dari pemasangan sampai jawaban pertama tanpa keluar app"
+description = "Saat dibuka pertama kali tanpa provider, app membawa pengguna memilih provider, mengisi key, dan mengetes koneksi, lalu langsung ke percakapan baru; layar tanpa provider selalu menunjuk ke langkah itu; tidak ada langkah yang meminta terminal atau dokumentasi. Memakai layar provider story 4 dan 5, daftar percakapan story 7, dan APK rilis story 3."
+verify = "Penguji yang belum pernah melihat app memasang APK, mengisi key-nya, dan mendapat jawaban pertama tanpa keluar dari app dan tanpa bantuan."
+covers = ["R1"]
+after = [3, 5, 7]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 10
+type = "story"
+title = "Crash tercatat lokal dan bisa diekspor pengguna"
+description = "Handler crash lokal tanpa jaringan menyimpan laporan dengan secret dan isi prompt dibersihkan; pengguna mengekspornya lewat share sheet memakai satu `FileProvider` dengan authority `${applicationId}.files` dan path `cache/export/` (AD-25, Consistency Conventions)."
+verify = "Setelah crash yang dipicu di build uji, pengguna mengekspor laporannya lewat share sheet; laporan tidak berisi API key atau isi prompt, dan app tidak membuka koneksi jaringan untuknya."
+covers = []
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 11
+type = "story"
+title = "Refactor sweep"
+description = "Bersih-bersih saja; cakupannya ditetapkan saat mulai, dari rencana dan temuan review yang ditunda story lain di epic ini. Cakupan yang terdorong keluar dari story lain menjadi story baru."
+verify = "CI hijau, semua tes tetap lulus, dan tidak ada perilaku pengguna yang berubah."
+covers = []
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 12
+type = "story"
+title = "Rilis epic diuji di HP sungguhan"
+description = "Tag di `main` menerbitkan pre-release epic ini lewat workflow story 3; pemilik proyek memasangnya dari GitHub Releases di HP sungguhan dan menjalankan setiap cek Done when epic (langkah hitl)."
+verify = "Setiap cek Done when epic lulus di HP sungguhan memakai APK dari GitHub Releases."
+covers = ["R1", "R2", "R3"]
+after = [11]
+hitl = true
+risk = "medium"
