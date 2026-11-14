@@ -43,7 +43,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - C4 (K4; riset D3 [13][15]): Harness agent native Kotlin buatan sendiri; tidak bergantung pada CLI OpenCode/Claude Code atau harness yang butuh proses terus hidup.
 - C5 (K4, K6; riset D1 [1][2][7][8]): Berbasis kejadian, tanpa proses always-on: exact alarm + notifikasi + FGS hanya selama ada tugas. FGS `dataSync` dibatasi 6 jam per 24 jam (Android 15+), dan job dari FGS ikut kuota normal (Android 16).
 - C6 (K4; riset D1 [3][10]): Userland proot hanya hidup saat tool shell dipakai. Phantom process killer (maks 32 child process lintas app, Android 12+) dan batas memori berbasis RAM (Android 17) membatasi shell, node, dan git.
-- C7 (riset D3 [11][4]): Eksekusi binary patuh W^X untuk targetSdk 29+ (tidak mengeksekusi file dari direktori yang bisa ditulis app). Build untuk Play terikat larangan unduh kode native; build GitHub/F-Droid tidak.
+- C7 (riset D3 [11][4]): Eksekusi binary patuh W^X untuk targetSdk 29+ (tidak mengeksekusi file dari direktori yang bisa ditulis app).
 - C8 (K10): Shell disandbox di folder app; konten web diperlakukan sebagai data.
 - C9 (K9): Kartu konfirmasi dan kartu aktivitas tool dibuat oleh app dari data tool call, bukan dari teks LLM.
 - C10 (K7; [Anthropic legal](https://code.claude.com/docs/en/legal-and-compliance); riset [37]): MVP hanya API key milik pengguna. Login memakai langganan Claude dilarang untuk app pihak ketiga. Tidak menjanjikan model gratis OpenCode Zen (hanya bisa dipakai lewat OpenCode).
@@ -76,7 +76,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Touch point: layanan pencarian web — dipakai oleh tool cari; owner: epic-browsing-web.
 - Touch point: Binance Agentic Wallet (`baw` + `SKILL.md`) — skill acuan untuk R7; owner: epic-skill-pihak-ketiga.
 - Touch point: GitHub Releases — kanal rilis setiap epic; owner: epic-chat-dan-provider.
-- Touch point: verifikasi developer Android (akun developer Google milik pengguna) — pendaftaran nama package dan kunci tanda tangan; owner: epic-chat-dan-provider.
+- Touch point: verifikasi developer Android (akun developer Google milik pemilik proyek) — pendaftaran nama package dan kunci tanda tangan; owner: epic-chat-dan-provider.
 - Tracer path: pengguna mengisi API key → mengirim chat → harness memanggil provider → agent menjalankan satu perintah di userland → kartu aktivitas dan, bila perlu, kartu konfirmasi tampil → jawaban mengalir ke chat.
 
 ## References
@@ -92,7 +92,6 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Assumption: Onboarding pengecualian baterai dan panduan autostart per merek (riset Rek 2) masuk v1, karena tugas terjadwal (K2) bergantung padanya.
 - Assumption: Model lokal untuk routing intent (riset Rek 5) tidak masuk v1; catatan keputusan tidak menyebutnya.
 - Assumption: Uji daya tahan tugas terjadwal 7 hari berturut-turut; riset hanya menyatakan daya tahan di Xiaomi/Samsung harus diuji sendiri, angka 7 hari usulan PO.
-- Assumption: Verifikasi developer mungkin sudah berlaku di Indonesia sejak September 2026 [28][29][30] (belum dicek ulang); pendaftaran dilakukan sebelum rilis pertama apa pun statusnya.
 - Assumption: minSdk 29, targetSdk 37, ABI rilis arm64-v8a (architecture, Stack); dikonfirmasi di story fondasi epic-chat-dan-provider sebelum rilis pertama.
 - Open question: Ukuran userland, strategi unduhnya, dan batas `npm install` di HP sungguhan (phantom process killer, memori Android 17) [3][10]. Menunggu: spike pembuka epic-agent-shell.
 - Open question: Model gratis mana yang andal untuk tool calling? Belum ada benchmark; perlu uji sendiri. Angka free tier Groq/Gemini hanya terlihat di console [38][61]. Menunggu: R12 dan preset provider di R2.
@@ -110,7 +109,8 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Decision: 2026-11-14 — Pencarian web v1 memakai DuckDuckGo HTML sebagai backend default tanpa key, setelah dibandingkan dengan SearXNG, Marginalia, Wikipedia, Brave, dan Tavily; rapuh karena bot challenge, tetapi `SearchPort` membuat penggantiannya murah.
 - Decision: 2026-11-14 — Pertanyaan library agent dan aturan inklusi F-Droid ditutup oleh architecture AD-11 (adapter sendiri di atas Ktor, tanpa Koog/LangChain4j) dan AD-17 (stack sudah dicek lolos).
 - Decision: 2026-11-14 — v1 hanya lewat APK unduhan manual di GitHub Releases; Google Play dan F-Droid di luar v1 (C14). Menggantikan pengajuan F-Droid di Done when dan epic-rilis-publik.
-- Decision: 2026-11-14 — Verifikasi developer Android memakai akun developer Google milik pengguna; application id `dev.lusalhi.lumynoid`. Keduanya bersama kunci tanda tangan didaftarkan di story fondasi epic-chat-dan-provider, karena nama package tidak bisa diubah setelah terbit.
-- Decision: 2026-11-14 — Architecture spine sebagian usang: application id `app.lumynoid` (Consistency Conventions), F-Droid di AD-17, AD-25, dan topologi deployment, serta baris Play dan verifikasi di Deferred. Companion tidak diedit di sini; perbarui lewat `bmad-architecture`.
+- Decision: 2026-11-14 — Verifikasi developer Android memakai akun developer Google milik pemilik proyek; application id `dev.lusalhi.lumynoid`. Keduanya bersama kunci tanda tangan didaftarkan di story fondasi epic-chat-dan-provider, karena nama package tidak bisa diubah setelah terbit.
+- Decision: 2026-11-14 — Architecture spine diperbarui lewat `bmad-architecture`: application id, distribusi GitHub saja, kunci rilis dan verifikasi developer (AD-25), dependensi (AD-17), judul kartu dan deep-link (AD-10), serta konvensi identitas manifest, format angka/waktu, dan versi.
+- Decision: 2026-11-14 — Verifikasi developer di Indonesia sejak 30 September 2026 baru berlaku untuk instal dari app store; unduhan langsung dari GitHub baru diperiksa saat rollout global 2027. Pendaftaran tetap dilakukan sebelum APK bertanda tangan pertama, termasuk pre-release `v0.x` (AD-25).
 - Decision: 2026-11-14 — Bahasa UI v1 adalah Inggris; semua string di `strings.xml`, jadi terjemahan bisa menyusul.
 - Decision: 2026-11-14 — Penanganan tool call kosong/rusak (AD-26) milik runner di epic-agent-shell; epic-hemat-kuota memegang retry karena limit lewat router.

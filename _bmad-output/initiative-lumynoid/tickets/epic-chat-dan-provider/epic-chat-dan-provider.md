@@ -24,7 +24,7 @@ Orang awam memasang APK dan langsung chat dengan AI memakai key miliknya, tanpa 
 ## Done when
 
 - Repo GitHub publik berlisensi; CI membangun APK bertanda tangan dan menerbitkannya ke GitHub Releases.
-- Nama package `dev.lusalhi.lumynoid` dan kunci tanda tangan rilis terdaftar di verifikasi developer Android memakai akun developer Google milik pengguna, sebelum APK pertama terbit; APK dari GitHub Releases terpasang di HP sungguhan tanpa peringatan developer tak terverifikasi.
+- Sebelum APK bertanda tangan pertama terbit (termasuk pre-release `v0.x`), `dev.lusalhi.lumynoid` dan fingerprint kunci rilis berstatus Registered di Play Console milik pemilik proyek; kunci yang dipulihkan dari cadangan offline punya fingerprint yang sama dengan yang tercatat di README (AD-25).
 - Di HP sungguhan, penguji menambah provider dari preset OpenAI-compatible, URL custom, dan Anthropic; tes koneksi menunjukkan berhasil atau gagal beserta alasannya.
 - Chat menampilkan jawaban streaming dengan markdown dan blok kode; percakapan muncul di daftar dan bisa dilanjutkan setelah app ditutup.
 - Dari pemasangan sampai jawaban pertama, penguji tidak melihat terminal dan tidak keluar dari app.
@@ -45,5 +45,5 @@ Orang awam memasang APK dan langsung chat dengan AI memakai key miliknya, tanpa 
 
 - Decision: 2026-11-14 — Fondasi (repo, kerangka Compose, CI, APK bertanda tangan) adalah story pertama epic ini.
 - Decision: 2026-11-14 — Pemilihan lisensi open source adalah story hitl pertama, sebelum repo diterbitkan.
-- Decision: 2026-11-14 — Application id `dev.lusalhi.lumynoid`; pendaftaran verifikasi developer (nama package + kunci tanda tangan) adalah langkah hitl di story fondasi, sebelum APK pertama terbit. Spine masih menyebut `app.lumynoid`.
+- Decision: 2026-11-14 — Application id `dev.lusalhi.lumynoid`; pendaftaran verifikasi developer (nama package + kunci tanda tangan) adalah langkah hitl di story fondasi, sebelum APK pertama terbit.
 - Decision: 2026-11-14 — Replan (AD-2): epic ini ikut membangun kerangka TaskRunner + AgentService tanpa tool; chat polos sudah lewat jalur itu. Alasan: mencegah jalur chat terpisah yang lalu dibongkar epic-agent-shell.

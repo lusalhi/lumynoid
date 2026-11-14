@@ -150,11 +150,13 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 ### AD-10 — Kartu hanya dari event bertipe
 
 - **Binds:** R4, R8, R9, R11, C2, C9
-- **Prevents:** teks LLM tampil menyerupai kartu konfirmasi/aktivitas; persetujuan diberikan di luar kartu.
+- **Prevents:** teks LLM tampil menyerupai kartu konfirmasi/aktivitas; persetujuan diberikan di luar kartu; judul kartu lama rusak setelah update APK; halaman web atau app lain membuka kartu approval.
 - **Rule:**
   - `ActivityCard`, `ApprovalCard`, dan `PreviewCard` adalah komponen Compose yang dirender hanya dari `TaskEvent` bertipe. Teks LLM hanya muncul di bubble markdown, yang tidak bisa menghasilkan komponen kartu.
   - Judul kartu berasal dari `tool.describe(args)`, yaitu kalimat awam dari `strings.xml`. Perintah mentah dan nilai args tampil sebagai field data berlabel di bagian detail yang bisa dibuka.
+  - `UiText` di `:core` adalah `UiText(key: String, args: Map<String, UiArg>)` dengan `key` stabil (mis. `card.shell.exec`). Event menyimpan `key` + args, tidak pernah teks jadi atau id `R`. Judul kartu dan notifikasi di-resolve saat render oleh satu registry di `:app`; key yang tidak dikenal tampil sebagai judul generik plus field data mentah, tidak pernah crash.
   - Notifikasi tidak membawa tombol setujui atau tolak; notifikasi hanya membuka kartu di app lewat deep-link.
+  - Deep-link berarti `PendingIntent` eksplisit (`FLAG_IMMUTABLE`) ke satu activity `:app` dengan target bertipe `{taskId, eventId}`, dibuat oleh satu helper di `:app`. v1 tidak mendaftarkan intent-filter skema kustom atau http yang diekspor.
 
 ### AD-11 — Port LLM dengan model pesan dan error milik sendiri
 
@@ -218,15 +220,15 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
   - Alarm berikutnya dihitung saat fire. Alarm dipasang ulang pada `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`, `TIME_SET`, `TIMEZONE_CHANGED`, dan `SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED`.
   - Jadwal yang terlewat (HP mati, alarm terlambat) mendapat paling banyak satu run susulan.
 
-### AD-17 — Dependensi harus lolos F-Droid
+### AD-17 — Dependensi bebas, tanpa layanan Google
 
-- **Binds:** all, C1, C14, epic-rilis-publik
-- **Prevents:** satu epic menarik library non-free atau binary prebuilt yang menggagalkan pengajuan F-Droid di epic 7.
+- **Binds:** all, C1
+- **Prevents:** satu epic menarik library non-free, layanan Google, atau binary prebuilt yang mengirim data ke pihak ketiga, melanggar kewajiban source GPL proot, atau masuk lewat dependensi transitif tanpa terlihat di PR.
 - **Rule:**
   - Dilarang memakai Google Play Services, Firebase/FCM, ML Kit, analytics, atau crash reporter yang mengirim ke jaringan.
   - Hanya dependensi berlisensi OSI dari Maven Central atau Google Maven yang boleh dipakai. Kode native (proot, loader) dibangun dari source yang di-pin di CI, bukan di-commit sebagai prebuilt.
-  - Build harus reproducible dari tag git. Dependensi baru dicek terhadap Inclusion Policy F-Droid di PR yang menambahkannya.
-  - Stack di spine ini sudah dicek dan lolos. Anti-fitur yang diharapkan: `NonFreeNet`.
+  - CI memeriksa classpath runtime rilis yang sudah di-resolve, termasuk transitif, dan gagal bila ada grup `com.google.android.gms`, `com.google.firebase`, `com.google.mlkit`, atau `com.google.android.play`, atau dependensi tanpa lisensi OSI. Stack di spine ini sudah lolos.
+  - `.so` dari AAR Maven boleh bila berlisensi OSI, arm64-v8a, dan 16 KB-aligned (dicek CI).
 
 ### AD-18 — Preview adalah sandbox offline
 
@@ -292,7 +294,7 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 ### AD-24 — Batas izin dan batas produk
 
 - **Binds:** C2, C3, C13, all
-- **Prevents:** sebuah epic menambah izin yang membuka kontrol app lain atau melanggar F-Droid/visi orang awam; kode LGPL Operit tersalin masuk.
+- **Prevents:** sebuah epic menambah izin yang membuka kontrol app lain atau melanggar visi orang awam (C3); kode LGPL Operit tersalin masuk.
 - **Rule:**
   - Izin manifest dibatasi allowlist: `INTERNET`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `WAKE_LOCK`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, dan `ACCESS_LOCAL_NETWORK` (diminta runtime hanya saat pengguna mengisi host LAN).
   - Dilarang: layanan Accessibility, `SYSTEM_ALERT_WINDOW`, `QUERY_ALL_PACKAGES`, Shizuku, dan MediaProjection.
@@ -302,13 +304,17 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 ### AD-25 — Operasi, rilis, dan data di perangkat
 
 - **Binds:** R1, C1, C7, C14, epic-chat-dan-provider, epic-agent-shell, epic-rilis-publik
-- **Prevents:** pengguna kehilangan data saat pindah antara GitHub Releases dan F-Droid; riwayat dan secret ikut backup awan; update rootfs menghapus workspace atau skill; build debug menimpa build release di HP uji; F-Droid menolak build.
+- **Prevents:** APK ditolak HP saat verifikasi developer berlaku untuk unduhan langsung (rollout global 2027); update gagal karena kunci berbeda atau `versionCode` turun; kunci hilang sehingga update tidak bisa ditandatangani, atau bocor sehingga update palsu bisa dibuat; dua epic paralel merilis APK yang saling tidak bisa menimpa; riwayat dan secret ikut backup awan; update rootfs menghapus workspace atau skill; build debug menimpa build release di HP uji.
 - **Rule:**
-  - **Tanda tangan dan build:** satu kunci tanda tangan dipakai untuk GitHub Releases dan F-Droid (build reproducible yang menerbitkan tanda tangan upstream). `dependenciesInfo { includeInApk = false; includeInBundle = false }`. Build debug memakai `applicationIdSuffix ".debug"`.
+  - **Distribusi:** v1 hanya berupa APK bertanda tangan yang diunduh manual dari GitHub Releases (C14). App tidak punya pemeriksa atau pemasang update; pengguna memperbarui dengan mengunduh APK baru. Setiap rilis memuat tepat satu aset `lumynoid-<versionName>.apk` plus `SHA256SUMS`.
+  - **Rilis:** APK rilis hanya dibangun dari tag di `main` oleh satu workflow rilis. CI menolak tag yang `versionCode`-nya tidak lebih besar dari rilis sebelumnya, atau yang skema Room-nya tidak berada di garis migrasi `main` (AD-19).
+  - **Verifikasi developer:** pemilik proyek mendaftarkan `dev.lusalhi.lumynoid` dan fingerprint SHA-256 kunci rilis lewat Play Console dengan akun penuh, setelah mengecek ketersediaan nama, sebelum APK bertanda tangan pertama keluar. Pre-release `v0.x` dan artefak CI yang ditandatangani terhitung APK pertama.
+  - **Kunci:** kunci rilis dibuat sekali secara offline. Salinan terenkripsi beserta passwordnya disimpan di dua lokasi di luar GitHub milik pemilik proyek, dan fingerprint SHA-256 sertifikatnya di-commit di repo dan README. Di CI, kunci hanya ada di GitHub Environment `release` yang terproteksi (hanya tag di `main`, persetujuan manual); workflow `pull_request` dan `pull_request_target` tidak pernah mengaksesnya. Penandatanganan di luar workflow rilis memakai `workflow_dispatch` di environment yang sama. v1 tidak merotasi kunci; bila kunci bocor, rotasi lewat lineage APK Signature Scheme v3 dan kunci baru didaftarkan sebelum APK pertama yang memakainya.
+  - **Build dan uji:** `dependenciesInfo { includeInApk = false }`. Build debug memakai `applicationIdSuffix ".debug"`, hanya dipasang lewat `adb`, dengan debug keystore bersama yang di-commit. Pengujian di HP sungguhan memakai APK rilis (pre-release GitHub dari tag `main`).
   - **Backup:** `allowBackup="false"`, ditambah `dataExtractionRules` yang mengecualikan Room, blob, `filesDir`, dan secret store dari cloud backup maupun transfer antarperangkat.
   - **Rootfs dan data:** rootfs disimpan di folder berversi yang terpisah dari `workspace/` dan data skill. Setelah rootfs diganti, skill terpasang di-install ulang otomatis.
   - **Persetujuan unduhan:** unduhan rootfs dan unduhan npm pertama meminta persetujuan pengguna satu kali.
-  - **Diagnostik:** crash ditangkap handler lokal tanpa jaringan, dengan secret dan isi prompt dibersihkan, lalu bisa diekspor pengguna lewat share sheet.
+  - **Diagnostik:** crash ditangkap handler lokal tanpa jaringan, dengan secret dan isi prompt dibersihkan, lalu bisa diekspor pengguna lewat share sheet. Bila R8 aktif, `mapping.txt` tiap rilis dilampirkan ke rilis GitHub.
 
 ### AD-26 — Budget per tugas dan tool call rusak
 
@@ -323,17 +329,19 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 
 | Concern | Convention |
 | --- | --- |
-| Package / application id | `app.lumynoid` `[ASSUMPTION]`; package per modul `app.lumynoid.<modul>`; debug `app.lumynoid.debug` |
+| Package / application id | `dev.lusalhi.lumynoid`; package per modul `dev.lusalhi.lumynoid.<modul>` (`:app` = `dev.lusalhi.lumynoid.app`); debug `dev.lusalhi.lumynoid.debug` |
+| Identitas manifest | Literal `dev.lusalhi.lumynoid` hanya di `applicationId` (`:app/build.gradle.kts`). Manifest memakai `${applicationId}`, kode memakai `context.packageName`. Satu `FileProvider` di `:app` dengan authority `${applicationId}.files` dan path hanya `cache/export/`. Alias Keystore tetap `lumynoid_secret_v1`, tidak diturunkan dari nama package |
 | ID | UUIDv7 sebagai `String` untuk semua entitas |
 | Waktu | Disimpan sebagai epoch millis UTC; jadwal memakai waktu lokal + `zoneId` (AD-16) |
-| Serialisasi | kotlinx.serialization; sealed hierarchy dengan `classDiscriminator = "type"` |
+| Serialisasi | kotlinx.serialization; sealed hierarchy dengan `classDiscriminator = "type"`; setiap subtipe yang dipersist wajib punya `@SerialName` snake_case eksplisit yang tidak pernah diubah, dicek CI |
 | Error lintas port | Sealed result/error bertipe; exception tidak menyeberangi port kecuali `CancellationException` |
 | Konkurensi | Port berbentuk `suspend`/`Flow`; dispatcher diinjeksi; pembatalan tugas = pembatalan coroutine + matikan userland |
 | Logging | Tanpa secret dan tanpa isi prompt di logcat release; jejak yang dilihat pengguna hanya event log |
-| String UI | Semua di `strings.xml`, tanpa string hardcoded |
+| String UI | Bahasa Inggris di v1; semua di `strings.xml`, tanpa string hardcoded |
+| Format angka dan waktu | `:core` dan adapter hanya mengirim nilai bertipe (`BigDecimal`, epoch millis + `zoneId`) di args `UiText`; pemformatan hanya di `:app` lewat satu `Formatters`. Jumlah di kartu `FINANCIAL` tampil verbatim tanpa pemisah ribuan, dengan titik desimal dan satuan (mis. `1000.5 USDT`). Waktu mengikuti format 24 jam sistem (`DateFormat.is24HourFormat`) |
 | Notifikasi | Channel: `task_running` (low), `task_result`, `approval_needed` (high); dibuat di `:app` |
 | Pengujian | `:core` diuji di JVM dengan `LlmPort` palsu yang diskrip; adapter dengan uji kontrak terhadap port; migrasi Room dengan `MigrationTestHelper` |
-| Versi | `versionCode`/`versionName` di source, dinaikkan di tag; tiap epic merilis `v0.<epic>.<patch>`, v1 = `v1.0.0` |
+| Versi | `versionCode`/`versionName` di source, `versionCode` naik ketat per rilis (AD-25); `versionName` `v0.<urutan rilis>.<patch>`, nomor epic dicatat di release notes; v1 = `v1.0.0` |
 
 ## Stack
 
@@ -414,14 +422,12 @@ graph LR
   subgraph Build
     GH[GitHub repo publik] --> CI[GitHub Actions: build proot dari source, test, sign]
     CI --> REL[GitHub Releases: APK v0.N.x / v1.0.0]
-    GH --> FD[F-Droid: build reproducible dari tag, tanda tangan upstream]
   end
   subgraph HP pengguna
     APP[Lumynoid app] --> PX[Proxy egress app]
     UL[Userland proot] --> PX
   end
-  REL --> APP
-  FD --> APP
+  REL -->|unduh manual| APP
   APP -->|HTTPS, key pengguna| LLM[Provider LLM: OpenAI-compatible, Anthropic, OpenRouter]
   APP -->|cari| SRCH[SearchPort: DuckDuckGo HTML, lalu SearXNG / Brave bila dikonfigurasi]
   APP -->|baca halaman| WEB[Situs web]
@@ -431,7 +437,7 @@ graph LR
 ```
 
 - Tidak ada server Lumynoid. Lingkungan: `debug` (`.debug`, boleh emulator x86_64 tanpa shell) dan `release` (arm64-v8a, ditandatangani).
-- Kunci tanda tangan rilis disimpan di GitHub Actions secrets, dan fingerprint-nya diumumkan di README.
+- Kunci tanda tangan rilis di CI hanya ada di GitHub Environment `release`, dengan dua cadangan offline di luar GitHub; fingerprint-nya diumumkan di README (AD-25).
 - Halaman dibaca secara lokal (Ktor + jsoup/Readability4J), tanpa reader pihak ketiga. Jika semua backend pencarian gagal, tool mengembalikan error bertipe dan UI menawarkan konfigurasi backend.
 
 ### Source tree minimal
@@ -479,7 +485,7 @@ lumynoid/
 | Backend pencarian default final (DuckDuckGo HTML rapuh: bot challenge) | epic-browsing-web; SearchPort membuat penggantiannya murah |
 | Onboarding pengecualian baterai, panduan autostart per merek, izin notifikasi dan exact alarm, fallback bila izin ditolak | epic-tugas-terjadwal, dalam batas AD-16 dan AD-24 |
 | Retensi dan ekspor riwayat chat | Sebelum epic-rilis-publik; backup awan sudah dimatikan (AD-25) |
-| Bahasa UI v1 | Kapan saja, karena konvensi `strings.xml` |
 | Lisensi Lumynoid (harus kompatibel dengan proot GPL-2.0 yang dibundel) | Story hitl pertama epic-chat-dan-provider |
-| Distribusi Play, verifikasi developer 2027, PSE Komdigi | epic-rilis-publik; arsitektur v1 (npm saat runtime, unduhan rootfs, FGS `specialUse`) tidak mengincar Play |
+| PSE Komdigi | epic-rilis-publik |
+| Build reproducible dari tag | Sebelum F-Droid dipertimbangkan (v1.x); tanpanya F-Droid menandatangani dengan kunci kedua dan update lintas kanal gagal |
 | GenUI/A2UI, Telegram, Sign in with ChatGPT | v1.x; titik sambungnya `TaskRunner.submit` (origin baru) dan `LlmPort` (adapter baru) |
