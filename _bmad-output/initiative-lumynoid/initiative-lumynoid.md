@@ -99,7 +99,6 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Open question: Apakah app BYOK gratis wajib terdaftar sebagai PSE Komdigi?
 - Open question: Lisensi open source Lumynoid belum dipilih; harus kompatibel dengan proot GPL-2.0 yang dibundel (architecture, Deferred). Menunggu: story hitl pertama epic-chat-dan-provider.
 - Open question: Retensi dan ekspor riwayat chat belum ditetapkan; penyimpanan key dan larangan backup awan sudah di architecture AD-15, AD-25. Menunggu: sebelum epic-rilis-publik.
-- Open question: Bahasa UI v1 (Indonesia, Inggris, atau keduanya) belum ditetapkan; semua string di `strings.xml` (architecture, Consistency Conventions).
 - Open question: Kebijakan `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dan angka konsumsi baterai belum ditemukan. Menunggu: R6.
 - Decision: 2026-11-14 — Urutan: slice dulu, lalu `bmad-architecture` di level initiative, lalu `bmad-ux` saat epic chat dan agent di-refine; alasannya risiko terbesar ada di sisi teknis dan komponen chat sudah ditetapkan K9.
 - Decision: 2026-11-14 — Slicing: epic dipotong per kemampuan karena Lumynoid satu app Android (satu batas deploy); tujuh epic dalam urutan build di `tickets/tickets.toml`, setiap epic merilis ke GitHub Releases.
@@ -110,4 +109,5 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Decision: 2026-11-14 — Replan (AD-2): epic-chat-dan-provider ikut membangun kerangka TaskRunner + AgentService tanpa tool, dan chat polos sudah lewat `TaskRunner.submit`; epic-agent-shell menambah loop tool call, registry, dan gerbang ke kerangka yang sama. Menggantikan "epic 3 hanya memanggil task runner epic 2": epic 3 memanggil TaskRunner yang kerangkanya dari epic 1 dan loop tool-nya dari epic 2. Alasan: mencegah epic 1 membangun jalur chat terpisah yang lalu dibongkar epic 2. Yang dibutuhkan tidak berubah, hanya cara mengirimnya.
 - Decision: 2026-11-14 — Pencarian web v1 memakai DuckDuckGo HTML sebagai backend default tanpa key, setelah dibandingkan dengan SearXNG, Marginalia, Wikipedia, Brave, dan Tavily; rapuh karena bot challenge, tetapi `SearchPort` membuat penggantiannya murah.
 - Decision: 2026-11-14 — Pertanyaan library agent dan aturan inklusi F-Droid ditutup oleh architecture AD-11 (adapter sendiri di atas Ktor, tanpa Koog/LangChain4j) dan AD-17 (stack sudah dicek lolos).
+- Decision: 2026-11-14 — Bahasa UI v1 adalah Inggris; semua string di `strings.xml`, jadi terjemahan bisa menyusul.
 - Decision: 2026-11-14 — Penanganan tool call kosong/rusak (AD-26) milik runner di epic-agent-shell; epic-hemat-kuota memegang retry karena limit lewat router.
