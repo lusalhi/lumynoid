@@ -68,10 +68,13 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Tidak pernah: login memakai langganan Claude (K7).
 - Di luar v1: LLM yang "berpikir terus" 24 jam; model lokal sebagai otak agent (riset Ringkasan eksekutif 2, D4).
 - Di luar: iOS (K8); fork Operit (K12).
-- Touch point: API provider LLM (OpenAI-compatible, Anthropic, OpenRouter) — dipakai lewat API key pengguna; owner: ditetapkan saat slicing.
-- Touch point: layanan pencarian web — dipakai oleh tool cari; owner: ditetapkan saat slicing.
-- Touch point: Binance Agentic Wallet (`baw` + `SKILL.md`) — skill acuan untuk R7; owner: ditetapkan saat slicing.
-- Touch point: GitHub Releases dan F-Droid — kanal rilis; owner: ditetapkan saat slicing.
+- Touch point: API provider LLM (OpenAI-compatible, Anthropic, OpenRouter) — dipakai lewat API key pengguna; owner: epic-chat-dan-provider.
+- Touch point: endpoint sisa kuota provider (mis. OpenRouter) — dibaca untuk penghitung kuota; owner: epic-hemat-kuota.
+- Touch point: npm registry dan sumber unduhan rootfs userland — dipakai shell dan coding; owner: epic-agent-shell.
+- Touch point: layanan pencarian web — dipakai oleh tool cari; owner: epic-browsing-web.
+- Touch point: Binance Agentic Wallet (`baw` + `SKILL.md`) — skill acuan untuk R7; owner: epic-skill-pihak-ketiga.
+- Touch point: GitHub Releases — kanal rilis setiap epic; owner: epic-chat-dan-provider.
+- Touch point: F-Droid — pengajuan rilis v1; owner: epic-rilis-publik.
 - Tracer path: pengguna mengisi API key → mengirim chat → harness memanggil provider → agent menjalankan satu perintah di userland → kartu aktivitas dan, bila perlu, kartu konfirmasi tampil → jawaban mengalir ke chat.
 
 ## References
@@ -98,3 +101,8 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Open question: Penyimpanan API key dan riwayat chat: apakah semuanya tetap di HP, terenkripsi, dan bisa dibackup? Sumber tidak menyebutnya.
 - Open question: Bahasa UI v1 (Indonesia, Inggris, atau keduanya) dan versi Android minimum belum ditetapkan.
 - Open question: Kebijakan `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dan angka konsumsi baterai belum ditemukan. Menunggu: R6.
+- Decision: 2026-11-14 — Urutan: slice dulu, lalu `bmad-architecture` di level initiative, lalu `bmad-ux` saat epic chat dan agent di-refine; alasannya risiko terbesar ada di sisi teknis dan komponen chat sudah ditetapkan K9.
+- Decision: 2026-11-14 — Slicing: epic dipotong per kemampuan karena Lumynoid satu app Android (satu batas deploy); tujuh epic dalam urutan build di `tickets/tickets.toml`, setiap epic merilis ke GitHub Releases.
+- Decision: 2026-11-14 — Fondasi platform adalah story pertama epic-chat-dan-provider, bukan epic tersendiri.
+- Decision: 2026-11-14 — Keputusan bersama (kontrak harness dan registry tool, adapter provider, siklus hidup userland, model kartu, penyimpanan key) ditetapkan di architecture spine `bmad-architecture`, lalu dirujuk epic pemakainya.
+- Decision: 2026-11-14 — Tabrakan kode dicegah lewat kontrak: epic 3 hanya memanggil task runner epic 2; epic 4 memiliki penyusunan konteks dengan titik sambung untuk epic 5 dan 6, yang karenanya menunggu epic 4.

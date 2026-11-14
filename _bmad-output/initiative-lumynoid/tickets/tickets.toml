@@ -1,0 +1,68 @@
+# Epic Lumynoid v1, urutan build. Satu app Android = satu batas deploy, jadi epic dipotong per kemampuan.
+# Setiap epic merilis APK ke GitHub Releases.
+
+[[epic]]
+id = 1
+slug = "epic-chat-dan-provider"
+title = "Orang awam chat dengan AI memakai key sendiri"
+description = "Repo publik berlisensi, CI, dan rilis APK bertanda tangan di GitHub Releases berjalan; penguji memasang APK, menambah provider (preset OpenAI-compatible, URL custom, atau Anthropic), mengetes koneksinya, lalu chat dengan jawaban streaming ber-markdown dan daftar percakapan yang bisa dilanjutkan. Bagian R1 di sini: dari pemasangan sampai jawaban chat pertama hanya lewat layar app."
+covers = ["R1", "R2", "R3"]
+
+[[epic]]
+id = 2
+slug = "epic-agent-shell"
+title = "Agent mengerjakan tugas lewat shell tersembunyi dengan aman"
+description = "Harness Kotlin menjalankan loop tool call lewat satu titik masuk task runner yang hidup di FGS selama tugas berjalan, terlepas dari layar chat (dipakai epic 3); agent menjalankan perintah dan coding (termasuk npm install) di userland proot yang hanya menyala saat dipakai; registry tool menjadi kontrak untuk epic 5 dan 6; setiap tool call tampil sebagai kartu aktivitas buatan app, aksi berisiko menunggu kartu konfirmasi, semuanya tercatat di log aksi, dan file/HTML hasilnya bisa dipratinjau. Bagian R10 di sini: output tool apa pun tidak bisa melewati kartu konfirmasi."
+covers = ["R4", "R8", "R9", "R10", "R11"]
+after = [{ epic = 1, needs = "adapter provider dan layar chat streaming tempat kartu tampil" }]
+
+[[epic]]
+id = 3
+slug = "epic-tugas-terjadwal"
+title = "Tugas terjadwal jalan tepat waktu saat app tertutup"
+description = "Pengguna membuat tugas sekali atau berulang lewat chat atau layar tugas; exact alarm membangunkan app dan memanggil task runner epic 2 tanpa mengubah loop-nya; hasil muncul sebagai notifikasi dan di percakapan; onboarding pengecualian baterai dan panduan autostart per merek tersedia; uji 7 hari di Xiaomi dan Samsung lulus."
+covers = ["R6"]
+after = [{ epic = 2, needs = "task runner di FGS yang menjalankan satu tugas agent tanpa layar chat terbuka" }]
+
+[[epic]]
+id = 4
+slug = "epic-hemat-kuota"
+title = "Tugas tetap selesai dengan kuota API gratis"
+description = "Saat key/provider kena limit, key/provider berikutnya dipakai; tugas agent hanya memakai model yang mendukung tools; tool call kosong atau rusak dari model gratis ditangani; sisa kuota dan status provider terlihat. Epic ini juga memiliki penyusunan konteks: pemangkasan konteks dengan titik sambung yang stabil untuk memotong output tool panjang (dipakai epic 5) dan memuat instruksi skill tanpa terpangkas (dipakai epic 6)."
+covers = ["R12"]
+after = [{ epic = 2, needs = "loop agent tempat rotasi, filter model, dan pemangkasan konteks dipasang" }]
+
+[[epic]]
+id = 5
+slug = "epic-browsing-web"
+title = "Agent mencari dan membaca web untuk menjawab"
+description = "Agent memanggil tool cari dan baca halaman lewat registry tool epic 2, isi halaman panjang dipotong lewat titik sambung konteks epic 4, dan jawaban menyertakan sumber yang bisa dibuka pengguna. Bagian R10 di sini: instruksi di halaman web diperlakukan sebagai data, dan halaman uji prompt injection tidak memicu aksi tanpa konfirmasi."
+covers = ["R5", "R10"]
+after = [
+  { epic = 2, needs = "registry tool, kartu aktivitas, dan gerbang konfirmasi" },
+  { epic = 4, needs = "titik sambung konteks untuk memotong isi halaman web panjang" },
+]
+
+[[epic]]
+id = 6
+slug = "epic-skill-pihak-ketiga"
+title = "Pengguna memasang skill pihak ketiga"
+description = "Pengguna memasang skill berformat SKILL.md dan agent memakainya; instruksi skill dimuat lewat titik sambung konteks epic 4; Binance Agentic Wallet (baw) terpasang lewat npm di userland epic 2, login lewat kode pairing, dan transaksi berhenti di preview sampai pengguna mengonfirmasi execute."
+covers = ["R7"]
+after = [
+  { epic = 2, needs = "userland dengan npm, registry tool, kartu konfirmasi untuk aksi keuangan" },
+  { epic = 4, needs = "titik sambung konteks untuk memuat instruksi skill tanpa terpangkas" },
+]
+
+[[epic]]
+id = 7
+slug = "epic-rilis-publik"
+title = "Lumynoid v1 terbit untuk umum"
+description = "Penguji awam menyelesaikan chat, coding lewat shell, jawaban dari web, dan tugas terjadwal tanpa terminal dan tanpa dokumentasi; rilis v1 di GitHub Releases; app diajukan ke F-Droid; keputusan Play dan verifikasi developer 2027 tercatat. Bagian R1 di sini: penguji awam memastikan seluruh app, bukan hanya chat pertama, bisa dipakai tanpa terminal dan tanpa dokumentasi."
+covers = ["R1"]
+after = [
+  { epic = 3, needs = "tugas terjadwal yang lulus uji 7 hari, untuk sesi penguji awam" },
+  { epic = 4, needs = "rotasi kuota, agar penguji awam bisa memakai key gratis" },
+  { epic = 5, needs = "browsing web, untuk sesi penguji awam" },
+  { epic = 6, needs = "skill pihak ketiga, untuk set fitur v1 yang lengkap sebelum diajukan ke F-Droid" },
+]
