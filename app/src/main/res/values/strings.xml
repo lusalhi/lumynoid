@@ -9,6 +9,22 @@
     <string name="chat_settings">AI provider</string>
     <string name="chat_needs_provider">Add your AI provider before you chat.</string>
     <string name="chat_open_provider">Set up AI provider</string>
+    <string name="chat_conversations">Conversations</string>
+    <string name="chat_new">New</string>
+
+    <string name="conversation_untitled">New conversation</string>
+    <string name="conversations_title">Conversations</string>
+    <string name="conversations_empty">No conversations yet. Send a message to start one.</string>
+    <string name="conversations_back">Back</string>
+    <string name="conversations_more">More actions</string>
+    <string name="conversation_rename">Rename</string>
+    <string name="conversation_rename_title">Rename conversation</string>
+    <string name="conversation_name">Name</string>
+    <string name="conversation_save">Save</string>
+    <string name="conversation_delete">Delete</string>
+    <string name="conversation_delete_title">Delete this conversation?</string>
+    <string name="conversation_delete_body">Its messages are removed from this phone and cannot be restored.</string>
+    <string name="conversation_cancel">Cancel</string>
 
     <string name="error_auth_failed">The provider did not accept your key. Check it in the AI provider settings.</string>
     <string name="error_rate_limited">The provider is limiting requests right now. Try again in a moment.</string>

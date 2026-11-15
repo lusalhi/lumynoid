@@ -22,7 +22,7 @@ class LumynoidData(
     private val database: LumynoidDatabase =
         Room.databaseBuilder(appContext, LumynoidDatabase::class.java, "lumynoid.db")
             .setDriver(AndroidSQLiteDriver())
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3) // no destructive fallback (AD-19)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4) // no destructive fallback (AD-19)
             .build()
 
     val events: EventRepository = RoomEventRepository(database.dao())

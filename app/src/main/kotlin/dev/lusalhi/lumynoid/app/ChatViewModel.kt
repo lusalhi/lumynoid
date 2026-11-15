@@ -3,6 +3,7 @@ package dev.lusalhi.lumynoid.app
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.lusalhi.lumynoid.core.Conversation
 import dev.lusalhi.lumynoid.core.LiveAnswer
 import dev.lusalhi.lumynoid.core.Origin
 import dev.lusalhi.lumynoid.core.TaskEvent
@@ -17,11 +18,14 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-enum class Screen { LOADING, CHAT, PROVIDER }
+enum class Screen { LOADING, CHAT, PROVIDER, CONVERSATIONS }
 
 data class ChatState(
     val screen: Screen = Screen.LOADING,
@@ -29,6 +33,12 @@ data class ChatState(
     val events: List<TaskEvent> = emptyList(),
     val live: LiveAnswer? = null,
     val sending: Boolean = false,
+    val conversations: List<Conversation> = emptyList(),
+    val conversationId: String? = null,
+    /** Title of the open conversation; empty for a new or untitled one. */
+    val title: String = "",
+    /** The conversation whose answer is streaming right now; it cannot be deleted. */
+    val streamingConversationId: String? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -42,16 +52,35 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val conversationId = MutableStateFlow<String?>(null)
 
     private val events = conversationId.flatMapLatest { id ->
-        if (id == null) flowOf(emptyList()) else graph.data.events.observe(id)
+        // Tagged with its conversation so a stale list is never shown under another conversation.
+        if (id == null) flowOf(null to emptyList()) else graph.data.events.observe(id).map { id to it }
     }
     private val live = agent.runner.flatMapLatest { it?.live ?: flowOf(null) }
 
+    private val conversations = graph.data.conversations.observeAll()
+    private val createLock = Mutex()
+
+    private val header = combine(screen, providerConfigured, conversationId, conversations) { screen, configured, id, all ->
+        ChatState(
+            screen = screen,
+            providerConfigured = configured,
+            conversations = all,
+            conversationId = id,
+            title = all.firstOrNull { it.id == id }?.title.orEmpty(),
+        )
+    }
+
     val state: StateFlow<ChatState> =
-        combine(screen, providerConfigured, events, live) { screen, configured, events, live ->
+        combine(header, events, live) { header, tagged, live ->
+            val events = if (tagged.first == header.conversationId) tagged.second else emptyList()
             // The saved AssistantMessage can be observed a moment before the runner clears its live
-            // copy; hide the live bubble then so the answer never shows twice.
-            val visibleLive = live?.takeIf { l -> events.none { it is TaskEvent.AssistantMessage && it.taskId == l.taskId } }
-            ChatState(screen, configured, events, visibleLive)
+            // copy; hide the live bubble then so the answer never shows twice. A live answer of
+            // another conversation must never show here either.
+            val visibleLive = live?.takeIf { l ->
+                l.conversationId == header.conversationId &&
+                    events.none { it is TaskEvent.AssistantMessage && it.taskId == l.taskId }
+            }
+            header.copy(events = events, live = visibleLive, streamingConversationId = live?.conversationId)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatState())
 
     init {
@@ -75,11 +104,41 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun openConversations() { screen.value = Screen.CONVERSATIONS }
+
+    fun closeConversations() { screen.value = Screen.CHAT }
+
+    fun openConversation(id: String) {
+        conversationId.value = id
+        screen.value = Screen.CHAT
+    }
+
+    /** The conversation itself is created on the first message, so nothing is written here. */
+    fun newConversation() {
+        conversationId.value = null
+        screen.value = Screen.CHAT
+    }
+
+    fun renameConversation(id: String, title: String) {
+        viewModelScope.launch { graph.data.conversations.rename(id, title) }
+    }
+
+    fun deleteConversation(id: String) {
+        // A cancel would append TaskCancelled after the delete and leave orphan events.
+        if (state.value.streamingConversationId == id) return
+        viewModelScope.launch {
+            graph.data.conversations.delete(id)
+            if (conversationId.value == id) conversationId.value = null
+        }
+    }
+
     fun send(text: String) {
         val input = text.trim()
         if (input.isEmpty() || !providerConfigured.value) return
         viewModelScope.launch {
-            val id = conversationId.value ?: graph.data.conversations.create().id.also { conversationId.value = it }
+            val id = createLock.withLock {
+                conversationId.value ?: graph.data.conversations.create(input).id.also { conversationId.value = it }
+            }
             val runner = agent.runner.filterNotNull().first()
             runner.submit(TaskRequest(Origin.User, id, workspaceId = UuidV7.next(), input = input))
         }

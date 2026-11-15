@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.TaskEvent
@@ -40,6 +41,8 @@ fun ChatScreen(
     state: ChatState,
     onSend: (String) -> Unit,
     onOpenProvider: () -> Unit,
+    onOpenConversations: () -> Unit,
+    onNewConversation: () -> Unit,
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -64,7 +67,15 @@ fun ChatScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(stringResource(R.string.chat_title), style = MaterialTheme.typography.titleLarge)
+            Text(
+                state.title.ifBlank { stringResource(R.string.conversation_untitled) },
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onOpenConversations) { Text(stringResource(R.string.chat_conversations)) }
+            TextButton(onClick = onNewConversation) { Text(stringResource(R.string.chat_new)) }
             TextButton(onClick = onOpenProvider) { Text(stringResource(R.string.chat_settings)) }
         }
 

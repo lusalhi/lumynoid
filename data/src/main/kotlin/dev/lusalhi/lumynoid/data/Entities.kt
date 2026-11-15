@@ -9,6 +9,16 @@ import androidx.room3.PrimaryKey
 internal data class ConversationEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    // Empty until the first message names the conversation; v3 rows are backfilled by MIGRATION_3_4.
+    @ColumnInfo(defaultValue = "") val title: String = "",
+)
+
+/** A conversation with its computed last activity (last event, else creation). */
+internal data class ConversationRow(
+    val id: String,
+    val title: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "last_activity_at") val lastActivityAt: Long,
 )
 
 @Entity(tableName = "task")

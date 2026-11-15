@@ -4,6 +4,9 @@ import androidx.room3.testing.MigrationTestHelper
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
+import dev.lusalhi.lumynoid.core.Origin
+import dev.lusalhi.lumynoid.core.TaskEvent
+import dev.lusalhi.lumynoid.core.TaskEventJson
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -104,5 +107,26 @@ class MigrationTest {
 
         assertEquals(listOf(listOf<String?>("p1", "openai_compatible")), v3.rows("SELECT id, kind FROM provider_config"))
         assertEquals(listOf(listOf<String?>("p1", "m")), v3.rows("SELECT provider_id, model_id FROM active_model"))
+    }
+
+    @Test
+    fun v3ConversationsAreTitledFromTheirFirstUserMessageAndEventsAreUntouched() = runTest {
+        val first = TaskEventJson.encode(TaskEvent.UserMessage("e1", "t1", 5L, Origin.User, "\n  Plan   my trip\nto Bali"))
+        val reply = TaskEventJson.encode(TaskEvent.AssistantMessage("e2", "t1", 6L, "sure"))
+        val second = TaskEventJson.encode(TaskEvent.UserMessage("e3", "t2", 7L, Origin.User, "later"))
+        helper.createDatabase(3).use { v3 ->
+            v3.execSQL("INSERT INTO conversation (id, created_at) VALUES ('c1', 1), ('c2', 2)")
+            v3.execSQL("INSERT INTO task_event (seq, id, task_id, conversation_id, at, payload) VALUES (1, 'e1', 't1', 'c1', 5, '${first.replace("'", "''")}')")
+            v3.execSQL("INSERT INTO task_event (seq, id, task_id, conversation_id, at, payload) VALUES (2, 'e2', 't1', 'c1', 6, '${reply.replace("'", "''")}')")
+            v3.execSQL("INSERT INTO task_event (seq, id, task_id, conversation_id, at, payload) VALUES (3, 'e3', 't2', 'c1', 7, '${second.replace("'", "''")}')")
+        }
+
+        val v4 = helper.runMigrationsAndValidate(4, listOf(MIGRATION_3_4))
+
+        assertEquals(
+            listOf(listOf<String?>("c1", "Plan my trip"), listOf<String?>("c2", "")),
+            v4.rows("SELECT id, title FROM conversation ORDER BY id"),
+        )
+        assertEquals(listOf("e1", "e2", "e3"), v4.rows("SELECT id FROM task_event ORDER BY seq").flatten())
     }
 }

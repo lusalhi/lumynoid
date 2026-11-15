@@ -78,7 +78,7 @@ class TaskRunner(
         try {
             currentCoroutineContext().ensureActive()
             var failure: FailureReason? = null
-            val request = LlmRequest(listOf(LlmMessage(Role.USER, item.request.input)))
+            val request = ContextAssembler.assemble(events.history(item.request.conversationId), item.taskId)
             llm.stream(request).collect { chunk ->
                 when (chunk) {
                     is LlmChunk.TextDelta -> {

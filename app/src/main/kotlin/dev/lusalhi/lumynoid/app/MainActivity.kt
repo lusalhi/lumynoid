@@ -55,6 +55,18 @@ private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
             state = state,
             onSend = viewModel::send,
             onOpenProvider = viewModel::openProvider,
+            onOpenConversations = viewModel::openConversations,
+            onNewConversation = viewModel::newConversation,
+        )
+        Screen.CONVERSATIONS -> ConversationListScreen(
+            conversations = state.conversations,
+            openId = state.conversationId,
+            streamingId = state.streamingConversationId,
+            onOpen = viewModel::openConversation,
+            onNew = viewModel::newConversation,
+            onRename = viewModel::renameConversation,
+            onDelete = viewModel::deleteConversation,
+            onBack = viewModel::closeConversations,
         )
     }
 }

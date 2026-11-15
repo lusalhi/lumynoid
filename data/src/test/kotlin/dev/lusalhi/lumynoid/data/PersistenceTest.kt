@@ -40,7 +40,7 @@ class PersistenceTest {
         val request: (String) -> TaskRequest = { TaskRequest(Origin.User, it, "ws", "hello") }
 
         val first = open(file)
-        val conversation = RoomConversationPort(first.dao(), UuidV7, Clock { 10L }).create()
+        val conversation = RoomConversationPort(first.dao(), UuidV7, Clock { 10L }).create("hello")
         val events = RoomEventRepository(first.dao())
         events.createTask("t1", request(conversation.id), 10L)
         events.append(conversation.id, TaskEvent.UserMessage("e1", "t1", 10L, Origin.User, "hello"))
@@ -106,6 +106,76 @@ class PersistenceTest {
         assertEquals(ProviderKind.ANTHROPIC, store.provider("p2")?.kind)
         assertEquals(listOf("b", "a"), store.models("p1").map { it.modelId })
         assertEquals(ActiveModel("p2", "z"), store.active())
+        db.close()
+    }
+
+    @Test
+    fun conversationsAreOrderedByLastActivityAndTitledFromTheFirstMessage() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        var now = 0L
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { now })
+        val events = RoomEventRepository(db.dao())
+        now = 1; val a = port.create("  first\nline  ")
+        now = 2; val b = port.create("second")
+        assertEquals(listOf(b.id, a.id), port.observeAll().first().map { it.id })
+        assertEquals("first", a.title)
+
+        events.append(a.id, TaskEvent.TaskQueued("q", "t", 50L))
+        val all = port.observeAll().first()
+        assertEquals(listOf(a.id, b.id), all.map { it.id })
+        assertEquals(50L, all.first().lastActivityAt)
+        assertEquals(2L, all.last().lastActivityAt)
+        assertEquals(a.id, port.latest()?.id)
+        db.close()
+    }
+
+    @Test
+    fun renameKeepsTheOldTitleWhenBlank() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
+        val c = port.create("old")
+
+        assertFalse(port.rename(c.id, "   "))
+        assertEquals("old", port.latest()?.title)
+        assertEquals(true, port.rename(c.id, "  new name "))
+        assertEquals("new name", port.latest()?.title)
+        db.close()
+    }
+
+    @Test
+    fun deleteRemovesTheConversationItsTasksAndEventsAndLeavesOthersIntact() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
+        val events = RoomEventRepository(db.dao())
+        val gone = port.create("gone")
+        val kept = port.create("kept")
+        for ((c, t) in listOf(gone.id to "t1", kept.id to "t2")) {
+            events.createTask(t, TaskRequest(Origin.User, c, "ws", "x"), 1L)
+            events.append(c, TaskEvent.UserMessage("e-$t", t, 2L, Origin.User, "x"))
+        }
+
+        port.delete(gone.id)
+
+        assertEquals(listOf(kept.id), port.observeAll().first().map { it.id })
+        assertEquals(emptyList(), events.history(gone.id))
+        assertEquals(listOf("e-t2"), events.history(kept.id).map { it.id })
+        assertEquals(1, db.dao().taskCount())
+        db.close()
+    }
+
+    @Test
+    fun writesForADeletedConversationLeaveNoRows() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
+        val events = RoomEventRepository(db.dao())
+        val c = port.create("gone")
+        port.delete(c.id)
+
+        events.createTask("t1", TaskRequest(Origin.User, c.id, "ws", "x"), 2L)
+        events.append(c.id, TaskEvent.UserMessage("e1", "t1", 2L, Origin.User, "x"))
+
+        assertEquals(0, db.dao().taskCount())
+        assertEquals(emptyList(), events.history(c.id))
         db.close()
     }
 }

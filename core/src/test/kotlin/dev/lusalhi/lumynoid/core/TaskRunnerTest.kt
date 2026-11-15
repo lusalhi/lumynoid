@@ -23,6 +23,7 @@ private class InMemoryEvents : EventRepository {
     override suspend fun createTask(taskId: String, request: TaskRequest, at: Long) { tasks += taskId }
     override suspend fun append(conversationId: String, event: TaskEvent) { state.value = state.value + event }
     override fun observe(conversationId: String): Flow<List<TaskEvent>> = state
+    override suspend fun history(conversationId: String): List<TaskEvent> = state.value
 }
 
 private class Counter : IdGenerator {
@@ -111,9 +112,9 @@ class TaskRunnerTest {
         val order = mutableListOf<String>()
         val llm = LlmPort { req ->
             flow {
-                order += "start:${req.messages.single().content}"
+                order += "start:${req.messages.last().content}"
                 emit(LlmChunk.TextDelta("x"))
-                order += "end:${req.messages.single().content}"
+                order += "end:${req.messages.last().content}"
                 emit(LlmChunk.Done)
             }
         }
@@ -133,7 +134,7 @@ class TaskRunnerTest {
         val llm = LlmPort { req ->
             flow {
                 if (calls++ == 0) throw IllegalStateException("adapter blew up")
-                emit(LlmChunk.TextDelta("fine:" + req.messages.single().content))
+                emit(LlmChunk.TextDelta("fine:" + req.messages.last().content))
                 emit(LlmChunk.Done)
             }
         }
@@ -198,7 +199,7 @@ class TaskRunnerTest {
         val called = mutableListOf<String>()
         val llm = LlmPort { req ->
             flow {
-                val input = req.messages.single().content
+                val input = req.messages.last().content
                 called += input
                 if (input == "first") gate.await()
                 emit(LlmChunk.TextDelta("done"))
@@ -238,6 +239,26 @@ class TaskRunnerTest {
 
         assertIs<TaskEvent.TaskCancelled>(events.state.value.last())
         assertEquals(null, runner.live.value)
+    }
+
+    @Test
+    fun aLaterMessageCarriesEveryEarlierAnsweredTurn() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val requests = mutableListOf<List<LlmMessage>>()
+        val llm = LlmPort { req ->
+            requests += req.messages
+            flow { emit(LlmChunk.TextDelta("re:" + req.messages.last().content)); emit(LlmChunk.Done) }
+        }
+        val runner = runnerFor(llm, events, scope)
+
+        runner.submit(request.copy(input = "a"))
+        runner.submit(request.copy(input = "b"))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(LlmMessage(Role.USER, "a"), LlmMessage(Role.ASSISTANT, "re:a"), LlmMessage(Role.USER, "b")),
+            requests[1],
+        )
     }
 
     @Test

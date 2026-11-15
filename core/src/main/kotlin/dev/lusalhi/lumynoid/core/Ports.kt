@@ -109,11 +109,25 @@ interface ProviderAdminPort {
     suspend fun select(providerId: String, modelId: String)
 }
 
-data class Conversation(val id: String, val createdAt: Long)
+/** [title] is empty until a message names it; the UI then shows a placeholder. */
+data class Conversation(val id: String, val title: String, val createdAt: Long, val lastActivityAt: Long)
 
+/** The UI's only way to read and write conversations (AD-23). Messages are written by `TaskRunner` alone. */
 interface ConversationPort {
-    suspend fun create(): Conversation
+    /** Creates a conversation titled from [firstMessage]. */
+    suspend fun create(firstMessage: String): Conversation
+
+    /** The conversation with the most recent activity. */
     suspend fun latest(): Conversation?
+
+    /** All conversations, most recent activity first. */
+    fun observeAll(): Flow<List<Conversation>>
+
+    /** Returns false and keeps the old title when [title] is blank. */
+    suspend fun rename(id: String, title: String): Boolean
+
+    /** Removes the conversation, its tasks and all its events in one transaction. */
+    suspend fun delete(id: String)
 }
 
 data class TaskRequest(
@@ -128,4 +142,7 @@ interface EventRepository {
     suspend fun createTask(taskId: String, request: TaskRequest, at: Long)
     suspend fun append(conversationId: String, event: TaskEvent)
     fun observe(conversationId: String): Flow<List<TaskEvent>>
+
+    /** Read-only snapshot of the conversation's events in log order, for building context. */
+    suspend fun history(conversationId: String): List<TaskEvent>
 }

@@ -2,6 +2,9 @@ package dev.lusalhi.lumynoid.data
 
 import androidx.room3.migration.Migration
 import androidx.sqlite.execSQL
+import dev.lusalhi.lumynoid.core.ConversationTitle
+import dev.lusalhi.lumynoid.core.TaskEvent
+import dev.lusalhi.lumynoid.core.TaskEventJson
 
 /**
  * v1 kept one `provider_config` row with its model. v2 keeps providers, their models and the active
@@ -34,4 +37,28 @@ internal val MIGRATION_1_2 = Migration(1, 2) { connection ->
 /** v3 records which wire format a provider speaks; every provider saved so far is OpenAI-compatible. */
 internal val MIGRATION_2_3 = Migration(2, 3) { connection ->
     connection.execSQL("ALTER TABLE provider_config ADD COLUMN `kind` TEXT NOT NULL DEFAULT 'openai_compatible'")
+}
+
+/**
+ * v4 adds a conversation title. Existing conversations are titled from their first user message,
+ * decoded in Kotlin so the rule is the same [ConversationTitle] the app uses; events are untouched.
+ */
+internal val MIGRATION_3_4 = Migration(3, 4) { connection ->
+    connection.execSQL("ALTER TABLE conversation ADD COLUMN `title` TEXT NOT NULL DEFAULT ''")
+    val titles = linkedMapOf<String, String>()
+    connection.prepare("SELECT conversation_id, payload FROM task_event ORDER BY seq").use { st ->
+        while (st.step()) {
+            val conversationId = st.getText(0)
+            if (conversationId in titles) continue
+            val event = runCatching { TaskEventJson.decode(st.getText(1)) }.getOrNull()
+            if (event is TaskEvent.UserMessage) titles[conversationId] = ConversationTitle.from(event.text)
+        }
+    }
+    for ((id, title) in titles) {
+        connection.prepare("UPDATE conversation SET title = ? WHERE id = ?").use { st ->
+            st.bindText(1, title)
+            st.bindText(2, id)
+            st.step()
+        }
+    }
 }
