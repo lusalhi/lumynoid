@@ -68,3 +68,6 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
 }
+
+// AD-17: the release classpath gate.
+apply(from = rootProject.file("gradle/dependency-policy.gradle.kts"))

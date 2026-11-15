@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -33,7 +34,13 @@ jobs:
             exit 1
           fi
 
-      - name: JVM tests
+      - name: Dependency policy self-test
+        run: python3 .github/scripts/check_dependency_policy.py --self-test
+
+      - name: No Google services, only OSI licences on the release classpath (AD-17)
+        run: ./gradlew :app:checkDependencyPolicy
+
+      - name: JVM tests (include the persisted-name check)
         run: ./gradlew :core:test :llm:test :data:testDebugUnitTest
 
       - name: Build debug APK
@@ -53,3 +60,27 @@ jobs:
             core/build/reports/tests
             llm/build/reports/tests
             data/build/reports/tests
+
+  schema-claims:
+    # One Room schema version, claimed once (AD-19). Needs the PR's own history, so it only runs on pull requests.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Schema claim self-test
+        run: python3 .github/scripts/check_schema_claims.py --self-test
+
+      - name: Reject reused or edited schema versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.base_ref }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+          python3 .github/scripts/check_schema_claims.py --base "origin/$BASE_REF" --repo "$REPO" --pr "$PR_NUMBER"

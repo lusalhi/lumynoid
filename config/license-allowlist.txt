@@ -1,0 +1,3 @@
+# Exceptions to the AD-17 licence check (.github/scripts/check_dependency_policy.py).
+# One entry per line: <group>:<artifact> | <reason>. Blank lines and lines starting with # are ignored.
+# Every entry needs a reason that names the licence the artifact is really under.
