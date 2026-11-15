@@ -3,7 +3,7 @@ title: 'Tracer bullet: first chat answer streams through every layer'
 type: feature
 ticket: '1'
 created: '2026-11-14'
-status: built
+status: done
 baseline_revision: 'faba4fcd00f1c55f917c3c6516711f6b3c87bba0'
 route: full
 route_source: auto
