@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lumynoid</string>
+
+    <string name="chat_title">Chat</string>
+    <string name="chat_empty">Say something to start the conversation.</string>
+    <string name="chat_input_hint">Message</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_settings">AI provider</string>
+    <string name="chat_needs_provider">Add your AI provider before you chat.</string>
+    <string name="chat_open_provider">Set up AI provider</string>
+
+    <string name="error_auth_failed">The provider did not accept your key. Check it in the AI provider settings.</string>
+    <string name="error_rate_limited">The provider is limiting requests right now. Try again in a moment.</string>
+    <string name="error_quota_exhausted">Your quota with this provider is used up.</string>
+    <string name="error_network">Could not reach the provider. Check your connection and the address.</string>
+    <string name="error_server">The provider returned an error or an empty answer. Try again.</string>
+    <string name="error_interrupted">This answer was interrupted.</string>
+    <string name="task_cancelled">Stopped.</string>
+
+    <string name="provider_title">AI provider</string>
+    <string name="provider_intro">Use any OpenAI-compatible service with your own API key. Your key stays on this phone.</string>
+    <string name="provider_base_url">Base URL</string>
+    <string name="provider_base_url_hint">https://openrouter.ai/api/v1</string>
+    <string name="provider_api_key">API key</string>
+    <string name="provider_api_key_saved">A key is saved. Leave empty to keep it.</string>
+    <string name="provider_model">Model</string>
+    <string name="provider_model_hint">for example openai/gpt-4o-mini</string>
+    <string name="provider_save">Save</string>
+    <string name="provider_back">Back</string>
+    <string name="provider_missing_base_url">Enter the base URL.</string>
+    <string name="provider_missing_api_key">Enter your API key.</string>
+    <string name="provider_missing_model">Enter a model name.</string>
+</resources>
