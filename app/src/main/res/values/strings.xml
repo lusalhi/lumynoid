@@ -19,7 +19,7 @@
     <string name="task_cancelled">Stopped.</string>
 
     <string name="provider_title">AI providers</string>
-    <string name="provider_intro">Use any OpenAI-compatible service with your own API key. Your key stays on this phone.</string>
+    <string name="provider_intro">Use an OpenAI-compatible service or Anthropic with your own API key. Your key stays on this phone.</string>
     <string name="provider_active">Used for chat · %1$s</string>
     <string name="provider_use">Use for chat</string>
     <string name="provider_edit">Edit</string>
@@ -34,6 +34,7 @@
     <string name="provider_api_key_saved">A key is saved. Leave empty to keep it.</string>
     <string name="provider_model">Model</string>
     <string name="provider_model_hint">for example openai/gpt-4o-mini</string>
+    <string name="provider_model_hint_anthropic">for example claude-sonnet-5-5</string>
     <string name="provider_load_models">Load models from provider</string>
     <string name="provider_load_models_again">Try again</string>
     <string name="provider_models_unavailable">This provider did not list its models. Type the model name above.</string>

@@ -11,6 +11,18 @@ interface SecretPort {
     suspend fun get(ref: SecretRef): String?
 }
 
+/** Which wire format a provider speaks. The persisted names never change. */
+enum class ProviderKind(val wireName: String) {
+    OPENAI_COMPATIBLE("openai_compatible"),
+    ANTHROPIC("anthropic"),
+    ;
+
+    companion object {
+        /** Unknown names fall back to OpenAI-compatible, the format every pre-v3 provider uses. */
+        fun fromWireName(name: String?): ProviderKind = entries.firstOrNull { it.wireName == name } ?: OPENAI_COMPATIBLE
+    }
+}
+
 /** One saved provider. The key itself lives behind [apiKey] in the secret store (AD-15). */
 data class ProviderConfig(
     val id: String,
@@ -18,6 +30,7 @@ data class ProviderConfig(
     val presetId: String?,
     val baseUrl: String,
     val apiKey: SecretRef,
+    val kind: ProviderKind = ProviderKind.OPENAI_COMPATIBLE,
 )
 
 /** A model a provider offers. [supportsTools] stays unknown (null) until epic-hemat-kuota fills it. */
@@ -48,6 +61,7 @@ data class ProviderDraft(
     val apiKey: String,
     val model: String,
     val makeActive: Boolean = false,
+    val kind: ProviderKind = ProviderKind.OPENAI_COMPATIBLE,
 )
 
 /** A saved provider as the UI may see it: never the key. */
@@ -57,6 +71,7 @@ data class ProviderSummary(
     val presetId: String?,
     val baseUrl: String,
     val models: List<String>,
+    val kind: ProviderKind = ProviderKind.OPENAI_COMPATIBLE,
 )
 
 data class ProviderOverview(val providers: List<ProviderSummary>, val active: ActiveModel?)

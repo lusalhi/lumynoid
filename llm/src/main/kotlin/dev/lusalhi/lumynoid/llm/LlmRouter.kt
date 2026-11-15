@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.flow
  * filtering arrive with epic-hemat-kuota.
  */
 class LlmRouter(
-    private val adapter: OpenAiCompatibleAdapter,
+    private val adapters: ProviderAdapters,
     private val configs: ProviderConfigStore,
     private val secrets: SecretPort,
 ) : LlmPort {
@@ -30,6 +30,6 @@ class LlmRouter(
             return@flow
         }
         emit(LlmChunk.Routed(provider.id, active.modelId))
-        emitAll(adapter.stream(provider.baseUrl, active.modelId, apiKey, request))
+        emitAll(adapters.forKind(provider.kind).stream(provider.baseUrl, active.modelId, apiKey, request))
     }
 }

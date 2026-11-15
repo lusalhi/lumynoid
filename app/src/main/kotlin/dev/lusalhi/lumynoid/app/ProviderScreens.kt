@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.lusalhi.lumynoid.core.LlmError
+import dev.lusalhi.lumynoid.core.ProviderKind
 import dev.lusalhi.lumynoid.core.ProviderPreset
 import dev.lusalhi.lumynoid.core.ProviderPresets
 import dev.lusalhi.lumynoid.core.ProviderSummary
@@ -206,7 +207,13 @@ private fun ProviderFormScreen(
             value = form.model,
             onValueChange = { v -> onEdit { it.copy(model = v) } },
             label = { Text(stringResource(R.string.provider_model)) },
-            placeholder = { Text(stringResource(R.string.provider_model_hint)) },
+            placeholder = {
+                Text(
+                    stringResource(
+                        if (form.kind == ProviderKind.ANTHROPIC) R.string.provider_model_hint_anthropic else R.string.provider_model_hint,
+                    ),
+                )
+            },
             singleLine = true,
             isError = form.showMissing && form.modelMissing,
             supportingText = {

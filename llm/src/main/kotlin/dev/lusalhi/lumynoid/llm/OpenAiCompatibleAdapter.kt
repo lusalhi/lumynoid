@@ -7,16 +7,13 @@ import dev.lusalhi.lumynoid.core.ModelListResult
 import dev.lusalhi.lumynoid.core.Role
 import io.ktor.client.HttpClient
 import io.ktor.client.request.accept
-import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.bodyAsText
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readLine
@@ -26,7 +23,6 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import java.io.IOException
 
@@ -34,9 +30,9 @@ import java.io.IOException
  * Streams chat completions from any OpenAI Chat Completions-compatible endpoint (AD-11), written
  * directly on Ktor with no vendor SDK. The API key travels only in the `Authorization` header.
  */
-class OpenAiCompatibleAdapter(private val client: HttpClient) {
+class OpenAiCompatibleAdapter(private val client: HttpClient) : WireAdapter {
 
-    fun stream(baseUrl: String, model: String, apiKey: String, request: LlmRequest): Flow<LlmChunk> = flow {
+    override fun stream(baseUrl: String, model: String, apiKey: String, request: LlmRequest): Flow<LlmChunk> = flow {
         val url = baseUrl.trimEnd('/') + "/chat/completions"
         val body = ChatRequest(
             model = model,
@@ -48,10 +44,10 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) {
                 header(HttpHeaders.Authorization, "Bearer $apiKey")
                 accept(ContentType.Text.EventStream)
                 contentType(ContentType.Application.Json)
-                setBody(json.encodeToString(ChatRequest.serializer(), body))
+                setBody(wireJson.encodeToString(ChatRequest.serializer(), body))
             }.execute { response ->
                 if (!response.status.isSuccess()) {
-                    emit(LlmChunk.Failed(response.toError()))
+                    emit(LlmChunk.Failed(response.toLlmError()))
                 } else {
                     readStream(response)
                 }
@@ -65,28 +61,10 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) {
         }
     }
 
-    /**
-     * Asks the provider which models it offers (`GET {baseUrl}/models`). Any failure, an unreadable body
-     * or an empty list is [ModelListResult.Unavailable] so the caller can fall back to typing the model.
-     */
-    suspend fun models(baseUrl: String, apiKey: String): ModelListResult = try {
-        val response = client.get(baseUrl.trimEnd('/') + "/models") {
+    override suspend fun models(baseUrl: String, apiKey: String): ModelListResult =
+        client.listModelIds(baseUrl.trimEnd('/') + "/models") {
             header(HttpHeaders.Authorization, "Bearer $apiKey")
-            accept(ContentType.Application.Json)
         }
-        if (!response.status.isSuccess()) {
-            ModelListResult.Unavailable(response.toError())
-        } else {
-            val ids = json.decodeFromString(ModelList.serializer(), response.bodyAsText()).data.map { it.id }.distinct()
-            if (ids.isEmpty()) ModelListResult.Unavailable(null) else ModelListResult.Models(ids)
-        }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: IOException) {
-        ModelListResult.Unavailable(LlmError.Network)
-    } catch (e: Exception) {
-        ModelListResult.Unavailable(LlmError.Server)
-    }
 
     private suspend fun FlowCollector<LlmChunk>.readStream(response: HttpResponse) {
         val channel = response.bodyAsChannel()
@@ -99,7 +77,7 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) {
                 finished = true
                 break
             }
-            val chunk = json.decodeFromString(StreamChunk.serializer(), payload)
+            val chunk = wireJson.decodeFromString(StreamChunk.serializer(), payload)
             if (chunk.error != null) {
                 emit(LlmChunk.Failed(LlmError.Server))
                 return
@@ -111,14 +89,6 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) {
         }
         // A stream that ends without [DONE] or a finish_reason was cut off: never record it as an answer.
         emit(if (finished) LlmChunk.Done else LlmChunk.Failed(LlmError.Network))
-    }
-
-    private fun HttpResponse.toError(): LlmError = when (status) {
-        HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden -> LlmError.AuthFailed
-        HttpStatusCode.PaymentRequired -> LlmError.QuotaExhausted
-        HttpStatusCode.TooManyRequests ->
-            LlmError.RateLimited(headers[HttpHeaders.RetryAfter]?.toLongOrNull()?.times(1000))
-        else -> LlmError.Server
     }
 
     private fun Role.wire(): String = when (this) {
@@ -151,18 +121,8 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) {
     private class Delta(val content: String? = null)
 
     @Serializable
-    private class ModelList(val data: List<ModelEntry> = emptyList())
-
-    @Serializable
-    private class ModelEntry(val id: String)
-
-    @Serializable
     private class UsageDto(
         @SerialName("prompt_tokens") val promptTokens: Int = 0,
         @SerialName("completion_tokens") val completionTokens: Int = 0,
     )
-
-    private companion object {
-        val json = Json { ignoreUnknownKeys = true }
-    }
 }

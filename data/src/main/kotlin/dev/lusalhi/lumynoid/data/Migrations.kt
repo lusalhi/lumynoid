@@ -30,3 +30,8 @@ internal val MIGRATION_1_2 = Migration(1, 2) { connection ->
     connection.execSQL("DROP TABLE provider_config")
     connection.execSQL("ALTER TABLE provider_config_new RENAME TO provider_config")
 }
+
+/** v3 records which wire format a provider speaks; every provider saved so far is OpenAI-compatible. */
+internal val MIGRATION_2_3 = Migration(2, 3) { connection ->
+    connection.execSQL("ALTER TABLE provider_config ADD COLUMN `kind` TEXT NOT NULL DEFAULT 'openai_compatible'")
+}

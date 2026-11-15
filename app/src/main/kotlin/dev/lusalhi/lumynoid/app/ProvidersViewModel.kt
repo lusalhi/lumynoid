@@ -8,6 +8,7 @@ import dev.lusalhi.lumynoid.core.ConnectionTestResult
 import dev.lusalhi.lumynoid.core.LlmError
 import dev.lusalhi.lumynoid.core.ModelListResult
 import dev.lusalhi.lumynoid.core.ProviderDraft
+import dev.lusalhi.lumynoid.core.ProviderKind
 import dev.lusalhi.lumynoid.core.ProviderPreset
 import dev.lusalhi.lumynoid.core.ProviderPresets
 import dev.lusalhi.lumynoid.core.ProviderSaveResult
@@ -37,6 +38,7 @@ sealed interface ModelsState {
 data class ProviderFormState(
     val id: String? = null,
     val presetId: String? = null,
+    val kind: ProviderKind = ProviderKind.OPENAI_COMPATIBLE,
     val name: String = "",
     val baseUrl: String = "",
     val apiKey: String = "",
@@ -55,7 +57,7 @@ data class ProviderFormState(
     val complete get() = !baseUrlMissing && !apiKeyMissing && !modelMissing
     val canListModels get() = !baseUrlMissing && !apiKeyMissing
 
-    fun toDraft() = ProviderDraft(id, presetId, name, baseUrl, apiKey, model, makeActive)
+    fun toDraft() = ProviderDraft(id, presetId, name, baseUrl, apiKey, model, makeActive, kind)
 }
 
 data class ProvidersState(
@@ -96,6 +98,7 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
             form = ProviderFormState(
                 id = provider.id,
                 presetId = provider.presetId,
+                kind = provider.kind,
                 name = provider.name,
                 baseUrl = provider.baseUrl,
                 model = model,
@@ -120,6 +123,7 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
         val urlWasAutomatic = f.baseUrl.isBlank() || f.baseUrl == previous?.baseUrl
         f.copy(
             presetId = preset?.id,
+            kind = preset?.kind ?: ProviderKind.OPENAI_COMPATIBLE,
             baseUrl = if (urlWasAutomatic) preset?.baseUrl.orEmpty() else f.baseUrl,
             name = if (nameWasAutomatic) preset?.name.orEmpty() else f.name,
             models = ModelsState.Idle,
@@ -138,8 +142,9 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
             val result = admin.listModels(sent)
             _state.update { s ->
                 val current = s.form ?: return@update s
-                // Only the form that asked still wants the answer; an edit of URL or key, or another provider, makes it stale.
-                val fresh = current.id == sent.id && current.baseUrl == sent.baseUrl && current.apiKey == sent.apiKey
+                // Only the form that asked still wants the answer; an edit of URL or key, a switch of kind, or another provider makes it stale.
+                val fresh = current.id == sent.id && current.kind == sent.kind &&
+                    current.baseUrl == sent.baseUrl && current.apiKey == sent.apiKey
                 s.copy(
                     form = when {
                         fresh -> current.copy(

@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.first
  * already-saved provider means "keep the stored key".
  */
 class ProviderAdmin(
-    private val adapter: OpenAiCompatibleAdapter,
+    private val adapters: ProviderAdapters,
     private val configs: ProviderConfigStore,
     private val secrets: SecretPort,
     private val ids: IdGenerator = UuidV7,
@@ -36,7 +36,7 @@ class ProviderAdmin(
 
     override suspend fun overview(): ProviderOverview = ProviderOverview(
         providers = configs.providers().map { p ->
-            ProviderSummary(p.id, p.name, p.presetId, p.baseUrl, configs.models(p.id).map { it.modelId })
+            ProviderSummary(p.id, p.name, p.presetId, p.baseUrl, configs.models(p.id).map { it.modelId }, p.kind)
         },
         active = configs.active(),
     )
@@ -53,7 +53,7 @@ class ProviderAdmin(
         val ref = existing?.apiKey ?: SecretRef("provider_key_$id")
         if (draft.apiKey.isNotBlank()) secrets.put(ref, draft.apiKey.trim())
         val url = withScheme(draft.baseUrl)
-        configs.save(ProviderConfig(id, nameFor(draft, url), draft.presetId, url, ref))
+        configs.save(ProviderConfig(id, nameFor(draft, url), draft.presetId, url, ref, draft.kind))
         configs.saveModel(ModelProfile(id, model))
         val active = configs.active()
         // The first provider, a request for it, and any edit of the active provider all set the active model.
@@ -64,7 +64,7 @@ class ProviderAdmin(
     override suspend fun listModels(draft: ProviderDraft): ModelListResult {
         if (draft.baseUrl.isBlank()) return ModelListResult.Unavailable(null)
         val key = keyFor(draft) ?: return ModelListResult.Unavailable(null)
-        return adapter.models(withScheme(draft.baseUrl), key)
+        return adapters.forKind(draft.kind).models(withScheme(draft.baseUrl), key)
     }
 
     override suspend fun testConnection(draft: ProviderDraft): ConnectionTestResult {
@@ -74,7 +74,7 @@ class ProviderAdmin(
         // A real one-word chat request: unlike `/models`, it needs a valid key and a model that exists.
         // The first useful chunk settles it, and `first` cancels the rest of the stream.
         val request = LlmRequest(listOf(LlmMessage(Role.USER, "Reply with one word.")))
-        val outcome = adapter.stream(withScheme(draft.baseUrl), model, key, request)
+        val outcome = adapters.forKind(draft.kind).stream(withScheme(draft.baseUrl), model, key, request)
             .first { it is LlmChunk.TextDelta || it is LlmChunk.Done || it is LlmChunk.Failed }
         return when (outcome) {
             is LlmChunk.Failed -> ConnectionTestResult.Failure(outcome.error)

@@ -10,6 +10,7 @@ import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.Origin
 import dev.lusalhi.lumynoid.core.ProviderConfig
 import dev.lusalhi.lumynoid.core.ProviderConfigStore
+import dev.lusalhi.lumynoid.core.ProviderKind
 import dev.lusalhi.lumynoid.core.SecretRef
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskEventJson
@@ -76,7 +77,9 @@ internal class RoomProviderConfigStore(private val dao: LumynoidDao) : ProviderC
 
     override suspend fun save(config: ProviderConfig) {
         dao.upsertProvider(
-            ProviderConfigEntity(config.id, config.name, config.presetId, config.baseUrl, config.apiKey.value),
+            ProviderConfigEntity(
+                config.id, config.name, config.presetId, config.baseUrl, config.apiKey.value, config.kind.wireName,
+            ),
         )
     }
 
@@ -93,5 +96,5 @@ internal class RoomProviderConfigStore(private val dao: LumynoidDao) : ProviderC
         dao.upsertActive(ActiveModelEntity(providerId = active.providerId, modelId = active.modelId))
     }
 
-    private fun ProviderConfigEntity.toConfig() = ProviderConfig(id, name, presetId, baseUrl, SecretRef(secretRef))
+    private fun ProviderConfigEntity.toConfig() = ProviderConfig(id, name, presetId, baseUrl, SecretRef(secretRef), ProviderKind.fromWireName(kind))
 }

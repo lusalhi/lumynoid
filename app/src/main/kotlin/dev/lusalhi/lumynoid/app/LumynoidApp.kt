@@ -5,7 +5,7 @@ import dev.lusalhi.lumynoid.core.LlmPort
 import dev.lusalhi.lumynoid.core.ProviderAdminPort
 import dev.lusalhi.lumynoid.data.LumynoidData
 import dev.lusalhi.lumynoid.llm.LlmRouter
-import dev.lusalhi.lumynoid.llm.OpenAiCompatibleAdapter
+import dev.lusalhi.lumynoid.llm.ProviderAdapters
 import dev.lusalhi.lumynoid.llm.ProviderAdmin
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -23,10 +23,10 @@ class AppGraph(application: Application) {
         }
     }
 
-    private val adapter = OpenAiCompatibleAdapter(httpClient)
+    private val adapters = ProviderAdapters(httpClient)
 
-    val llm: LlmPort = LlmRouter(adapter, data.providerConfigs, data.secrets)
-    val providerAdmin: ProviderAdminPort = ProviderAdmin(adapter, data.providerConfigs, data.secrets)
+    val llm: LlmPort = LlmRouter(adapters, data.providerConfigs, data.secrets)
+    val providerAdmin: ProviderAdminPort = ProviderAdmin(adapters, data.providerConfigs, data.secrets)
 }
 
 class LumynoidApp : Application() {

@@ -13,7 +13,7 @@ import androidx.room3.RoomDatabase
         ModelProfileEntity::class,
         ActiveModelEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 internal abstract class LumynoidDatabase : RoomDatabase() {

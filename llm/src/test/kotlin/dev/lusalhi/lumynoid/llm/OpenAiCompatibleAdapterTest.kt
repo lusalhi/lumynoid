@@ -12,6 +12,7 @@ import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.ProviderConfig
 import dev.lusalhi.lumynoid.core.ProviderConfigStore
 import dev.lusalhi.lumynoid.core.ProviderDraft
+import dev.lusalhi.lumynoid.core.ProviderKind
 import dev.lusalhi.lumynoid.core.ProviderSaveResult
 import dev.lusalhi.lumynoid.core.Role
 import dev.lusalhi.lumynoid.core.SecretPort
@@ -70,7 +71,8 @@ private fun draft(
     makeActive: Boolean = false,
     presetId: String? = null,
     name: String = "",
-) = ProviderDraft(id, presetId, name, url, key, model, makeActive)
+    kind: ProviderKind = ProviderKind.OPENAI_COMPATIBLE,
+) = ProviderDraft(id, presetId, name, url, key, model, makeActive, kind)
 
 private fun sse(vararg lines: String) = lines.joinToString("\n\n", postfix = "\n\n")
 
@@ -78,6 +80,8 @@ class OpenAiCompatibleAdapterTest {
 
 
     private fun adapterFor(engine: MockEngine) = OpenAiCompatibleAdapter(HttpClient(engine))
+
+    private fun adaptersFor(engine: MockEngine) = ProviderAdapters(HttpClient(engine))
 
     @Test
     fun streamsTextDeltasThenDone() = runTest {
@@ -191,7 +195,7 @@ class OpenAiCompatibleAdapterTest {
     }
 
     private fun admin(store: MemoryStore, engine: MockEngine = MockEngine { respond("never") }) =
-        ProviderAdmin(adapterFor(engine), store, store, CountingIds())
+        ProviderAdmin(adaptersFor(engine), store, store, CountingIds())
 
     private val okStream = sse("""data: {"choices":[{"delta":{"content":"ok"}}]}""", "data: [DONE]")
 
@@ -200,7 +204,7 @@ class OpenAiCompatibleAdapterTest {
         val store = MemoryStore()
         val engine = MockEngine { respond(okStream) }
         admin(store).save(draft(url = "https://example.test/v1", model = "chosen/model"))
-        val router = LlmRouter(adapterFor(engine), store, store)
+        val router = LlmRouter(adaptersFor(engine), store, store)
 
         val chunks = router.stream(request).toList()
 
@@ -215,7 +219,7 @@ class OpenAiCompatibleAdapterTest {
     fun routerWithoutAnActiveProviderFailsWithoutCallingTheNetwork() = runTest {
         val store = MemoryStore()
         val engine = MockEngine { respond("never") }
-        val chunks = LlmRouter(adapterFor(engine), store, store).stream(request).toList()
+        val chunks = LlmRouter(adaptersFor(engine), store, store).stream(request).toList()
 
         assertEquals(listOf<LlmChunk>(LlmChunk.Failed(LlmError.AuthFailed)), chunks)
         assertTrue(engine.requestHistory.isEmpty())
@@ -228,7 +232,7 @@ class OpenAiCompatibleAdapterTest {
         val admin = admin(store)
         admin.save(draft(url = "https://one.test/v1", model = "m1")) // first provider: active
         admin.save(draft(url = "https://two.test/v1", model = "m2", key = "sk-two"))
-        val router = LlmRouter(adapterFor(engine), store, store)
+        val router = LlmRouter(adaptersFor(engine), store, store)
 
         router.stream(request).toList()
         admin.select("p2", "m2")
@@ -246,7 +250,7 @@ class OpenAiCompatibleAdapterTest {
         val admin = admin(store)
         admin.save(draft(url = "https://one.test/v1", model = "m1"))
         admin.save(draft(url = "https://two.test/v1", model = "m2", key = "sk-two"))
-        val router = LlmRouter(adapterFor(engine), store, store)
+        val router = LlmRouter(adaptersFor(engine), store, store)
 
         val seen = mutableListOf<LlmChunk>()
         router.stream(request).collect {
@@ -342,6 +346,65 @@ class OpenAiCompatibleAdapterTest {
         assertEquals(ConnectionTestResult.Incomplete, admin.testConnection(draft(key = "", id = "p1")))
         assertTrue(engine.requestHistory.isEmpty())
         assertEquals(ProviderSaveResult.SAVED, admin.save(draft(key = "sk-new", id = "p1", model = "m2")))
+    }
+
+    private val anthropicStream = "event: message_start\n" +
+        """data: {"type":"message_start","message":{"usage":{"input_tokens":3}}}""" + "\n\n" +
+        "event: content_block_delta\n" +
+        """data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hey"}}""" + "\n\n" +
+        "event: message_stop\n" + """data: {"type":"message_stop"}""" + "\n\n"
+
+    @Test
+    fun theRouterUsesTheAdapterOfTheActiveProvidersKind() = runTest {
+        val store = MemoryStore()
+        val engine = MockEngine { request ->
+            respond(if (request.url.host == "api.anthropic.com") anthropicStream else okStream)
+        }
+        val admin = admin(store)
+        admin.save(draft(url = "https://one.test/v1", model = "m1")) // OpenAI-compatible, first: active
+        admin.save(draft(url = "https://api.anthropic.com/v1", model = "claude-x", key = "sk-ant", kind = ProviderKind.ANTHROPIC))
+        val router = LlmRouter(adaptersFor(engine), store, store)
+
+        val first = router.stream(request).toList()
+        admin.select("p2", "claude-x")
+        val second = router.stream(request).toList()
+
+        assertEquals(listOf(LlmChunk.Routed("p1", "m1"), LlmChunk.TextDelta("ok"), LlmChunk.Done), first)
+        assertEquals(
+            listOf(LlmChunk.Routed("p2", "claude-x"), LlmChunk.TextDelta("hey"), LlmChunk.Usage(3, 0), LlmChunk.Done),
+            second,
+        )
+        val sent = engine.requestHistory
+        assertEquals("https://one.test/v1/chat/completions", sent[0].url.toString())
+        assertEquals("Bearer $SECRET", sent[0].headers[HttpHeaders.Authorization])
+        assertEquals("https://api.anthropic.com/v1/messages", sent[1].url.toString())
+        assertEquals("sk-ant", sent[1].headers["x-api-key"])
+        assertEquals(null, sent[1].headers[HttpHeaders.Authorization])
+    }
+
+    @Test
+    fun adminSavesTheKindAndUsesTheAnthropicFormatForModelListAndTest() = runTest {
+        val store = MemoryStore()
+        val engine = MockEngine { request ->
+            if (request.url.encodedPath.endsWith("/models")) respond("""{"data":[{"id":"claude-a"}]}""") else respond(anthropicStream)
+        }
+        val admin = admin(store, engine)
+        val anthropic = draft(url = "https://api.anthropic.com/v1", model = "claude-a", key = "sk-ant", presetId = "anthropic", kind = ProviderKind.ANTHROPIC)
+
+        assertEquals(ModelListResult.Models(listOf("claude-a")), admin.listModels(anthropic))
+        assertEquals(ConnectionTestResult.Success, admin.testConnection(anthropic))
+        admin.save(anthropic)
+
+        assertEquals(ProviderKind.ANTHROPIC, store.configs.getValue("p1").kind)
+        assertEquals(listOf(ProviderKind.ANTHROPIC), admin.overview().providers.map { it.kind })
+        assertTrue(engine.requestHistory.all { it.headers["x-api-key"] == "sk-ant" && it.headers[HttpHeaders.Authorization] == null })
+    }
+
+    @Test
+    fun aWrongAnthropicKeyFailsTheTestWithAuthFailed() = runTest {
+        val engine = MockEngine { respond("{}", HttpStatusCode.Unauthorized) }
+        val result = admin(MemoryStore(), engine).testConnection(draft(kind = ProviderKind.ANTHROPIC))
+        assertEquals(ConnectionTestResult.Failure(LlmError.AuthFailed), result)
     }
 
     @Test

@@ -7,6 +7,7 @@ import dev.lusalhi.lumynoid.core.Clock
 import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.Origin
 import dev.lusalhi.lumynoid.core.ProviderConfig
+import dev.lusalhi.lumynoid.core.ProviderKind
 import dev.lusalhi.lumynoid.core.SecretRef
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskRequest
@@ -92,7 +93,7 @@ class PersistenceTest {
         assertEquals(null, store.active())
 
         store.save(ProviderConfig("p1", "One", "openrouter", "https://one.test/v1", SecretRef("k1")))
-        store.save(ProviderConfig("p2", "Two", null, "https://two.test/v1", SecretRef("k2")))
+        store.save(ProviderConfig("p2", "Two", "anthropic", "https://two.test/v1", SecretRef("k2"), ProviderKind.ANTHROPIC))
         store.saveModel(ModelProfile("p1", "a"))
         store.saveModel(ModelProfile("p1", "b"))
         store.saveModel(ModelProfile("p1", "a")) // saved again: now the most recent
@@ -101,6 +102,8 @@ class PersistenceTest {
 
         assertEquals(listOf("p1", "p2"), store.providers().map { it.id })
         assertEquals("openrouter", store.provider("p1")?.presetId)
+        assertEquals(ProviderKind.OPENAI_COMPATIBLE, store.provider("p1")?.kind)
+        assertEquals(ProviderKind.ANTHROPIC, store.provider("p2")?.kind)
         assertEquals(listOf("b", "a"), store.models("p1").map { it.modelId })
         assertEquals(ActiveModel("p2", "z"), store.active())
         db.close()

@@ -66,4 +66,43 @@ class MigrationTest {
         assertEquals(emptyList(), v2.rows("SELECT * FROM provider_config"))
         assertEquals(emptyList(), v2.rows("SELECT * FROM active_model"))
     }
+
+    @Test
+    fun v2ProvidersBecomeOpenAiCompatibleAndKeepTheirActiveModel() = runTest {
+        helper.createDatabase(2).use { v2 ->
+            v2.execSQL(
+                "INSERT INTO provider_config (id, name, preset_id, base_url, secret_ref) VALUES " +
+                    "('p1', 'OpenRouter', 'openrouter', 'https://openrouter.ai/api/v1', 'k1'), " +
+                    "('p2', 'Mine', NULL, 'https://my.host/v1', 'k2')",
+            )
+            v2.execSQL("INSERT INTO model_profile (provider_id, model_id, supports_tools) VALUES ('p2', 'm', NULL)")
+            v2.execSQL("INSERT INTO active_model (id, provider_id, model_id) VALUES (1, 'p2', 'm')")
+        }
+
+        val v3 = helper.runMigrationsAndValidate(3, listOf(MIGRATION_2_3))
+
+        assertEquals(
+            listOf(
+                listOf<String?>("p1", "OpenRouter", "openrouter", "https://openrouter.ai/api/v1", "k1", "openai_compatible"),
+                listOf<String?>("p2", "Mine", null, "https://my.host/v1", "k2", "openai_compatible"),
+            ),
+            v3.rows("SELECT id, name, preset_id, base_url, secret_ref, kind FROM provider_config ORDER BY id"),
+        )
+        assertEquals(listOf(listOf<String?>("p2", "m")), v3.rows("SELECT provider_id, model_id FROM model_profile"))
+        assertEquals(listOf(listOf<String?>("1", "p2", "m")), v3.rows("SELECT id, provider_id, model_id FROM active_model"))
+    }
+
+    @Test
+    fun theWholeChainFromV1ReachesV3() = runTest {
+        helper.createDatabase(1).use { v1 ->
+            v1.execSQL(
+                "INSERT INTO provider_config (id, base_url, model, secret_ref) VALUES ('p1', 'https://x.test/v1', 'm', 'k1')",
+            )
+        }
+
+        val v3 = helper.runMigrationsAndValidate(3, listOf(MIGRATION_1_2, MIGRATION_2_3))
+
+        assertEquals(listOf(listOf<String?>("p1", "openai_compatible")), v3.rows("SELECT id, kind FROM provider_config"))
+        assertEquals(listOf(listOf<String?>("p1", "m")), v3.rows("SELECT provider_id, model_id FROM active_model"))
+    }
 }

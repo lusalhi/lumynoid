@@ -41,6 +41,8 @@ internal data class ProviderConfigEntity(
     @ColumnInfo(name = "preset_id") val presetId: String?,
     @ColumnInfo(name = "base_url") val baseUrl: String,
     @ColumnInfo(name = "secret_ref") val secretRef: String,
+    // Providers saved before v3 all speak the OpenAI-compatible format.
+    @ColumnInfo(defaultValue = "openai_compatible") val kind: String = "openai_compatible",
 )
 
 @Entity(tableName = "model_profile", primaryKeys = ["provider_id", "model_id"])
