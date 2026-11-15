@@ -3,7 +3,7 @@ title: 'Public licensed repo with CI gates'
 type: chore
 ticket: '2'
 created: '2026-11-15'
-status: built
+status: done
 baseline_revision: 'bca406260d72dcdd1bbe770cdf45e4168ecefeca'
 route: full
 route_source: auto
@@ -63,8 +63,8 @@ context:
 - [x] `.github/scripts/check_schema_claims.py` + self-test -- compare schema files on the PR against base and against other open PRs (`gh api`) -- AD-19
 - [x] `core/src/test/.../SerialNamePolicyTest.kt` -- reflect over each persisted root's sealed subclasses and enum entries; require explicit snake_case serial names; include a negative fixture proving a missing name is detected -- AD-19
 - [x] `.github/workflows/ci.yml` -- wire the three gates into the job
-- [ ] Verify live: on a private repo, push a base branch `main`, then open throw-away PRs (Firebase dependency; reused schema number); both must fail, then close them and delete their branches
-- [ ] Hand over: report that the repo is ready to flip public, with the history's author email noted for the owner
+- [x] Verify live: on a private repo, push a base branch `main`, then open throw-away PRs (Firebase dependency; reused schema number); both must fail, then close them and delete their branches
+- [x] Hand over: report that the repo is ready to flip public, with the history's author email noted for the owner
 
 **Acceptance Criteria:**
 - Given a clean checkout, when `./gradlew checkDependencyPolicy :core:test` runs, then it succeeds.
@@ -84,6 +84,9 @@ Implemented directly in the main session (no subagent was requested). Local veri
 - Step-03 forbids push and remote operations, so the **live** task (create `main`, throw-away PRs for Firebase and a reused schema number, close them) is NOT done. The schema gate's `gh api` open-PR scan and the `schema-claims` job were exercised only by the local self-test, not on GitHub. The task stays unchecked until after review.
 - The final plan task is a hand-over: the owner flips the repo public; the history's author email (`hammam47@gmail.com`) becomes public with it.
 
+- Live proof, 2026-11-15 (after review, with the owner's go-ahead): pushed `initiative-lumynoid`, created `main` from it and made it the default branch. CI on `main` was green (`schema-claims` skipped on push by design). `licenseInfo` reads Apache-2.0. Four throw-away PRs were opened and closed unmerged, their branches deleted: Firebase dependency failed the AD-17 step naming `com.google.android.gms` and `com.google.firebase` modules; two PRs both adding schema `2.json` each failed with "also claimed by PR ..."; an edited `1.json` failed with "an existing exported schema was edited". This proved the `gh api` open-PR scan on GitHub. The repo is still PRIVATE; the owner flips it public.
+- Slip during the live run: a stale local `main` branch (old BMad setup commit) was used for the first batch of test branches, which pushed four junk branches. They were deleted from the remote before any PR existed; the second batch was cut from `origin/main`.
+
 ## Plan Change Log
 
 ## Review Triage Log
@@ -97,7 +100,7 @@ Pass 1, quick lens, run externally with `omp` on its default model (findings in 
 | 1 | `Apache-2.0 WITH Commons-Clause` matches `apache` | low | reject | Real in theory, but no such POM is on the classpath and the fix needs extra guard branches; allowlist review at PR time covers new dependencies. |
 | 4 | Enum entry check accepts an unannotated lowercase entry | low | reject | Real, but Kotlin enum entries are uppercase by convention, so an unannotated entry fails the snake_case check; detecting annotations needs reflection on the enum class. Not worth the complexity. |
 | 5 | Prefix match forbids subgroups of the four groups | low | reject | Stricter than the plan's "exactly" wording, but it only rejects `com.google.android.gms.*` style groups that do not exist on Maven, and loosening it would weaken AD-17. |
-| 6 | Live GitHub acceptance evidence missing | low | defer | Not a code defect: step 3 forbids push, so the throw-away PRs and the `licenseInfo` check are done after review. Recorded in `deferred-work.md`; the plan task stays unchecked. |
+| 6 | Live GitHub acceptance evidence missing | low | defer (done later, see Implementation Notes) | Not a code defect: step 3 forbids push, so the throw-away PRs and the `licenseInfo` check are done after review. Recorded in `deferred-work.md`; the plan task stays unchecked. |
 
 ## Design Notes
 
