@@ -18,6 +18,13 @@
     <string name="error_interrupted">This answer was interrupted.</string>
     <string name="task_cancelled">Stopped.</string>
 
+    <string name="link_dialog_title">Open this link?</string>
+    <string name="link_open">Open</string>
+    <string name="link_cancel">Cancel</string>
+    <string name="link_cannot_open">This link can\'t be opened.</string>
+    <string name="link_no_app">No app on this phone can open this link.</string>
+    <string name="link_image_label">Image: %1$s</string>
+
     <string name="provider_title">AI providers</string>
     <string name="provider_intro">Use an OpenAI-compatible service or Anthropic with your own API key. Your key stays on this phone.</string>
     <string name="provider_active">Used for chat · %1$s</string>

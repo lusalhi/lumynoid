@@ -150,7 +150,12 @@ private fun Bubble(text: String, fromUser: Boolean) {
             color = if (fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.widthIn(max = 320.dp),
         ) {
-            Text(text, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyLarge)
+            val padding = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+            if (fromUser) {
+                Text(text, padding, style = MaterialTheme.typography.bodyLarge)
+            } else {
+                AssistantMarkdown(text, padding)
+            }
         }
     }
 }

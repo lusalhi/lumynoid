@@ -67,6 +67,10 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+    implementation(libs.markdown.renderer)
+    implementation(libs.markdown.renderer.m3)
+
+    testImplementation(libs.junit)
 }
 
 // AD-17: the release classpath gate.
