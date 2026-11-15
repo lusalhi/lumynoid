@@ -32,7 +32,6 @@ covers = []
 after = [2]
 hitl = true
 risk = "high"
-unknown = "Apakah akun developer Google penuh milik pemilik proyek sudah ada dan terverifikasi?"
 
 [[entry]]
 id = 4
