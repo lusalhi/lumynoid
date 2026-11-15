@@ -3,14 +3,16 @@ package dev.lusalhi.lumynoid.llm
 import dev.lusalhi.lumynoid.core.LlmChunk
 import dev.lusalhi.lumynoid.core.LlmError
 import dev.lusalhi.lumynoid.core.LlmRequest
-import dev.lusalhi.lumynoid.core.ProviderConfig
+import dev.lusalhi.lumynoid.core.ModelListResult
 import dev.lusalhi.lumynoid.core.Role
 import io.ktor.client.HttpClient
 import io.ktor.client.request.accept
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -34,10 +36,10 @@ import java.io.IOException
  */
 class OpenAiCompatibleAdapter(private val client: HttpClient) {
 
-    fun stream(config: ProviderConfig, apiKey: String, request: LlmRequest): Flow<LlmChunk> = flow {
-        val url = config.baseUrl.trimEnd('/') + "/chat/completions"
+    fun stream(baseUrl: String, model: String, apiKey: String, request: LlmRequest): Flow<LlmChunk> = flow {
+        val url = baseUrl.trimEnd('/') + "/chat/completions"
         val body = ChatRequest(
-            model = config.model,
+            model = model,
             messages = request.messages.map { ChatMessage(it.role.wire(), it.content) },
             stream = true,
         )
@@ -61,6 +63,29 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) {
         } catch (e: Exception) {
             emit(LlmChunk.Failed(LlmError.Server))
         }
+    }
+
+    /**
+     * Asks the provider which models it offers (`GET {baseUrl}/models`). Any failure, an unreadable body
+     * or an empty list is [ModelListResult.Unavailable] so the caller can fall back to typing the model.
+     */
+    suspend fun models(baseUrl: String, apiKey: String): ModelListResult = try {
+        val response = client.get(baseUrl.trimEnd('/') + "/models") {
+            header(HttpHeaders.Authorization, "Bearer $apiKey")
+            accept(ContentType.Application.Json)
+        }
+        if (!response.status.isSuccess()) {
+            ModelListResult.Unavailable(response.toError())
+        } else {
+            val ids = json.decodeFromString(ModelList.serializer(), response.bodyAsText()).data.map { it.id }.distinct()
+            if (ids.isEmpty()) ModelListResult.Unavailable(null) else ModelListResult.Models(ids)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: IOException) {
+        ModelListResult.Unavailable(LlmError.Network)
+    } catch (e: Exception) {
+        ModelListResult.Unavailable(LlmError.Server)
     }
 
     private suspend fun FlowCollector<LlmChunk>.readStream(response: HttpResponse) {
@@ -124,6 +149,12 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) {
 
     @Serializable
     private class Delta(val content: String? = null)
+
+    @Serializable
+    private class ModelList(val data: List<ModelEntry> = emptyList())
+
+    @Serializable
+    private class ModelEntry(val id: String)
 
     @Serializable
     private class UsageDto(

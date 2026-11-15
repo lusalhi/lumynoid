@@ -15,10 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -34,81 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.TaskEvent
-
-@Composable
-fun ProviderScreen(
-    form: ProviderFormState,
-    canGoBack: Boolean,
-    onEdit: ((ProviderFormState) -> ProviderFormState) -> Unit,
-    onSave: () -> Unit,
-    onBack: () -> Unit,
-) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(stringResource(R.string.provider_title), style = MaterialTheme.typography.headlineSmall)
-        Text(stringResource(R.string.provider_intro), style = MaterialTheme.typography.bodyMedium)
-
-        OutlinedTextField(
-            value = form.baseUrl,
-            onValueChange = { v -> onEdit { it.copy(baseUrl = v) } },
-            label = { Text(stringResource(R.string.provider_base_url)) },
-            placeholder = { Text(stringResource(R.string.provider_base_url_hint)) },
-            singleLine = true,
-            isError = form.showMissing && form.baseUrlMissing,
-            supportingText = {
-                if (form.showMissing && form.baseUrlMissing) Text(stringResource(R.string.provider_missing_base_url))
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = form.apiKey,
-            onValueChange = { v -> onEdit { it.copy(apiKey = v) } },
-            label = { Text(stringResource(R.string.provider_api_key)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            isError = form.showMissing && form.apiKeyMissing,
-            supportingText = {
-                when {
-                    form.showMissing && form.apiKeyMissing -> Text(stringResource(R.string.provider_missing_api_key))
-                    form.keySaved -> Text(stringResource(R.string.provider_api_key_saved))
-                }
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = form.model,
-            onValueChange = { v -> onEdit { it.copy(model = v) } },
-            label = { Text(stringResource(R.string.provider_model)) },
-            placeholder = { Text(stringResource(R.string.provider_model_hint)) },
-            singleLine = true,
-            isError = form.showMissing && form.modelMissing,
-            supportingText = {
-                if (form.showMissing && form.modelMissing) Text(stringResource(R.string.provider_missing_model))
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onSave) { Text(stringResource(R.string.provider_save)) }
-            if (canGoBack) TextButton(onClick = onBack) { Text(stringResource(R.string.provider_back)) }
-        }
-    }
-}
 
 @Composable
 fun ChatScreen(

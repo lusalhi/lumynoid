@@ -23,8 +23,10 @@ class AppGraph(application: Application) {
         }
     }
 
-    val llm: LlmPort = LlmRouter(OpenAiCompatibleAdapter(httpClient), data.providerConfigs, data.secrets)
-    val providerAdmin: ProviderAdminPort = ProviderAdmin(data.providerConfigs, data.secrets)
+    private val adapter = OpenAiCompatibleAdapter(httpClient)
+
+    val llm: LlmPort = LlmRouter(adapter, data.providerConfigs, data.secrets)
+    val providerAdmin: ProviderAdminPort = ProviderAdmin(adapter, data.providerConfigs, data.secrets)
 }
 
 class LumynoidApp : Application() {

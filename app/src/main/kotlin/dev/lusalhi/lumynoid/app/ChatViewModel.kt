@@ -5,8 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.lusalhi.lumynoid.core.LiveAnswer
 import dev.lusalhi.lumynoid.core.Origin
-import dev.lusalhi.lumynoid.core.ProviderInput
-import dev.lusalhi.lumynoid.core.ProviderSaveResult
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskRequest
 import dev.lusalhi.lumynoid.core.UuidV7
@@ -24,19 +22,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class Screen { LOADING, CHAT, PROVIDER }
-
-data class ProviderFormState(
-    val baseUrl: String = "",
-    val apiKey: String = "",
-    val model: String = "",
-    val keySaved: Boolean = false,
-    val showMissing: Boolean = false,
-) {
-    val baseUrlMissing get() = baseUrl.isBlank()
-    val apiKeyMissing get() = apiKey.isBlank() && !keySaved
-    val modelMissing get() = model.isBlank()
-    val complete get() = !baseUrlMissing && !apiKeyMissing && !modelMissing
-}
 
 data class ChatState(
     val screen: Screen = Screen.LOADING,
@@ -56,9 +41,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val providerConfigured = MutableStateFlow(false)
     private val conversationId = MutableStateFlow<String?>(null)
 
-    private val _form = MutableStateFlow(ProviderFormState())
-    val form: StateFlow<ProviderFormState> = _form
-
     private val events = conversationId.flatMapLatest { id ->
         if (id == null) flowOf(emptyList()) else graph.data.events.observe(id)
     }
@@ -76,36 +58,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         agent.connect()
         viewModelScope.launch {
             conversationId.value = graph.data.conversations.latest()?.id
-            val current = graph.providerAdmin.current()
-            providerConfigured.value = current != null
-            if (current != null) {
-                _form.value = ProviderFormState(current.baseUrl, "", current.model, keySaved = true)
-            }
-            screen.value = if (current != null) Screen.CHAT else Screen.PROVIDER
+            val configured = graph.providerAdmin.overview().active != null
+            providerConfigured.value = configured
+            screen.value = if (configured) Screen.CHAT else Screen.PROVIDER
         }
     }
 
     fun openProvider() { screen.value = Screen.PROVIDER }
 
-    fun closeProvider() { if (providerConfigured.value) screen.value = Screen.CHAT }
-
-    fun editForm(transform: (ProviderFormState) -> ProviderFormState) = _form.update(transform)
-
-    fun saveProvider() {
-        val form = _form.value
-        if (!form.complete) {
-            _form.update { it.copy(showMissing = true) }
-            return
-        }
+    /** Leaves the provider screen for the chat, once the app has a provider and model to chat with. */
+    fun closeProvider() {
         viewModelScope.launch {
-            when (graph.providerAdmin.save(ProviderInput(form.baseUrl, form.apiKey, form.model))) {
-                ProviderSaveResult.SAVED -> {
-                    providerConfigured.value = true
-                    _form.update { it.copy(apiKey = "", keySaved = true, showMissing = false) }
-                    screen.value = Screen.CHAT
-                }
-                ProviderSaveResult.INCOMPLETE -> _form.update { it.copy(showMissing = true) }
-            }
+            val configured = graph.providerAdmin.overview().active != null
+            providerConfigured.value = configured
+            if (configured) screen.value = Screen.CHAT
         }
     }
 

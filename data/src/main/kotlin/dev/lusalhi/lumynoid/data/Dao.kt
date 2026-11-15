@@ -26,6 +26,22 @@ internal interface LumynoidDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertProvider(config: ProviderConfigEntity)
 
-    @Query("SELECT * FROM provider_config LIMIT 1")
-    suspend fun activeProvider(): ProviderConfigEntity?
+    @Query("SELECT * FROM provider_config ORDER BY rowid")
+    suspend fun providers(): List<ProviderConfigEntity>
+
+    @Query("SELECT * FROM provider_config WHERE id = :id")
+    suspend fun provider(id: String): ProviderConfigEntity?
+
+    /** REPLACE re-inserts the row, so `rowid` order is the order models were last saved. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertModel(model: ModelProfileEntity)
+
+    @Query("SELECT * FROM model_profile WHERE provider_id = :providerId ORDER BY rowid")
+    suspend fun models(providerId: String): List<ModelProfileEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertActive(active: ActiveModelEntity)
+
+    @Query("SELECT * FROM active_model WHERE id = 1")
+    suspend fun active(): ActiveModelEntity?
 }

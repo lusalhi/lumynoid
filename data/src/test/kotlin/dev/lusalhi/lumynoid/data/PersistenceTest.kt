@@ -2,7 +2,9 @@ package dev.lusalhi.lumynoid.data
 
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import dev.lusalhi.lumynoid.core.ActiveModel
 import dev.lusalhi.lumynoid.core.Clock
+import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.Origin
 import dev.lusalhi.lumynoid.core.ProviderConfig
 import dev.lusalhi.lumynoid.core.SecretRef
@@ -73,13 +75,34 @@ class PersistenceTest {
         val db = open(folder.newFile("lumynoid.db"))
         val store = RoomProviderConfigStore(db.dao())
 
-        store.save(ProviderConfig("p1", "https://example.test/v1", "m", SecretRef("provider_key_p1")))
-        val row = db.dao().activeProvider()
+        store.save(ProviderConfig("p1", "Mine", null, "https://example.test/v1", SecretRef("provider_key_p1")))
+        val row = db.dao().provider("p1")
 
         assertNotNull(row)
         assertEquals("provider_key_p1", row.secretRef)
         assertFalse(row.toString().contains("sk-"))
-        assertEquals(SecretRef("provider_key_p1"), store.active()?.apiKey)
+        assertEquals(SecretRef("provider_key_p1"), store.provider("p1")?.apiKey)
+        db.close()
+    }
+
+    @Test
+    fun providersModelsAndTheActiveChoiceRoundTrip() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val store = RoomProviderConfigStore(db.dao())
+        assertEquals(null, store.active())
+
+        store.save(ProviderConfig("p1", "One", "openrouter", "https://one.test/v1", SecretRef("k1")))
+        store.save(ProviderConfig("p2", "Two", null, "https://two.test/v1", SecretRef("k2")))
+        store.saveModel(ModelProfile("p1", "a"))
+        store.saveModel(ModelProfile("p1", "b"))
+        store.saveModel(ModelProfile("p1", "a")) // saved again: now the most recent
+        store.setActive(ActiveModel("p1", "b"))
+        store.setActive(ActiveModel("p2", "z"))
+
+        assertEquals(listOf("p1", "p2"), store.providers().map { it.id })
+        assertEquals("openrouter", store.provider("p1")?.presetId)
+        assertEquals(listOf("b", "a"), store.models("p1").map { it.modelId })
+        assertEquals(ActiveModel("p2", "z"), store.active())
         db.close()
     }
 }

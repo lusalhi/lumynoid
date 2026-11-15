@@ -1,10 +1,12 @@
 package dev.lusalhi.lumynoid.data
 
+import dev.lusalhi.lumynoid.core.ActiveModel
 import dev.lusalhi.lumynoid.core.Clock
 import dev.lusalhi.lumynoid.core.Conversation
 import dev.lusalhi.lumynoid.core.ConversationPort
 import dev.lusalhi.lumynoid.core.EventRepository
 import dev.lusalhi.lumynoid.core.IdGenerator
+import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.Origin
 import dev.lusalhi.lumynoid.core.ProviderConfig
 import dev.lusalhi.lumynoid.core.ProviderConfigStore
@@ -68,11 +70,28 @@ internal class RoomConversationPort(
 
 internal class RoomProviderConfigStore(private val dao: LumynoidDao) : ProviderConfigStore {
 
-    override suspend fun active(): ProviderConfig? = dao.activeProvider()?.let {
-        ProviderConfig(it.id, it.baseUrl, it.model, SecretRef(it.secretRef))
-    }
+    override suspend fun providers(): List<ProviderConfig> = dao.providers().map { it.toConfig() }
+
+    override suspend fun provider(id: String): ProviderConfig? = dao.provider(id)?.toConfig()
 
     override suspend fun save(config: ProviderConfig) {
-        dao.upsertProvider(ProviderConfigEntity(config.id, config.baseUrl, config.model, config.apiKey.value))
+        dao.upsertProvider(
+            ProviderConfigEntity(config.id, config.name, config.presetId, config.baseUrl, config.apiKey.value),
+        )
     }
+
+    override suspend fun models(providerId: String): List<ModelProfile> =
+        dao.models(providerId).map { ModelProfile(it.providerId, it.modelId, it.supportsTools) }
+
+    override suspend fun saveModel(model: ModelProfile) {
+        dao.upsertModel(ModelProfileEntity(model.providerId, model.modelId, model.supportsTools))
+    }
+
+    override suspend fun active(): ActiveModel? = dao.active()?.let { ActiveModel(it.providerId, it.modelId) }
+
+    override suspend fun setActive(active: ActiveModel) {
+        dao.upsertActive(ActiveModelEntity(providerId = active.providerId, modelId = active.modelId))
+    }
+
+    private fun ProviderConfigEntity.toConfig() = ProviderConfig(id, name, presetId, baseUrl, SecretRef(secretRef))
 }

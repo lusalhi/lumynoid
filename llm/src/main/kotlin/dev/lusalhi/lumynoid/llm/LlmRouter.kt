@@ -11,8 +11,9 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 
 /**
- * The decorator the rest of the app sees as [LlmPort] (AD-12). In this story it is a pass-through
- * for the one active provider; rotation and model filtering arrive with epic-hemat-kuota.
+ * The decorator the rest of the app sees as [LlmPort] (AD-12). It is a pass-through for the one active
+ * provider and model, read on every call so a switch applies from the next message; rotation and model
+ * filtering arrive with epic-hemat-kuota.
  */
 class LlmRouter(
     private val adapter: OpenAiCompatibleAdapter,
@@ -21,13 +22,14 @@ class LlmRouter(
 ) : LlmPort {
 
     override fun stream(request: LlmRequest): Flow<LlmChunk> = flow {
-        val config = configs.active()
-        val apiKey = config?.let { secrets.get(it.apiKey) }
-        if (config == null || apiKey.isNullOrBlank()) {
+        val active = configs.active()
+        val provider = active?.let { configs.provider(it.providerId) }
+        val apiKey = provider?.let { secrets.get(it.apiKey) }
+        if (active == null || provider == null || apiKey.isNullOrBlank()) {
             emit(LlmChunk.Failed(LlmError.AuthFailed))
             return@flow
         }
-        emit(LlmChunk.Routed(config.id, config.model))
-        emitAll(adapter.stream(config, apiKey, request))
+        emit(LlmChunk.Routed(provider.id, active.modelId))
+        emitAll(adapter.stream(provider.baseUrl, active.modelId, apiKey, request))
     }
 }

@@ -10,8 +10,10 @@ import androidx.room3.RoomDatabase
         TaskEntity::class,
         TaskEventEntity::class,
         ProviderConfigEntity::class,
+        ModelProfileEntity::class,
+        ActiveModelEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 internal abstract class LumynoidDatabase : RoomDatabase() {

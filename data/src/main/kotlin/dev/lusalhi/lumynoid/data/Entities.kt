@@ -37,7 +37,23 @@ internal data class TaskEventEntity(
 @Entity(tableName = "provider_config")
 internal data class ProviderConfigEntity(
     @PrimaryKey val id: String,
+    val name: String,
+    @ColumnInfo(name = "preset_id") val presetId: String?,
     @ColumnInfo(name = "base_url") val baseUrl: String,
-    val model: String,
     @ColumnInfo(name = "secret_ref") val secretRef: String,
+)
+
+@Entity(tableName = "model_profile", primaryKeys = ["provider_id", "model_id"])
+internal data class ModelProfileEntity(
+    @ColumnInfo(name = "provider_id") val providerId: String,
+    @ColumnInfo(name = "model_id") val modelId: String,
+    @ColumnInfo(name = "supports_tools") val supportsTools: Boolean?,
+)
+
+/** At most one row (`id = 1`): the provider and model every message uses. */
+@Entity(tableName = "active_model")
+internal data class ActiveModelEntity(
+    @PrimaryKey val id: Int = 1,
+    @ColumnInfo(name = "provider_id") val providerId: String,
+    @ColumnInfo(name = "model_id") val modelId: String,
 )

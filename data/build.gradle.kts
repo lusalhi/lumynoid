@@ -37,4 +37,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.sqlite.bundled.jvm)
+    // MigrationTestHelper runs on the host JVM, so it needs Room's JVM runtime ahead of the Android one.
+    testImplementation(libs.sqlite.jvm)
+    testImplementation(libs.room.runtime.jvm)
+    testImplementation(libs.room.testing.jvm)
 }
