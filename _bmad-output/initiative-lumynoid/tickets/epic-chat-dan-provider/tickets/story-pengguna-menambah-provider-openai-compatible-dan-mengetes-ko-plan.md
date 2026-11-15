@@ -3,7 +3,7 @@ title: 'Add OpenAI-compatible providers and test their connection'
 type: feature
 ticket: '4'
 created: '2026-11-15'
-status: built
+status: done
 baseline_revision: '8cfa475477d29d36916e94bf886939fec7a64644'
 route: full
 route_source: auto
@@ -88,6 +88,8 @@ Not done here, by scope or environment:
 - Not run on a device or emulator: the provider list, form, preset chips, model suggestions, the Test button and its result text are compiled but unexercised. `:app` has no unit-test infrastructure, so `ProvidersViewModel` logic is untested.
 - `testConnection` sends a real one-word chat request, so it can spend a few tokens on a paid provider.
 - Unhandled: a Room write failure inside `save` is not caught (the story-1 review accepted the same risk for the tracer).
+
+Marked done by the owner on 2026-11-15 without the on-device verify step: the tester did not run the provider screen on a phone. Only the automated checks above back this story.
 
 ## Plan Change Log
 

@@ -3,7 +3,7 @@ title: 'Chat with an Anthropic API key'
 type: feature
 ticket: '5'
 created: '2026-11-15'
-status: built
+status: done
 baseline_revision: 'cdd6acba96001fec1c2824e9e7387d15cc0a01f7'
 route: full
 route_source: auto
@@ -85,6 +85,8 @@ Not done here, by scope or environment:
 - Not run against the real Anthropic API or on a device; the SSE shapes come from the Messages API documentation as I know it, tested against `MockEngine` only. A real-key run is the ticket's verify step.
 - `max_tokens` is fixed at 8192; a model with a lower output cap (older Haiku) would answer HTTP 400, which shows as a provider error.
 - The Anthropic chip, kind switching and the hint are compiled but unexercised (`:app` has no unit-test setup).
+
+Marked done by the owner on 2026-11-15 without a live Anthropic check: the owner has no Anthropic credits, so the adapter was never run against the real API. Only the `MockEngine` tests back it. Epic story 12 (release test on a real phone) is the place to catch a wire-format mismatch, ideally with a funded Anthropic key.
 
 ## Plan Change Log
 
