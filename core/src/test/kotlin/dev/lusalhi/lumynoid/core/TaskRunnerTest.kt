@@ -8,8 +8,10 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -20,10 +22,27 @@ import kotlin.test.assertTrue
 private class InMemoryEvents : EventRepository {
     val state = MutableStateFlow<List<TaskEvent>>(emptyList())
     val tasks = mutableListOf<String>()
-    override suspend fun createTask(taskId: String, request: TaskRequest, at: Long) { tasks += taskId }
+    val conversations = linkedMapOf<String, String>()
+    override suspend fun createTask(taskId: String, request: TaskRequest, at: Long) {
+        tasks += taskId
+        conversations[taskId] = request.conversationId
+    }
     override suspend fun append(conversationId: String, event: TaskEvent) { state.value = state.value + event }
     override fun observe(conversationId: String): Flow<List<TaskEvent>> = state
     override suspend fun history(conversationId: String): List<TaskEvent> = state.value
+
+    /** Same rule as `:data`: no event, or a last event of Queued, UserMessage or AssistantMessage. */
+    override suspend fun unfinishedTasks(): List<UnfinishedTask> = conversations.mapNotNull { (taskId, conv) ->
+        val last = state.value.lastOrNull { it.taskId == taskId }
+        val open = last == null || last is TaskEvent.TaskQueued || last is TaskEvent.UserMessage || last is TaskEvent.AssistantMessage
+        if (open) UnfinishedTask(taskId, conv) else null
+    }
+
+    /** Seeds a task of a previous run. */
+    fun seed(taskId: String, vararg events: TaskEvent) {
+        conversations[taskId] = "conv-1"
+        state.value = state.value + events
+    }
 }
 
 private class Counter : IdGenerator {
@@ -259,6 +278,150 @@ class TaskRunnerTest {
             listOf(LlmMessage(Role.USER, "a"), LlmMessage(Role.ASSISTANT, "re:a"), LlmMessage(Role.USER, "b")),
             requests[1],
         )
+    }
+
+    private fun queued(t: String) = TaskEvent.TaskQueued("q-$t", t, 0L)
+    private fun user(t: String) = TaskEvent.UserMessage("u-$t", t, 0L, Origin.User, "x")
+    private fun answer(t: String) = TaskEvent.AssistantMessage("a-$t", t, 0L, "x")
+
+    @Test
+    fun recoveryClosesOnlyTasksWithoutATerminalEvent() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        events.seed("queued-only", queued("queued-only"))
+        events.seed("user-only", queued("user-only"), user("user-only"))
+        events.seed("answered", queued("answered"), user("answered"), answer("answered"))
+        events.seed("no-events")
+        events.seed("done", queued("done"), user("done"), answer("done"), TaskEvent.TaskFinished("f-done", "done", 0L))
+        events.seed("failed", user("failed"), TaskEvent.TaskFailed("x-failed", "failed", 0L, FailureReason.NETWORK))
+        events.seed("stopped", user("stopped"), TaskEvent.TaskCancelled("c-stopped", "stopped", 0L))
+        events.seed("unknown", user("unknown"), TaskEvent.Unknown("k", "unknown", 0L))
+        val before = events.state.value.size
+        runnerFor(LlmPort { flow { emit(LlmChunk.Done) } }, events, scope)
+
+        advanceUntilIdle()
+
+        val added = events.state.value.drop(before)
+        assertTrue(added.all { it is TaskEvent.TaskFailed && it.reason == FailureReason.INTERRUPTED })
+        assertEquals(setOf("queued-only", "user-only", "answered", "no-events"), added.map { it.taskId }.toSet())
+        assertEquals(4, added.size)
+    }
+
+    @Test
+    fun aSubmitDuringRecoveryIsNeverMarkedInterrupted() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        events.seed("old", queued("old"), user("old"))
+        val llm = LlmPort { flow { emit(LlmChunk.TextDelta("ok")); emit(LlmChunk.Done) } }
+        val runner = runnerFor(llm, events, scope)
+
+        val id = runner.submit(request)
+        advanceUntilIdle()
+
+        val interrupted = events.state.value.filterIsInstance<TaskEvent.TaskFailed>()
+        assertEquals(listOf("old"), interrupted.map { it.taskId })
+        assertIs<TaskEvent.TaskFinished>(events.state.value.last { it.taskId == id })
+    }
+
+    @Test
+    fun aFailingRecoveryStillLetsTheQueueRun() = runnerTest { scope ->
+        val log = InMemoryEvents()
+        val events = object : EventRepository by log {
+            override suspend fun unfinishedTasks(): List<UnfinishedTask> = error("disk gone")
+        }
+        val llm = LlmPort { flow { emit(LlmChunk.TextDelta("ok")); emit(LlmChunk.Done) } }
+        val runner = TaskRunner(llm, events, scope, Clock { 1L }, Counter())
+
+        runner.submit(request)
+        advanceUntilIdle()
+
+        assertIs<TaskEvent.TaskFinished>(log.state.value.last())
+    }
+
+    @Test
+    fun busyStaysTrueAcrossQueuedTasksAndDropsAfterTheLast() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val gate = CompletableDeferred<Unit>()
+        val llm = LlmPort { req ->
+            flow {
+                if (req.messages.last().content == "a") gate.await()
+                emit(LlmChunk.TextDelta("x"))
+                emit(LlmChunk.Done)
+            }
+        }
+        val runner = runnerFor(llm, events, scope)
+        val seen = mutableListOf<Boolean>()
+        val watcher = scope.launch(UnconfinedTestDispatcher(testScheduler)) { runner.busy.collect { seen += it } }
+        advanceUntilIdle()
+        assertEquals(false, runner.busy.value)
+
+        runner.submit(request.copy(input = "a"))
+        runner.submit(request.copy(input = "b"))
+        advanceUntilIdle()
+        assertEquals(true, runner.busy.value)
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(false, runner.busy.value)
+        assertEquals(listOf(false, true, false), seen)
+        watcher.cancel()
+    }
+
+    @Test
+    fun activeIsSetBeforeTheFirstTokenAndClearedAfterwards() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val gate = CompletableDeferred<Unit>()
+        val llm = LlmPort { flow { gate.await(); emit(LlmChunk.TextDelta("x")); emit(LlmChunk.Done) } }
+        val runner = runnerFor(llm, events, scope)
+
+        val id = runner.submit(request)
+        advanceUntilIdle()
+        assertEquals(ActiveTask(id, "conv-1"), runner.active.value)
+        assertEquals(null, runner.live.value)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(null, runner.active.value)
+    }
+
+    @Test
+    fun cancellingATaskThatAlreadyFinishedChangesNothing() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val llm = LlmPort { flow { emit(LlmChunk.TextDelta("x")); emit(LlmChunk.Done) } }
+        val runner = runnerFor(llm, events, scope)
+
+        val done = runner.submit(request)
+        advanceUntilIdle()
+        val before = events.state.value
+        runner.cancel(done)
+        advanceUntilIdle()
+        assertEquals(before, events.state.value)
+
+        val next = runner.submit(request.copy(input = "again"))
+        advanceUntilIdle()
+        assertIs<TaskEvent.TaskFinished>(events.state.value.last { it.taskId == next })
+    }
+
+    @Test
+    fun cancellingBeforeTheFirstTokenRecordsCancellationAndStartsTheNextTask() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val llm = LlmPort { req ->
+            flow {
+                if (req.messages.last().content == "a") awaitCancellation()
+                emit(LlmChunk.TextDelta("b-answer"))
+                emit(LlmChunk.Done)
+            }
+        }
+        val runner = runnerFor(llm, events, scope)
+
+        val a = runner.submit(request.copy(input = "a"))
+        runner.submit(request.copy(input = "b"))
+        advanceUntilIdle()
+        runner.cancel(a)
+        advanceUntilIdle()
+
+        assertTrue(events.state.value.any { it is TaskEvent.TaskCancelled && it.taskId == a })
+        assertTrue(events.state.value.none { it is TaskEvent.AssistantMessage && it.taskId == a })
+        assertEquals("b-answer", events.state.value.filterIsInstance<TaskEvent.AssistantMessage>().single().text)
+        assertEquals(false, runner.busy.value)
     }
 
     @Test

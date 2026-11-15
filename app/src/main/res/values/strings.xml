@@ -6,6 +6,7 @@
     <string name="chat_empty">Say something to start the conversation.</string>
     <string name="chat_input_hint">Message</string>
     <string name="chat_send">Send</string>
+    <string name="chat_stop">Stop</string>
     <string name="chat_settings">AI provider</string>
     <string name="chat_needs_provider">Add your AI provider before you chat.</string>
     <string name="chat_open_provider">Set up AI provider</string>
@@ -33,6 +34,10 @@
     <string name="error_server">The provider returned an error or an empty answer. Try again.</string>
     <string name="error_interrupted">This answer was interrupted.</string>
     <string name="task_cancelled">Stopped.</string>
+
+    <string name="notification_channel_task_running">Answer in progress</string>
+    <string name="notification_task_running_title">Lumynoid</string>
+    <string name="notification_task_running_text">Answering…</string>
 
     <string name="link_dialog_title">Open this link?</string>
     <string name="link_open">Open</string>

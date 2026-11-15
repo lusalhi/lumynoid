@@ -44,6 +44,13 @@ internal data class TaskEventEntity(
     val payload: String,
 )
 
+/** A task with the payload of its last event; [lastPayload] is null when it has no event. */
+internal data class TaskLastEventRow(
+    @ColumnInfo(name = "task_id") val taskId: String,
+    @ColumnInfo(name = "conversation_id") val conversationId: String,
+    @ColumnInfo(name = "last_payload") val lastPayload: String?,
+)
+
 @Entity(tableName = "provider_config")
 internal data class ProviderConfigEntity(
     @PrimaryKey val id: String,

@@ -72,6 +72,14 @@ internal interface LumynoidDao {
     @Query("SELECT * FROM task_event WHERE conversation_id = :conversationId ORDER BY seq")
     fun observeEvents(conversationId: String): Flow<List<TaskEventEntity>>
 
+    /** Every task with the payload of its last event (null when it has none). */
+    @Query(
+        "SELECT t.id AS task_id, t.conversation_id AS conversation_id, " +
+            "(SELECT e.payload FROM task_event e WHERE e.conversation_id = t.conversation_id AND e.task_id = t.id " +
+            "ORDER BY e.seq DESC LIMIT 1) AS last_payload FROM task t",
+    )
+    suspend fun taskLastEvents(): List<TaskLastEventRow>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertProvider(config: ProviderConfigEntity)
 

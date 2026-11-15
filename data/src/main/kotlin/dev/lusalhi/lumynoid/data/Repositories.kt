@@ -16,6 +16,7 @@ import dev.lusalhi.lumynoid.core.SecretRef
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskEventJson
 import dev.lusalhi.lumynoid.core.TaskRequest
+import dev.lusalhi.lumynoid.core.UnfinishedTask
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -46,6 +47,16 @@ internal class RoomEventRepository(private val dao: LumynoidDao) : EventReposito
 
     override suspend fun history(conversationId: String): List<TaskEvent> =
         dao.events(conversationId).map { it.toEvent() }
+
+    override suspend fun unfinishedTasks(): List<UnfinishedTask> =
+        dao.taskLastEvents().filter { row ->
+            val payload = row.lastPayload ?: return@filter true
+            // Unreadable payloads and unknown types count as finished, like TaskEvent.Unknown.
+            when (runCatching { TaskEventJson.decode(payload) }.getOrNull()) {
+                is TaskEvent.TaskQueued, is TaskEvent.UserMessage, is TaskEvent.AssistantMessage -> true
+                else -> false
+            }
+        }.map { UnfinishedTask(it.taskId, it.conversationId) }
 
     private fun TaskEventEntity.toEvent(): TaskEvent =
         runCatching { TaskEventJson.decode(payload) }.getOrDefault(TaskEvent.Unknown(id, taskId, at))

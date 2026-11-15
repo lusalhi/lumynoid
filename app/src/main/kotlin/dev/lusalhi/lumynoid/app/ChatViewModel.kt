@@ -39,6 +39,8 @@ data class ChatState(
     val title: String = "",
     /** The conversation whose answer is streaming right now; it cannot be deleted. */
     val streamingConversationId: String? = null,
+    /** The runner's active task when it belongs to the open conversation; the chat shows Stop while set. */
+    val runningTaskId: String? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -56,6 +58,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (id == null) flowOf(null to emptyList()) else graph.data.events.observe(id).map { id to it }
     }
     private val live = agent.runner.flatMapLatest { it?.live ?: flowOf(null) }
+    private val active = agent.runner.flatMapLatest { it?.active ?: flowOf(null) }
 
     private val conversations = graph.data.conversations.observeAll()
     private val createLock = Mutex()
@@ -71,7 +74,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val state: StateFlow<ChatState> =
-        combine(header, events, live) { header, tagged, live ->
+        combine(header, events, live, active) { header, tagged, live, active ->
             val events = if (tagged.first == header.conversationId) tagged.second else emptyList()
             // The saved AssistantMessage can be observed a moment before the runner clears its live
             // copy; hide the live bubble then so the answer never shows twice. A live answer of
@@ -80,7 +83,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 l.conversationId == header.conversationId &&
                     events.none { it is TaskEvent.AssistantMessage && it.taskId == l.taskId }
             }
-            header.copy(events = events, live = visibleLive, streamingConversationId = live?.conversationId)
+            header.copy(
+                events = events,
+                live = visibleLive,
+                streamingConversationId = active?.conversationId,
+                runningTaskId = active?.takeIf { it.conversationId == header.conversationId }?.taskId,
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatState())
 
     init {
@@ -130,6 +138,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             graph.data.conversations.delete(id)
             if (conversationId.value == id) conversationId.value = null
         }
+    }
+
+    /** Stops the answer of the open conversation; does nothing when it already finished. */
+    fun stop() {
+        val taskId = state.value.runningTaskId ?: return
+        agent.runner.value?.cancel(taskId)
     }
 
     fun send(text: String) {

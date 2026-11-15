@@ -54,6 +54,7 @@ private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
         Screen.CHAT -> ChatScreen(
             state = state,
             onSend = viewModel::send,
+            onStop = viewModel::stop,
             onOpenProvider = viewModel::openProvider,
             onOpenConversations = viewModel::openConversations,
             onNewConversation = viewModel::newConversation,

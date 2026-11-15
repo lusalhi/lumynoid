@@ -4,6 +4,7 @@ import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import dev.lusalhi.lumynoid.core.ActiveModel
 import dev.lusalhi.lumynoid.core.Clock
+import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.Origin
 import dev.lusalhi.lumynoid.core.ProviderConfig
@@ -176,6 +177,37 @@ class PersistenceTest {
 
         assertEquals(0, db.dao().taskCount())
         assertEquals(emptyList(), events.history(c.id))
+        db.close()
+    }
+
+    @Test
+    fun unfinishedTasksListsEveryTaskWhoseLastEventIsNotTerminal() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
+        val events = RoomEventRepository(db.dao())
+        val c = port.create("x")
+        val other = port.create("y")
+        suspend fun create(id: String, conv: String = c.id) = events.createTask(id, TaskRequest(Origin.User, conv, "ws", "x"), 1L)
+        suspend fun add(event: TaskEvent, conv: String = c.id) = events.append(conv, event)
+
+        create("none")
+        create("queued"); add(TaskEvent.TaskQueued("q1", "queued", 1L))
+        create("user"); add(TaskEvent.TaskQueued("q2", "user", 1L)); add(TaskEvent.UserMessage("u2", "user", 2L, Origin.User, "x"))
+        create("answered"); add(TaskEvent.UserMessage("u3", "answered", 1L, Origin.User, "x")); add(TaskEvent.AssistantMessage("a3", "answered", 2L, "y"))
+        create("finished"); add(TaskEvent.UserMessage("u4", "finished", 1L, Origin.User, "x")); add(TaskEvent.TaskFinished("f4", "finished", 2L))
+        create("failed"); add(TaskEvent.TaskFailed("f5", "failed", 2L, FailureReason.INTERRUPTED))
+        create("cancelled"); add(TaskEvent.UserMessage("u6", "cancelled", 1L, Origin.User, "x")); add(TaskEvent.TaskCancelled("c6", "cancelled", 2L))
+        create("unknown", other.id); add(TaskEvent.Unknown("k7", "unknown", 2L), other.id)
+        create("unreadable", other.id)
+        db.dao().insertEvent(TaskEventEntity(id = "bad", taskId = "unreadable", conversationId = other.id, at = 3L, payload = "{not json"))
+        create("other-open", other.id); add(TaskEvent.UserMessage("u8", "other-open", 1L, Origin.User, "x"), other.id)
+
+        val unfinished = events.unfinishedTasks()
+
+        assertEquals(
+            setOf("none" to c.id, "queued" to c.id, "user" to c.id, "answered" to c.id, "other-open" to other.id),
+            unfinished.map { it.taskId to it.conversationId }.toSet(),
+        )
         db.close()
     }
 }

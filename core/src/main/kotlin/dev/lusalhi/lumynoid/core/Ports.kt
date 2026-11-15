@@ -137,6 +137,9 @@ data class TaskRequest(
     val input: String,
 )
 
+/** A task that has no terminal event yet: a crash or kill cut it off, or it never started. */
+data class UnfinishedTask(val taskId: String, val conversationId: String)
+
 /** Event log storage. Only [TaskRunner] may call the write functions (AD-4, AD-5). */
 interface EventRepository {
     suspend fun createTask(taskId: String, request: TaskRequest, at: Long)
@@ -145,4 +148,11 @@ interface EventRepository {
 
     /** Read-only snapshot of the conversation's events in log order, for building context. */
     suspend fun history(conversationId: String): List<TaskEvent>
+
+    /**
+     * Tasks whose last event is not terminal: no events at all, or a last event that is
+     * [TaskEvent.TaskQueued], [TaskEvent.UserMessage] or [TaskEvent.AssistantMessage]. Finished,
+     * failed, cancelled and [TaskEvent.Unknown]-ending tasks are not listed.
+     */
+    suspend fun unfinishedTasks(): List<UnfinishedTask>
 }

@@ -40,6 +40,7 @@ import dev.lusalhi.lumynoid.core.TaskEvent
 fun ChatScreen(
     state: ChatState,
     onSend: (String) -> Unit,
+    onStop: () -> Unit,
     onOpenProvider: () -> Unit,
     onOpenConversations: () -> Unit,
     onNewConversation: () -> Unit,
@@ -120,10 +121,14 @@ fun ChatScreen(
                     modifier = Modifier.weight(1f),
                     maxLines = 5,
                 )
-                Button(
-                    onClick = { onSend(draft); draft = "" },
-                    enabled = draft.isNotBlank(),
-                ) { Text(stringResource(R.string.chat_send)) }
+                if (state.runningTaskId != null) {
+                    Button(onClick = onStop) { Text(stringResource(R.string.chat_stop)) }
+                } else {
+                    Button(
+                        onClick = { onSend(draft); draft = "" },
+                        enabled = draft.isNotBlank(),
+                    ) { Text(stringResource(R.string.chat_send)) }
+                }
             }
         }
     }
