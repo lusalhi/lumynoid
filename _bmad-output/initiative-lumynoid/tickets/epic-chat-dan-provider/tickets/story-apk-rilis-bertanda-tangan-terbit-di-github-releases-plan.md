@@ -64,7 +64,7 @@ context:
 - [x] `.github/workflows/release.yml` -- jobs `verify` (no secrets: tag check, gates and tests from `ci.yml`), `build` (environment `release`: decode keystore to `$RUNNER_TEMP`, `assembleRelease`, apk check, `SHA256SUMS`, upload artifact, attach `mapping.txt` if it exists), `publish` (`gh release create --prerelease` for `v0.*`, `--verify-tag`)
 - [x] `docs/release.md` -- owner runbook: `keytool` PKCS12 command, two encrypted offline backups, printing the fingerprint, Play Console registration, environment + secrets (`gh` commands), cutting a release, restore drill
 - [x] `README.md` -- link the runbook; fingerprint slot
-- [ ] Live, after review and owner go-ahead: create Environment `release`; owner adds secrets, registers in Play Console, sends the public fingerprint; commit it; merge to `main`; tag `v0.1.0`; prove a non-rising tag is rejected, then delete that tag
+- [x] Live, after review and owner go-ahead: create Environment `release`; owner adds secrets, registers in Play Console, sends the public fingerprint; commit it; merge to `main`; tag `v0.1.0`; prove a non-rising tag is rejected, then delete that tag
 
 **Acceptance Criteria:**
 - Given a clean checkout without the key, when `./gradlew :app:assembleRelease` runs, then it builds an unsigned APK whose only native folder is `lib/arm64-v8a`.
@@ -81,6 +81,9 @@ Implemented by a Sonnet subagent from this plan; the main session checked the di
 - `verify` also greps the manifest for `allowBackup="false"` and `dataExtractionRules`; `build` rejects a debuggable APK and deletes the decoded keystore on exit.
 - Real-repo check: with a temporary local tag `v0.1.0` at HEAD (deleted afterwards), `check_release.py tag --main HEAD` passed on the real files, and `--main origin/main` failed as expected (not an ancestor; schemas 2–4 missing on `origin/main`) until the branch is merged.
 - Not exercised live: the workflow run, environment gating, `gh release create`, and the real-key path. The Live task stays open for the owner steps.
+
+- Live proof, 2026-11-16 (with the owner's go-ahead at each step): the owner created the key offline and sent the public fingerprint, committed as `25922ef`. The owner confirmed `dev.lusalhi.lumynoid` and the fingerprint show Registered in Play Console. Claude created Environment `release` via `gh api` (required reviewer `lusalhi`, deployment rule tag `v*`); the owner added the 4 `RELEASE_*` secrets. PR #5 merged `initiative-lumynoid` into `main` (`98a3415`). Tag `v0.1.0` ran `verify` → owner approval → `build` → `publish`, all green (run 43805785330). The pre-release holds exactly `lumynoid-v0.1.0.apk` and `SHA256SUMS`; the checksum matches, `apksigner` shows the committed fingerprint, `aapt2` shows `dev.lusalhi.lumynoid` 1 / `v0.1.0`, only `arm64-v8a`, not debuggable. Test tag `v0.1.1` on the same commit failed `verify` with "versionCode must rise: v0.1.1 has 1 but v0.1.0 has 1" (run 43809398836; build and publish skipped); the tag was deleted.
+- Still owner-only before the ticket's Verify is fully met: install the pre-release APK on a real phone, and the restore drill (decrypt a backup, its fingerprint equals the README).
 
 ## Plan Change Log
 
