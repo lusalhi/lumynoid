@@ -1,0 +1,3 @@
+- source_plan: `_bmad-output/initiative-lumynoid/tickets/epic-chat-dan-provider/tickets/story-jawaban-tetap-selesai-di-background-dan-bisa-dihentikan-plan.md`
+  summary: Block deleting a conversation that has a queued (not yet running) task, or drop that task from the queue when its conversation is deleted.
+  evidence: `ChatViewModel.deleteConversation` guards only the runner's `active` task; a task queued behind another conversation's answer still runs after its conversation is deleted, sends an empty request and keeps the foreground service up for nothing. Pre-existing since story 1.7 (noted in its plan), found again in the story 1.8 review.

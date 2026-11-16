@@ -1,6 +1,7 @@
 package dev.lusalhi.lumynoid.core
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -17,6 +18,9 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** The answer currently streaming. Deltas are hot state, never persisted (AD-4). */
 data class LiveAnswer(val taskId: String, val conversationId: String, val text: String)
+
+/** The task the runner is executing right now, from the moment its job starts until it has ended. */
+data class ActiveTask(val taskId: String, val conversationId: String)
 
 /**
  * The single execution path (AD-2): every LLM turn enters through [submit], runs one at a time in
@@ -35,35 +39,92 @@ class TaskRunner(
     private val cancelled = ConcurrentHashMap.newKeySet<String>()
     private val running = MutableStateFlow<Pair<String, Job>?>(null)
     private val _live = MutableStateFlow<LiveAnswer?>(null)
+    private val _active = MutableStateFlow<ActiveTask?>(null)
+    private val _busy = MutableStateFlow(false)
+    private val pendingLock = Any()
+    private var pending = 0
+
+    /** Completed once crash recovery has closed the tasks of the previous run; submit waits for it. */
+    private val recovered = CompletableDeferred<Unit>()
 
     val live: StateFlow<LiveAnswer?> = _live.asStateFlow()
 
+    /** The task being executed, set before its first token and cleared after it ended. */
+    val active: StateFlow<ActiveTask?> = _active.asStateFlow()
+
+    /** True from [submit] until the last queued or running task has ended, with no gap between tasks. */
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
     init {
         scope.launch {
+            try {
+                recoverInterrupted()
+            } finally {
+                recovered.complete(Unit)
+            }
             for (item in queue) {
                 // ATOMIC: the body always starts, so a cancel that lands before it runs still reaches
                 // execute's own handler and records TaskCancelled.
                 val job = launch(start = CoroutineStart.ATOMIC) { execute(item) }
                 running.value = item.taskId to job
+                _active.value = ActiveTask(item.taskId, item.request.conversationId)
                 // cancel() adds the id first and reads `running` second; this registers first and reads
                 // the id second, so one side always sees the other and no cancel is lost.
                 if (cancelled.remove(item.taskId)) job.cancel()
                 job.join()
                 running.value = null
+                _active.value = null
                 cancelled.remove(item.taskId)
+                adjustPending(-1)
             }
         }
     }
 
+    /** AD-22: tasks left without a terminal event by a crash or kill are closed before new work starts. */
+    private suspend fun recoverInterrupted() {
+        val tasks = try {
+            events.unfinishedTasks()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A failed recovery must not keep the queue from running.
+            return
+        }
+        for (task in tasks) {
+            try {
+                events.append(
+                    task.conversationId,
+                    TaskEvent.TaskFailed(ids.next(), task.taskId, clock.nowMillis(), FailureReason.INTERRUPTED),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Keep closing the other tasks.
+            }
+        }
+    }
+
+    private fun adjustPending(delta: Int) = synchronized(pendingLock) {
+        pending += delta
+        _busy.value = pending > 0
+    }
+
     /** Records the task and its user message, queues it, and returns the task id. */
     suspend fun submit(request: TaskRequest): String {
+        recovered.await()
         val taskId = ids.next()
         val now = clock.nowMillis()
-        events.createTask(taskId, request, now)
-        val item = Queued(taskId, request)
-        append(item, TaskEvent.TaskQueued(ids.next(), taskId, now))
-        append(item, TaskEvent.UserMessage(ids.next(), taskId, now, request.origin, request.input))
-        queue.send(item)
+        adjustPending(1)
+        try {
+            events.createTask(taskId, request, now)
+            val item = Queued(taskId, request)
+            append(item, TaskEvent.TaskQueued(ids.next(), taskId, now))
+            append(item, TaskEvent.UserMessage(ids.next(), taskId, now, request.origin, request.input))
+            queue.send(item)
+        } catch (e: Throwable) {
+            adjustPending(-1)
+            throw e
+        }
         return taskId
     }
 
@@ -78,7 +139,7 @@ class TaskRunner(
         try {
             currentCoroutineContext().ensureActive()
             var failure: FailureReason? = null
-            val request = LlmRequest(listOf(LlmMessage(Role.USER, item.request.input)))
+            val request = ContextAssembler.assemble(events.history(item.request.conversationId), item.taskId)
             llm.stream(request).collect { chunk ->
                 when (chunk) {
                     is LlmChunk.TextDelta -> {

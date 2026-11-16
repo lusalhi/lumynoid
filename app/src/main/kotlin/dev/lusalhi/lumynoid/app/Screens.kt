@@ -15,10 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -34,87 +31,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.TaskEvent
 
 @Composable
-fun ProviderScreen(
-    form: ProviderFormState,
-    canGoBack: Boolean,
-    onEdit: ((ProviderFormState) -> ProviderFormState) -> Unit,
-    onSave: () -> Unit,
-    onBack: () -> Unit,
-) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(stringResource(R.string.provider_title), style = MaterialTheme.typography.headlineSmall)
-        Text(stringResource(R.string.provider_intro), style = MaterialTheme.typography.bodyMedium)
-
-        OutlinedTextField(
-            value = form.baseUrl,
-            onValueChange = { v -> onEdit { it.copy(baseUrl = v) } },
-            label = { Text(stringResource(R.string.provider_base_url)) },
-            placeholder = { Text(stringResource(R.string.provider_base_url_hint)) },
-            singleLine = true,
-            isError = form.showMissing && form.baseUrlMissing,
-            supportingText = {
-                if (form.showMissing && form.baseUrlMissing) Text(stringResource(R.string.provider_missing_base_url))
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = form.apiKey,
-            onValueChange = { v -> onEdit { it.copy(apiKey = v) } },
-            label = { Text(stringResource(R.string.provider_api_key)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            isError = form.showMissing && form.apiKeyMissing,
-            supportingText = {
-                when {
-                    form.showMissing && form.apiKeyMissing -> Text(stringResource(R.string.provider_missing_api_key))
-                    form.keySaved -> Text(stringResource(R.string.provider_api_key_saved))
-                }
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        OutlinedTextField(
-            value = form.model,
-            onValueChange = { v -> onEdit { it.copy(model = v) } },
-            label = { Text(stringResource(R.string.provider_model)) },
-            placeholder = { Text(stringResource(R.string.provider_model_hint)) },
-            singleLine = true,
-            isError = form.showMissing && form.modelMissing,
-            supportingText = {
-                if (form.showMissing && form.modelMissing) Text(stringResource(R.string.provider_missing_model))
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onSave) { Text(stringResource(R.string.provider_save)) }
-            if (canGoBack) TextButton(onClick = onBack) { Text(stringResource(R.string.provider_back)) }
-        }
-    }
-}
-
-@Composable
 fun ChatScreen(
     state: ChatState,
     onSend: (String) -> Unit,
+    onStop: () -> Unit,
     onOpenProvider: () -> Unit,
+    onOpenConversations: () -> Unit,
+    onNewConversation: () -> Unit,
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -139,7 +68,15 @@ fun ChatScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(stringResource(R.string.chat_title), style = MaterialTheme.typography.titleLarge)
+            Text(
+                state.title.ifBlank { stringResource(R.string.conversation_untitled) },
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onOpenConversations) { Text(stringResource(R.string.chat_conversations)) }
+            TextButton(onClick = onNewConversation) { Text(stringResource(R.string.chat_new)) }
             TextButton(onClick = onOpenProvider) { Text(stringResource(R.string.chat_settings)) }
         }
 
@@ -184,10 +121,14 @@ fun ChatScreen(
                     modifier = Modifier.weight(1f),
                     maxLines = 5,
                 )
-                Button(
-                    onClick = { onSend(draft); draft = "" },
-                    enabled = draft.isNotBlank(),
-                ) { Text(stringResource(R.string.chat_send)) }
+                if (state.runningTaskId != null) {
+                    Button(onClick = onStop) { Text(stringResource(R.string.chat_stop)) }
+                } else {
+                    Button(
+                        onClick = { onSend(draft); draft = "" },
+                        enabled = draft.isNotBlank(),
+                    ) { Text(stringResource(R.string.chat_send)) }
+                }
             }
         }
     }
@@ -225,7 +166,12 @@ private fun Bubble(text: String, fromUser: Boolean) {
             color = if (fromUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.widthIn(max = 320.dp),
         ) {
-            Text(text, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyLarge)
+            val padding = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+            if (fromUser) {
+                Text(text, padding, style = MaterialTheme.typography.bodyLarge)
+            } else {
+                AssistantMarkdown(text, padding)
+            }
         }
     }
 }

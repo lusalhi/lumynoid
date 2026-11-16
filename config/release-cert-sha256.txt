@@ -1,0 +1,2 @@
+# SHA-256 fingerprint of the Lumynoid release signing certificate (AD-25). Public; never the key or its password.
+19:39:03:AA:56:2F:76:B0:88:B0:F0:AE:60:5C:7B:21:63:5C:47:59:1D:9E:DC:93:56:A0:B4:ED:28:73:DC:B4

@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Binds to [AgentService] and exposes its [TaskRunner] once connected. */
+/** Binds to [AgentService] and exposes its [TaskRunner] once connected. The service starts itself while busy. */
 class AgentConnection(private val context: Context) {
 
     private val _runner = MutableStateFlow<TaskRunner?>(null)
@@ -28,7 +28,6 @@ class AgentConnection(private val context: Context) {
 
     fun connect() {
         val intent = Intent(context, AgentService::class.java)
-        context.startService(intent)
         context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
     }
 

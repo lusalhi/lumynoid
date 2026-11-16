@@ -3,7 +3,6 @@ package dev.lusalhi.lumynoid.app
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -17,6 +16,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -25,13 +25,14 @@ import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
     private val viewModel: ChatViewModel by viewModels()
+    private val providers: ProvidersViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             LumynoidTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    Root(viewModel)
+                    Root(viewModel, providers)
                 }
             }
         }
@@ -39,28 +40,34 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun Root(viewModel: ChatViewModel) {
+private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
     val state by viewModel.state.collectAsState()
-    val form by viewModel.form.collectAsState()
 
     when (state.screen) {
         Screen.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
         Screen.PROVIDER -> {
-            BackHandler(enabled = state.providerConfigured, onBack = viewModel::closeProvider)
-            ProviderScreen(
-                form = form,
-                canGoBack = state.providerConfigured,
-                onEdit = viewModel::editForm,
-                onSave = viewModel::saveProvider,
-                onBack = viewModel::closeProvider,
-            )
+            LaunchedEffect(Unit) { providers.refresh() }
+            ProvidersRoute(providers, canLeave = state.providerConfigured, onLeave = viewModel::closeProvider)
         }
         Screen.CHAT -> ChatScreen(
             state = state,
             onSend = viewModel::send,
+            onStop = viewModel::stop,
             onOpenProvider = viewModel::openProvider,
+            onOpenConversations = viewModel::openConversations,
+            onNewConversation = viewModel::newConversation,
+        )
+        Screen.CONVERSATIONS -> ConversationListScreen(
+            conversations = state.conversations,
+            openId = state.conversationId,
+            streamingId = state.streamingConversationId,
+            onOpen = viewModel::openConversation,
+            onNew = viewModel::newConversation,
+            onRename = viewModel::renameConversation,
+            onDelete = viewModel::deleteConversation,
+            onBack = viewModel::closeConversations,
         )
     }
 }

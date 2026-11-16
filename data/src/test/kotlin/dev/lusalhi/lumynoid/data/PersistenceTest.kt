@@ -2,9 +2,13 @@ package dev.lusalhi.lumynoid.data
 
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import dev.lusalhi.lumynoid.core.ActiveModel
 import dev.lusalhi.lumynoid.core.Clock
+import dev.lusalhi.lumynoid.core.FailureReason
+import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.Origin
 import dev.lusalhi.lumynoid.core.ProviderConfig
+import dev.lusalhi.lumynoid.core.ProviderKind
 import dev.lusalhi.lumynoid.core.SecretRef
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskRequest
@@ -37,7 +41,7 @@ class PersistenceTest {
         val request: (String) -> TaskRequest = { TaskRequest(Origin.User, it, "ws", "hello") }
 
         val first = open(file)
-        val conversation = RoomConversationPort(first.dao(), UuidV7, Clock { 10L }).create()
+        val conversation = RoomConversationPort(first.dao(), UuidV7, Clock { 10L }).create("hello")
         val events = RoomEventRepository(first.dao())
         events.createTask("t1", request(conversation.id), 10L)
         events.append(conversation.id, TaskEvent.UserMessage("e1", "t1", 10L, Origin.User, "hello"))
@@ -73,13 +77,137 @@ class PersistenceTest {
         val db = open(folder.newFile("lumynoid.db"))
         val store = RoomProviderConfigStore(db.dao())
 
-        store.save(ProviderConfig("p1", "https://example.test/v1", "m", SecretRef("provider_key_p1")))
-        val row = db.dao().activeProvider()
+        store.save(ProviderConfig("p1", "Mine", null, "https://example.test/v1", SecretRef("provider_key_p1")))
+        val row = db.dao().provider("p1")
 
         assertNotNull(row)
         assertEquals("provider_key_p1", row.secretRef)
         assertFalse(row.toString().contains("sk-"))
-        assertEquals(SecretRef("provider_key_p1"), store.active()?.apiKey)
+        assertEquals(SecretRef("provider_key_p1"), store.provider("p1")?.apiKey)
+        db.close()
+    }
+
+    @Test
+    fun providersModelsAndTheActiveChoiceRoundTrip() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val store = RoomProviderConfigStore(db.dao())
+        assertEquals(null, store.active())
+
+        store.save(ProviderConfig("p1", "One", "openrouter", "https://one.test/v1", SecretRef("k1")))
+        store.save(ProviderConfig("p2", "Two", "anthropic", "https://two.test/v1", SecretRef("k2"), ProviderKind.ANTHROPIC))
+        store.saveModel(ModelProfile("p1", "a"))
+        store.saveModel(ModelProfile("p1", "b"))
+        store.saveModel(ModelProfile("p1", "a")) // saved again: now the most recent
+        store.setActive(ActiveModel("p1", "b"))
+        store.setActive(ActiveModel("p2", "z"))
+
+        assertEquals(listOf("p1", "p2"), store.providers().map { it.id })
+        assertEquals("openrouter", store.provider("p1")?.presetId)
+        assertEquals(ProviderKind.OPENAI_COMPATIBLE, store.provider("p1")?.kind)
+        assertEquals(ProviderKind.ANTHROPIC, store.provider("p2")?.kind)
+        assertEquals(listOf("b", "a"), store.models("p1").map { it.modelId })
+        assertEquals(ActiveModel("p2", "z"), store.active())
+        db.close()
+    }
+
+    @Test
+    fun conversationsAreOrderedByLastActivityAndTitledFromTheFirstMessage() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        var now = 0L
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { now })
+        val events = RoomEventRepository(db.dao())
+        now = 1; val a = port.create("  first\nline  ")
+        now = 2; val b = port.create("second")
+        assertEquals(listOf(b.id, a.id), port.observeAll().first().map { it.id })
+        assertEquals("first", a.title)
+
+        events.append(a.id, TaskEvent.TaskQueued("q", "t", 50L))
+        val all = port.observeAll().first()
+        assertEquals(listOf(a.id, b.id), all.map { it.id })
+        assertEquals(50L, all.first().lastActivityAt)
+        assertEquals(2L, all.last().lastActivityAt)
+        assertEquals(a.id, port.latest()?.id)
+        db.close()
+    }
+
+    @Test
+    fun renameKeepsTheOldTitleWhenBlank() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
+        val c = port.create("old")
+
+        assertFalse(port.rename(c.id, "   "))
+        assertEquals("old", port.latest()?.title)
+        assertEquals(true, port.rename(c.id, "  new name "))
+        assertEquals("new name", port.latest()?.title)
+        db.close()
+    }
+
+    @Test
+    fun deleteRemovesTheConversationItsTasksAndEventsAndLeavesOthersIntact() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
+        val events = RoomEventRepository(db.dao())
+        val gone = port.create("gone")
+        val kept = port.create("kept")
+        for ((c, t) in listOf(gone.id to "t1", kept.id to "t2")) {
+            events.createTask(t, TaskRequest(Origin.User, c, "ws", "x"), 1L)
+            events.append(c, TaskEvent.UserMessage("e-$t", t, 2L, Origin.User, "x"))
+        }
+
+        port.delete(gone.id)
+
+        assertEquals(listOf(kept.id), port.observeAll().first().map { it.id })
+        assertEquals(emptyList(), events.history(gone.id))
+        assertEquals(listOf("e-t2"), events.history(kept.id).map { it.id })
+        assertEquals(1, db.dao().taskCount())
+        db.close()
+    }
+
+    @Test
+    fun writesForADeletedConversationLeaveNoRows() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
+        val events = RoomEventRepository(db.dao())
+        val c = port.create("gone")
+        port.delete(c.id)
+
+        events.createTask("t1", TaskRequest(Origin.User, c.id, "ws", "x"), 2L)
+        events.append(c.id, TaskEvent.UserMessage("e1", "t1", 2L, Origin.User, "x"))
+
+        assertEquals(0, db.dao().taskCount())
+        assertEquals(emptyList(), events.history(c.id))
+        db.close()
+    }
+
+    @Test
+    fun unfinishedTasksListsEveryTaskWhoseLastEventIsNotTerminal() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
+        val events = RoomEventRepository(db.dao())
+        val c = port.create("x")
+        val other = port.create("y")
+        suspend fun create(id: String, conv: String = c.id) = events.createTask(id, TaskRequest(Origin.User, conv, "ws", "x"), 1L)
+        suspend fun add(event: TaskEvent, conv: String = c.id) = events.append(conv, event)
+
+        create("none")
+        create("queued"); add(TaskEvent.TaskQueued("q1", "queued", 1L))
+        create("user"); add(TaskEvent.TaskQueued("q2", "user", 1L)); add(TaskEvent.UserMessage("u2", "user", 2L, Origin.User, "x"))
+        create("answered"); add(TaskEvent.UserMessage("u3", "answered", 1L, Origin.User, "x")); add(TaskEvent.AssistantMessage("a3", "answered", 2L, "y"))
+        create("finished"); add(TaskEvent.UserMessage("u4", "finished", 1L, Origin.User, "x")); add(TaskEvent.TaskFinished("f4", "finished", 2L))
+        create("failed"); add(TaskEvent.TaskFailed("f5", "failed", 2L, FailureReason.INTERRUPTED))
+        create("cancelled"); add(TaskEvent.UserMessage("u6", "cancelled", 1L, Origin.User, "x")); add(TaskEvent.TaskCancelled("c6", "cancelled", 2L))
+        create("unknown", other.id); add(TaskEvent.Unknown("k7", "unknown", 2L), other.id)
+        create("unreadable", other.id)
+        db.dao().insertEvent(TaskEventEntity(id = "bad", taskId = "unreadable", conversationId = other.id, at = 3L, payload = "{not json"))
+        create("other-open", other.id); add(TaskEvent.UserMessage("u8", "other-open", 1L, Origin.User, "x"), other.id)
+
+        val unfinished = events.unfinishedTasks()
+
+        assertEquals(
+            setOf("none" to c.id, "queued" to c.id, "user" to c.id, "answered" to c.id, "other-open" to other.id),
+            unfinished.map { it.taskId to it.conversationId }.toSet(),
+        )
         db.close()
     }
 }

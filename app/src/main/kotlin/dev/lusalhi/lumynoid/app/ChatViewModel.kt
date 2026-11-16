@@ -3,10 +3,9 @@ package dev.lusalhi.lumynoid.app
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.lusalhi.lumynoid.core.Conversation
 import dev.lusalhi.lumynoid.core.LiveAnswer
 import dev.lusalhi.lumynoid.core.Origin
-import dev.lusalhi.lumynoid.core.ProviderInput
-import dev.lusalhi.lumynoid.core.ProviderSaveResult
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskRequest
 import dev.lusalhi.lumynoid.core.UuidV7
@@ -19,24 +18,14 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-enum class Screen { LOADING, CHAT, PROVIDER }
-
-data class ProviderFormState(
-    val baseUrl: String = "",
-    val apiKey: String = "",
-    val model: String = "",
-    val keySaved: Boolean = false,
-    val showMissing: Boolean = false,
-) {
-    val baseUrlMissing get() = baseUrl.isBlank()
-    val apiKeyMissing get() = apiKey.isBlank() && !keySaved
-    val modelMissing get() = model.isBlank()
-    val complete get() = !baseUrlMissing && !apiKeyMissing && !modelMissing
-}
+enum class Screen { LOADING, CHAT, PROVIDER, CONVERSATIONS }
 
 data class ChatState(
     val screen: Screen = Screen.LOADING,
@@ -44,6 +33,14 @@ data class ChatState(
     val events: List<TaskEvent> = emptyList(),
     val live: LiveAnswer? = null,
     val sending: Boolean = false,
+    val conversations: List<Conversation> = emptyList(),
+    val conversationId: String? = null,
+    /** Title of the open conversation; empty for a new or untitled one. */
+    val title: String = "",
+    /** The conversation whose answer is streaming right now; it cannot be deleted. */
+    val streamingConversationId: String? = null,
+    /** The runner's active task when it belongs to the open conversation; the chat shows Stop while set. */
+    val runningTaskId: String? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -56,64 +53,106 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val providerConfigured = MutableStateFlow(false)
     private val conversationId = MutableStateFlow<String?>(null)
 
-    private val _form = MutableStateFlow(ProviderFormState())
-    val form: StateFlow<ProviderFormState> = _form
-
     private val events = conversationId.flatMapLatest { id ->
-        if (id == null) flowOf(emptyList()) else graph.data.events.observe(id)
+        // Tagged with its conversation so a stale list is never shown under another conversation.
+        if (id == null) flowOf(null to emptyList()) else graph.data.events.observe(id).map { id to it }
     }
     private val live = agent.runner.flatMapLatest { it?.live ?: flowOf(null) }
+    private val active = agent.runner.flatMapLatest { it?.active ?: flowOf(null) }
+
+    private val conversations = graph.data.conversations.observeAll()
+    private val createLock = Mutex()
+
+    private val header = combine(screen, providerConfigured, conversationId, conversations) { screen, configured, id, all ->
+        ChatState(
+            screen = screen,
+            providerConfigured = configured,
+            conversations = all,
+            conversationId = id,
+            title = all.firstOrNull { it.id == id }?.title.orEmpty(),
+        )
+    }
 
     val state: StateFlow<ChatState> =
-        combine(screen, providerConfigured, events, live) { screen, configured, events, live ->
+        combine(header, events, live, active) { header, tagged, live, active ->
+            val events = if (tagged.first == header.conversationId) tagged.second else emptyList()
             // The saved AssistantMessage can be observed a moment before the runner clears its live
-            // copy; hide the live bubble then so the answer never shows twice.
-            val visibleLive = live?.takeIf { l -> events.none { it is TaskEvent.AssistantMessage && it.taskId == l.taskId } }
-            ChatState(screen, configured, events, visibleLive)
+            // copy; hide the live bubble then so the answer never shows twice. A live answer of
+            // another conversation must never show here either.
+            val visibleLive = live?.takeIf { l ->
+                l.conversationId == header.conversationId &&
+                    events.none { it is TaskEvent.AssistantMessage && it.taskId == l.taskId }
+            }
+            header.copy(
+                events = events,
+                live = visibleLive,
+                streamingConversationId = active?.conversationId,
+                runningTaskId = active?.takeIf { it.conversationId == header.conversationId }?.taskId,
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatState())
 
     init {
         agent.connect()
         viewModelScope.launch {
             conversationId.value = graph.data.conversations.latest()?.id
-            val current = graph.providerAdmin.current()
-            providerConfigured.value = current != null
-            if (current != null) {
-                _form.value = ProviderFormState(current.baseUrl, "", current.model, keySaved = true)
-            }
-            screen.value = if (current != null) Screen.CHAT else Screen.PROVIDER
+            val configured = graph.providerAdmin.overview().active != null
+            providerConfigured.value = configured
+            screen.value = if (configured) Screen.CHAT else Screen.PROVIDER
         }
     }
 
     fun openProvider() { screen.value = Screen.PROVIDER }
 
-    fun closeProvider() { if (providerConfigured.value) screen.value = Screen.CHAT }
-
-    fun editForm(transform: (ProviderFormState) -> ProviderFormState) = _form.update(transform)
-
-    fun saveProvider() {
-        val form = _form.value
-        if (!form.complete) {
-            _form.update { it.copy(showMissing = true) }
-            return
-        }
+    /** Leaves the provider screen for the chat, once the app has a provider and model to chat with. */
+    fun closeProvider() {
         viewModelScope.launch {
-            when (graph.providerAdmin.save(ProviderInput(form.baseUrl, form.apiKey, form.model))) {
-                ProviderSaveResult.SAVED -> {
-                    providerConfigured.value = true
-                    _form.update { it.copy(apiKey = "", keySaved = true, showMissing = false) }
-                    screen.value = Screen.CHAT
-                }
-                ProviderSaveResult.INCOMPLETE -> _form.update { it.copy(showMissing = true) }
-            }
+            val configured = graph.providerAdmin.overview().active != null
+            providerConfigured.value = configured
+            if (configured) screen.value = Screen.CHAT
         }
+    }
+
+    fun openConversations() { screen.value = Screen.CONVERSATIONS }
+
+    fun closeConversations() { screen.value = Screen.CHAT }
+
+    fun openConversation(id: String) {
+        conversationId.value = id
+        screen.value = Screen.CHAT
+    }
+
+    /** The conversation itself is created on the first message, so nothing is written here. */
+    fun newConversation() {
+        conversationId.value = null
+        screen.value = Screen.CHAT
+    }
+
+    fun renameConversation(id: String, title: String) {
+        viewModelScope.launch { graph.data.conversations.rename(id, title) }
+    }
+
+    fun deleteConversation(id: String) {
+        // A cancel would append TaskCancelled after the delete and leave orphan events.
+        if (state.value.streamingConversationId == id) return
+        viewModelScope.launch {
+            graph.data.conversations.delete(id)
+            if (conversationId.value == id) conversationId.value = null
+        }
+    }
+
+    /** Stops the answer of the open conversation; does nothing when it already finished. */
+    fun stop() {
+        val taskId = state.value.runningTaskId ?: return
+        agent.runner.value?.cancel(taskId)
     }
 
     fun send(text: String) {
         val input = text.trim()
         if (input.isEmpty() || !providerConfigured.value) return
         viewModelScope.launch {
-            val id = conversationId.value ?: graph.data.conversations.create().id.also { conversationId.value = it }
+            val id = createLock.withLock {
+                conversationId.value ?: graph.data.conversations.create(input).id.also { conversationId.value = it }
+            }
             val runner = agent.runner.filterNotNull().first()
             runner.submit(TaskRequest(Origin.User, id, workspaceId = UuidV7.next(), input = input))
         }

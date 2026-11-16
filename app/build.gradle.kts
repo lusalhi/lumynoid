@@ -3,6 +3,13 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val releaseSigning = listOf(
+    "LUMYNOID_KEYSTORE_PATH",
+    "LUMYNOID_KEYSTORE_PASSWORD",
+    "LUMYNOID_KEY_ALIAS",
+    "LUMYNOID_KEY_PASSWORD",
+).associateWith { System.getenv(it) }
+
 android {
     namespace = "dev.lusalhi.lumynoid.app"
     compileSdk = 37
@@ -24,11 +31,28 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Release key (AD-25): only present when the release workflow (or its owner) provides all four values.
+        // Without them the release build stays unsigned, which is what local and CI builds want.
+        if (releaseSigning.values.all { !it.isNullOrBlank() }) {
+            create("release") {
+                storeFile = file(releaseSigning.getValue("LUMYNOID_KEYSTORE_PATH")!!)
+                storePassword = releaseSigning["LUMYNOID_KEYSTORE_PASSWORD"]
+                keyAlias = releaseSigning["LUMYNOID_KEY_ALIAS"]
+                keyPassword = releaseSigning["LUMYNOID_KEY_PASSWORD"]
+            }
+        }
     }
 
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
+        }
+        release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+            // AD-25: the release APK is arm64-v8a only; debug keeps every ABI for emulators.
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
         }
     }
 
@@ -67,6 +91,10 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+    implementation(libs.markdown.renderer)
+    implementation(libs.markdown.renderer.m3)
+
+    testImplementation(libs.junit)
 }
 
 // AD-17: the release classpath gate.
