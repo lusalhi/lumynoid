@@ -3,7 +3,7 @@ title: 'Signed release APK published to GitHub Releases'
 type: feature
 ticket: '3'
 created: '2026-11-16'
-status: built
+status: done
 baseline_revision: '42440eb731835cad2d571a1433f7a9b1d3844de3'
 route: full
 route_source: auto
@@ -84,7 +84,7 @@ Implemented by a Sonnet subagent from this plan; the main session checked the di
 
 - Live proof, 2026-11-16 (with the owner's go-ahead at each step): the owner created the key offline and sent the public fingerprint, committed as `25922ef`. The owner confirmed `dev.lusalhi.lumynoid` and the fingerprint show Registered in Play Console. Claude created Environment `release` via `gh api` (required reviewer `lusalhi`, deployment rule tag `v*`); the owner added the 4 `RELEASE_*` secrets. PR #5 merged `initiative-lumynoid` into `main` (`98a3415`). Tag `v0.1.0` ran `verify` → owner approval → `build` → `publish`, all green (run 43805785330). The pre-release holds exactly `lumynoid-v0.1.0.apk` and `SHA256SUMS`; the checksum matches, `apksigner` shows the committed fingerprint, `aapt2` shows `dev.lusalhi.lumynoid` 1 / `v0.1.0`, only `arm64-v8a`, not debuggable. Test tag `v0.1.1` on the same commit failed `verify` with "versionCode must rise: v0.1.1 has 1 but v0.1.0 has 1" (run 43809398836; build and publish skipped); the tag was deleted.
 - Real phone, 2026-11-16: the owner installed the `v0.1.0` pre-release APK and chatted; answers finished with the screen off or the app closed. The FGS notification is not visible without the notification permission (recorded in `deferred-work.md`, owner accepted).
-- Still owner-only before the ticket's Verify is fully met: the restore drill (decrypt a backup, its fingerprint equals the README).
+- Restore drill, 2026-11-16: the owner decrypted a key backup; its SHA-256 fingerprint matches the README. Every item of the ticket's Verify is now met.
 
 ## Plan Change Log
 
