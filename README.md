@@ -8,7 +8,13 @@ Lumynoid is an Android app for chatting with an AI model using your own API key.
 
 Lumynoid is distributed only as a signed APK downloaded manually from this repository's [GitHub Releases](../../releases). There is no Play Store or F-Droid listing and the app does not update itself: to update, download the newer APK.
 
-Each release carries one `lumynoid-<version>.apk` and a `SHA256SUMS` file. Release signing-key SHA-256 fingerprint: _to be published here when the first signed release ships._ Verify an APK with `apksigner verify --print-certs` and the release's `SHA256SUMS`. Maintainers: see [docs/release.md](docs/release.md).
+Each release carries one `lumynoid-<version>.apk` and a `SHA256SUMS` file. Release signing-key SHA-256 fingerprint:
+
+```
+19:39:03:AA:56:2F:76:B0:88:B0:F0:AE:60:5C:7B:21:63:5C:47:59:1D:9E:DC:93:56:A0:B4:ED:28:73:DC:B4
+```
+
+Verify an APK with `apksigner verify --print-certs` and the release's `SHA256SUMS`. Maintainers: see [docs/release.md](docs/release.md).
 
 ## Build
 
