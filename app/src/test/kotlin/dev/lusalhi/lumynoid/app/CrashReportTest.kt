@@ -172,7 +172,9 @@ class CrashReportTest {
         val providers = doc.getElementsByTagName("provider")
         assertEquals(1, providers.length)
         val p = providers.item(0) as Element
-        assertEquals("androidx.core.content.FileProvider", p.getAttribute("android:name"))
+        // Never the AndroidX base class: AndroidX says declaring it directly crashes on some devices.
+        assertEquals(".LumynoidFileProvider", p.getAttribute("android:name"))
+        assertEquals(androidx.core.content.FileProvider::class.java, LumynoidFileProvider::class.java.superclass)
         assertEquals("\${applicationId}.files", p.getAttribute("android:authorities"))
         assertEquals("false", p.getAttribute("android:exported"))
         assertEquals("true", p.getAttribute("android:grantUriPermissions"))

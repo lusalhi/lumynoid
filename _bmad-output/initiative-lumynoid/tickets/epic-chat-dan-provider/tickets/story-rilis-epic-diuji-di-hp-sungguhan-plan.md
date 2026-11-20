@@ -34,6 +34,8 @@ Oneshot: the only code change is two lines in `app/build.gradle.kts`; everything
 
 Built 2026-11-20: version bump done and verified (self-test 19 cases, full Gradle command BUILD SUCCESSFUL, release APK holds only `lib/arm64-v8a`). The docs, live and phone tasks stay open and owner-gated; status `built` means the code part is ready, not that the story is done. Nothing pushed.
 
+Phone result, 2026-11-20: the owner reported a crash with the `v0.2.0` pre-release. Cubic's PR #6 review had flagged the manifest registering `androidx.core.content.FileProvider` directly; AndroidX says that "is not reliable and will causes crashes on some devices", so story 1.10's rejection of that finding was wrong. Fix: `LumynoidFileProvider` subclass registered in the manifest, `CrashReportTest` asserts it, and the version goes to `v0.2.1` / `versionCode` 3. The crash cause on the owner's phone is not yet confirmed to be the provider; a crash report or logcat would settle it.
+
 ## Review Triage Log
 
 Pass 1, quick lens (subagent, same model level). 4 findings: high 0, medium 0, low 0, false 4, maybe-false 0. No loopback.
