@@ -12,9 +12,30 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonObject
+import java.util.TreeMap
 import java.util.concurrent.ConcurrentHashMap
+import java.util.regex.Pattern
+
+// The tree reader accepts arbitrary bare literals. Check lexical tokens before it checks structure.
+private val jsonToken = Pattern.compile(
+    """[ \t\r\n]++|[{}\[\],:]|"(?:[^"\\\x00-\x1f]++|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*+"|""" +
+        """(?:null|true|false|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?=[ \t\r\n,}\]]|\z)""",
+)
+
+private fun hasStrictJsonTokens(text: String): Boolean {
+    val matcher = jsonToken.matcher(text)
+    var offset = 0
+    while (offset < text.length) {
+        if (!matcher.region(offset, text.length).lookingAt()) return false
+        offset = matcher.end()
+    }
+    return true
+}
 
 /** The answer currently streaming. Deltas are hot state, never persisted (AD-4). */
 data class LiveAnswer(val taskId: String, val conversationId: String, val text: String)
@@ -32,6 +53,7 @@ class TaskRunner(
     scope: CoroutineScope,
     private val clock: Clock = SystemClock,
     private val ids: IdGenerator = UuidV7,
+    private val tools: ToolRegistry = ToolRegistry(),
 ) {
     private class Queued(val taskId: String, val request: TaskRequest)
 
@@ -145,27 +167,36 @@ class TaskRunner(
     }
 
     private suspend fun execute(item: Queued) {
-        val text = StringBuilder()
         try {
             currentCoroutineContext().ensureActive()
-            var failure: FailureReason? = null
-            val request = ContextAssembler.assemble(events.history(item.request.conversationId), item.taskId)
-            llm.stream(request).collect { chunk ->
-                when (chunk) {
-                    is LlmChunk.TextDelta -> {
-                        text.append(chunk.text)
-                        _live.value = LiveAnswer(item.taskId, item.request.conversationId, text.toString())
-                    }
-                    is LlmChunk.Failed -> failure = chunk.error.toReason()
-                    is LlmChunk.Routed, is LlmChunk.Usage, LlmChunk.Done -> Unit
+            val registry = tools.snapshot()
+            var request = ContextAssembler.assemble(events.history(item.request.conversationId), item.taskId)
+            if (registry.isNotEmpty()) request = request.copy(tools = registry.values.map { it.definition })
+            var toolTurn = false
+            while (true) {
+                val reply = readReply(item, request)
+                if (reply.terminal is LlmChunk.Failed) {
+                    fail(item, reply.terminal.error.toReason())
+                    return
                 }
-            }
-            if (failure == null && text.isEmpty()) failure = FailureReason.SERVER
-            if (failure != null) {
-                append(item, TaskEvent.TaskFailed(ids.next(), item.taskId, clock.nowMillis(), failure!!))
-            } else {
-                append(item, TaskEvent.AssistantMessage(ids.next(), item.taskId, clock.nowMillis(), text.toString()))
-                append(item, TaskEvent.TaskFinished(ids.next(), item.taskId, clock.nowMillis()))
+                val fragments = reply.fragments
+                if (fragments == null) {
+                    if (reply.text.isEmpty() || (toolTurn && reply.terminal != LlmChunk.Done)) {
+                        fail(item, FailureReason.SERVER)
+                    } else {
+                        append(item, TaskEvent.AssistantMessage(ids.next(), item.taskId, clock.nowMillis(), reply.text))
+                        append(item, TaskEvent.TaskFinished(ids.next(), item.taskId, clock.nowMillis()))
+                    }
+                    return
+                }
+                val calls = if (reply.terminal == LlmChunk.Done) prepareCalls(fragments, registry) else null
+                if (calls == null) {
+                    fail(item, LlmError.MalformedToolCall.toReason())
+                    return
+                }
+                request = request.copy(messages = runToolRound(item, request.messages, reply.text, calls))
+                toolTurn = true
+                _live.value = null
             }
         } catch (e: CancellationException) {
             withContext(NonCancellable) {
@@ -176,13 +207,103 @@ class TaskRunner(
             // A broken adapter or a failed write must end this task, not the queue or the process.
             runCatching {
                 withContext(NonCancellable) {
-                    append(item, TaskEvent.TaskFailed(ids.next(), item.taskId, clock.nowMillis(), FailureReason.SERVER))
+                    fail(item, FailureReason.SERVER)
                 }
             }
         } finally {
             _live.value = null
         }
     }
+
+    private class ToolFragments {
+        val name = StringBuilder()
+        val arguments = StringBuilder()
+    }
+
+    private data class Reply(
+        val text: String,
+        val fragments: TreeMap<Int, ToolFragments>?,
+        val terminal: LlmChunk?,
+    )
+
+    private suspend fun readReply(item: Queued, request: LlmRequest): Reply {
+        val text = StringBuilder()
+        var fragments: TreeMap<Int, ToolFragments>? = null
+        val terminal = llm.stream(request).firstOrNull { chunk ->
+            when (chunk) {
+                is LlmChunk.TextDelta -> {
+                    text.append(chunk.text)
+                    _live.value = LiveAnswer(item.taskId, item.request.conversationId, text.toString())
+                }
+                is LlmChunk.ToolCallDelta -> {
+                    val calls = fragments ?: TreeMap<Int, ToolFragments>().also { fragments = it }
+                    val call = calls.getOrPut(chunk.index, ::ToolFragments)
+                    chunk.nameFragment?.let(call.name::append)
+                    chunk.argumentsFragment?.let(call.arguments::append)
+                }
+                is LlmChunk.Failed, LlmChunk.Done -> return@firstOrNull true
+                is LlmChunk.Routed, is LlmChunk.Usage -> Unit
+            }
+            false
+        }
+        return Reply(text.toString(), fragments, terminal)
+    }
+
+    private data class PreparedCall(
+        val tool: Tool,
+        val args: JsonObject,
+        val request: TaskEvent.RequestedToolCall,
+    )
+
+    private fun prepareCalls(
+        fragments: Map<Int, ToolFragments>,
+        registry: Map<String, ToolRegistry.Entry>,
+    ): List<PreparedCall>? = buildList(fragments.size) {
+        for ((index, fragmentsAtIndex) in fragments) {
+            if (index < 0) return null
+            val name = fragmentsAtIndex.name.toString()
+            val tool = registry[name]?.tool ?: return null
+            val argsJson = fragmentsAtIndex.arguments.toString()
+            if (!hasStrictJsonTokens(argsJson)) return null
+            val args = try {
+                TaskEventJson.json.parseToJsonElement(argsJson) as? JsonObject ?: return null
+            } catch (_: SerializationException) {
+                return null
+            }
+            // The approval policy is not installed yet. Never dispatch work of uncertain or higher risk.
+            if (tool.assess(args) != RiskAssessment.READ_ONLY) return null
+            val call = TaskEvent.RequestedToolCall(ToolCall(ids.next(), name, argsJson), tool.describe(args))
+            add(PreparedCall(tool, args, call))
+        }
+    }
+
+    private suspend fun runToolRound(
+        item: Queued,
+        messages: List<LlmMessage>,
+        assistantText: String,
+        calls: List<PreparedCall>,
+    ): List<LlmMessage> {
+        val request = TaskEvent.ToolCallRequested(
+            ids.next(), item.taskId, clock.nowMillis(), assistantText, calls.map { it.request },
+        )
+        append(item, request)
+        val context = ToolContext(item.taskId, item.request.conversationId, item.request.workspaceId)
+        return buildList(messages.size + calls.size + 1) {
+            addAll(messages)
+            add(request.toLlmMessage())
+            for (call in calls) {
+                currentCoroutineContext().ensureActive()
+                val outcome = call.tool.execute(call.args, context)
+                val callId = call.request.call.id
+                val result = TaskEvent.ToolResult(ids.next(), item.taskId, clock.nowMillis(), callId, outcome)
+                append(item, result)
+                add(result.toLlmMessage())
+            }
+        }
+    }
+
+    private suspend fun fail(item: Queued, reason: FailureReason) =
+        append(item, TaskEvent.TaskFailed(ids.next(), item.taskId, clock.nowMillis(), reason))
 
     private suspend fun append(item: Queued, event: TaskEvent) =
         events.append(item.request.conversationId, event)

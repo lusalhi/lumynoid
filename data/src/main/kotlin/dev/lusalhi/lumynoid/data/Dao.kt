@@ -61,7 +61,7 @@ internal interface LumynoidDao {
             "SELECT :id, :taskId, :conversationId, :at, :payload " +
             "WHERE EXISTS (SELECT 1 FROM conversation WHERE id = :conversationId)",
     )
-    suspend fun insertEventIfConversationExists(id: String, taskId: String, conversationId: String, at: Long, payload: String)
+    suspend fun insertEventIfConversationExists(id: String, taskId: String, conversationId: String, at: Long, payload: String): Long
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertEvent(event: TaskEventEntity)

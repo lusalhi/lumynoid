@@ -143,6 +143,7 @@ data class UnfinishedTask(val taskId: String, val conversationId: String)
 /** Event log storage. Only [TaskRunner] may call the write functions (AD-4, AD-5). */
 interface EventRepository {
     suspend fun createTask(taskId: String, request: TaskRequest, at: Long)
+    /** Tool events must be stored before returning; throw if their conversation no longer exists. */
     suspend fun append(conversationId: String, event: TaskEvent)
     fun observe(conversationId: String): Flow<List<TaskEvent>>
 
@@ -150,9 +151,8 @@ interface EventRepository {
     suspend fun history(conversationId: String): List<TaskEvent>
 
     /**
-     * Tasks whose last event is not terminal: no events at all, or a last event that is
-     * [TaskEvent.TaskQueued], [TaskEvent.UserMessage] or [TaskEvent.AssistantMessage]. Finished,
-     * failed, cancelled and [TaskEvent.Unknown]-ending tasks are not listed.
+     * Tasks with no events or whose last event is nonterminal ([TaskEvent.needsRecovery]). Finished, failed,
+     * cancelled and [TaskEvent.Unknown]-ending tasks are not listed.
      */
     suspend fun unfinishedTasks(): List<UnfinishedTask>
 }

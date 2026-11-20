@@ -11,24 +11,37 @@ import dev.lusalhi.lumynoid.core.ProviderConfig
 import dev.lusalhi.lumynoid.core.ProviderKind
 import dev.lusalhi.lumynoid.core.SecretRef
 import dev.lusalhi.lumynoid.core.TaskEvent
+import dev.lusalhi.lumynoid.core.TaskEventJson
 import dev.lusalhi.lumynoid.core.TaskRequest
+import dev.lusalhi.lumynoid.core.ToolCall
+import dev.lusalhi.lumynoid.core.ToolOutcome
+import dev.lusalhi.lumynoid.core.UiText
 import dev.lusalhi.lumynoid.core.UuidV7
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
+import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
-import org.junit.Test
+import java.io.RandomAccessFile
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /** Runs the real Room schema on a real SQLite file, closing and reopening it like a process restart. */
 class PersistenceTest {
 
     @get:Rule
     val folder = TemporaryFolder()
+
+    private val blobRoot get() = File(folder.root, "event-blobs")
+
+    private fun repository(dao: LumynoidDao): RoomEventRepository =
+        RoomEventRepository(dao, EventBlobStore(blobRoot))
 
     private fun open(file: File): LumynoidDatabase =
         Room.databaseBuilder<LumynoidDatabase>(file.path) { LumynoidDatabase_Impl() }
@@ -42,7 +55,7 @@ class PersistenceTest {
 
         val first = open(file)
         val conversation = RoomConversationPort(first.dao(), UuidV7, Clock { 10L }).create("hello")
-        val events = RoomEventRepository(first.dao())
+        val events = repository(first.dao())
         events.createTask("t1", request(conversation.id), 10L)
         events.append(conversation.id, TaskEvent.UserMessage("e1", "t1", 10L, Origin.User, "hello"))
         events.append(conversation.id, TaskEvent.AssistantMessage("e2", "t1", 11L, "world"))
@@ -50,7 +63,7 @@ class PersistenceTest {
         first.close()
 
         val second = open(file)
-        val reopened = RoomEventRepository(second.dao()).observe(conversation.id).first()
+        val reopened = repository(second.dao()).observe(conversation.id).first()
         assertEquals(listOf("e1", "e2", "e3"), reopened.map { it.id })
         assertEquals("world", (reopened[1] as TaskEvent.AssistantMessage).text)
         assertEquals(conversation.id, RoomConversationPort(second.dao(), UuidV7, Clock { 20L }).latest()?.id)
@@ -65,11 +78,53 @@ class PersistenceTest {
         val future = """{"type":"from_the_future","id":"new","taskId":"t","at":2}"""
         dao.insertEvent(TaskEventEntity(id = "new", taskId = "t", conversationId = "c", at = 2L, payload = future))
 
-        val read = RoomEventRepository(dao).observe("c").first()
+        val read = repository(dao).observe("c").first()
 
         assertEquals(2, read.size)
         read.forEach { assertIs<TaskEvent.Unknown>(it) }
         db.close()
+    }
+
+    @Test
+    fun largeUtf8EventUsesAReferenceOnFirstInsertAndReadsFullyAfterReopen() = runTest {
+        val file = folder.newFile("lumynoid.db")
+        val first = open(file)
+        val c = RoomConversationPort(first.dao(), UuidV7, Clock { 1L }).create("x")
+        val events = repository(first.dao())
+        events.createTask("t", TaskRequest(Origin.User, c.id, "ws", "x"), 1L)
+        val call = ToolCall("call", "web_fixture_lookup", "{}")
+        val requested = TaskEvent.ToolCallRequested(
+            "request", "t", 2L, "", listOf(TaskEvent.RequestedToolCall(call, UiText("card.fixture.lookup"))),
+        )
+        val tail = "END OF FULL TOOL OUTPUT"
+        val result = TaskEvent.ToolResult("result", "t", 3L, call.id, ToolOutcome("界".repeat(90_000) + tail))
+        events.append(c.id, requested)
+        events.append(c.id, result)
+        val rows = first.dao().events(c.id)
+        val fullJson = TaskEventJson.encode(result)
+        assertEquals(TaskEventJson.encode(requested), rows.first().payload)
+        assertTrue(rows.last().payload.encodeToByteArray().size < 4096)
+        assertFalse(tail in rows.last().payload)
+        assertTrue(fullJson.length < 256 * 1024)
+        assertTrue(fullJson.encodeToByteArray().size > 256 * 1024)
+        first.close()
+
+        val second = open(file)
+        try {
+            val reopened = repository(second.dao())
+            assertEquals(listOf(requested, result), reopened.history(c.id))
+            assertEquals(listOf(requested, result), reopened.observe(c.id).first())
+            val blob = blobRoot.walkTopDown().single { it.isFile }
+            assertEquals(7, UUID.fromString(blob.name).version())
+            RandomAccessFile(blob, "rw").use { it.writeByte('x'.code) }
+            assertEquals(TaskEvent.Unknown(result.id, result.taskId, result.at), reopened.history(c.id).last())
+            assertEquals(listOf("t"), reopened.unfinishedTasks().map { it.taskId })
+            assertTrue(blob.delete())
+            assertEquals(TaskEvent.Unknown(result.id, result.taskId, result.at), reopened.history(c.id).last())
+            assertEquals(listOf("t"), reopened.unfinishedTasks().map { it.taskId })
+        } finally {
+            second.close()
+        }
     }
 
     @Test
@@ -115,7 +170,7 @@ class PersistenceTest {
         val db = open(folder.newFile("lumynoid.db"))
         var now = 0L
         val port = RoomConversationPort(db.dao(), UuidV7, Clock { now })
-        val events = RoomEventRepository(db.dao())
+        val events = repository(db.dao())
         now = 1; val a = port.create("  first\nline  ")
         now = 2; val b = port.create("second")
         assertEquals(listOf(b.id, a.id), port.observeAll().first().map { it.id })
@@ -147,7 +202,7 @@ class PersistenceTest {
     fun deleteRemovesTheConversationItsTasksAndEventsAndLeavesOthersIntact() = runTest {
         val db = open(folder.newFile("lumynoid.db"))
         val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
-        val events = RoomEventRepository(db.dao())
+        val events = repository(db.dao())
         val gone = port.create("gone")
         val kept = port.create("kept")
         for ((c, t) in listOf(gone.id to "t1", kept.id to "t2")) {
@@ -168,12 +223,19 @@ class PersistenceTest {
     fun writesForADeletedConversationLeaveNoRows() = runTest {
         val db = open(folder.newFile("lumynoid.db"))
         val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
-        val events = RoomEventRepository(db.dao())
+        val events = repository(db.dao())
         val c = port.create("gone")
         port.delete(c.id)
 
         events.createTask("t1", TaskRequest(Origin.User, c.id, "ws", "x"), 2L)
         events.append(c.id, TaskEvent.UserMessage("e1", "t1", 2L, Origin.User, "x"))
+        val call = TaskEvent.RequestedToolCall(ToolCall("call", "web_fixture_lookup", "{}"), UiText("card.fixture.lookup"))
+        assertFailsWith<IllegalStateException> {
+            events.append(c.id, TaskEvent.ToolCallRequested("e2", "t1", 3L, "", listOf(call)))
+        }
+        assertFailsWith<IllegalStateException> {
+            events.append(c.id, TaskEvent.ToolResult("e3", "t1", 4L, call.call.id, ToolOutcome("not stored")))
+        }
 
         assertEquals(0, db.dao().taskCount())
         assertEquals(emptyList(), events.history(c.id))
@@ -184,7 +246,7 @@ class PersistenceTest {
     fun unfinishedTasksListsEveryTaskWhoseLastEventIsNotTerminal() = runTest {
         val db = open(folder.newFile("lumynoid.db"))
         val port = RoomConversationPort(db.dao(), UuidV7, Clock { 1L })
-        val events = RoomEventRepository(db.dao())
+        val events = repository(db.dao())
         val c = port.create("x")
         val other = port.create("y")
         suspend fun create(id: String, conv: String = c.id) = events.createTask(id, TaskRequest(Origin.User, conv, "ws", "x"), 1L)
@@ -194,6 +256,13 @@ class PersistenceTest {
         create("queued"); add(TaskEvent.TaskQueued("q1", "queued", 1L))
         create("user"); add(TaskEvent.TaskQueued("q2", "user", 1L)); add(TaskEvent.UserMessage("u2", "user", 2L, Origin.User, "x"))
         create("answered"); add(TaskEvent.UserMessage("u3", "answered", 1L, Origin.User, "x")); add(TaskEvent.AssistantMessage("a3", "answered", 2L, "y"))
+        val call = ToolCall("c", "web_fixture_lookup", "{}")
+        create("requested")
+        add(TaskEvent.ToolCallRequested(
+            "requested", "requested", 2L, "", listOf(TaskEvent.RequestedToolCall(call, UiText("card.fixture.lookup"))),
+        ))
+        create("result")
+        add(TaskEvent.ToolResult("result", "result", 2L, call.id, ToolOutcome("x")))
         create("finished"); add(TaskEvent.UserMessage("u4", "finished", 1L, Origin.User, "x")); add(TaskEvent.TaskFinished("f4", "finished", 2L))
         create("failed"); add(TaskEvent.TaskFailed("f5", "failed", 2L, FailureReason.INTERRUPTED))
         create("cancelled"); add(TaskEvent.UserMessage("u6", "cancelled", 1L, Origin.User, "x")); add(TaskEvent.TaskCancelled("c6", "cancelled", 2L))
@@ -205,7 +274,10 @@ class PersistenceTest {
         val unfinished = events.unfinishedTasks()
 
         assertEquals(
-            setOf("none" to c.id, "queued" to c.id, "user" to c.id, "answered" to c.id, "other-open" to other.id),
+            setOf(
+                "none" to c.id, "queued" to c.id, "user" to c.id, "answered" to c.id,
+                "requested" to c.id, "result" to c.id, "other-open" to other.id,
+            ),
             unfinished.map { it.taskId to it.conversationId }.toSet(),
         )
         db.close()

@@ -17,10 +17,16 @@ import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskEventJson
 import dev.lusalhi.lumynoid.core.TaskRequest
 import dev.lusalhi.lumynoid.core.UnfinishedTask
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
-internal class RoomEventRepository(private val dao: LumynoidDao) : EventRepository {
+internal class RoomEventRepository(
+    private val dao: LumynoidDao,
+    private val blobs: EventBlobStore,
+) : EventRepository {
 
     override suspend fun createTask(taskId: String, request: TaskRequest, at: Long) {
         dao.insertTaskIfConversationExists(
@@ -33,13 +39,26 @@ internal class RoomEventRepository(private val dao: LumynoidDao) : EventReposito
     }
 
     override suspend fun append(conversationId: String, event: TaskEvent) {
-        dao.insertEventIfConversationExists(
+        val encoded = TaskEventJson.encode(event)
+        // A UTF-16 code unit occupies at most three UTF-8 bytes.
+        val bytes = if (encoded.length > StoredEventBlob.MAX_INLINE_BYTES / 3) encoded.encodeToByteArray() else null
+        val payload = if (bytes != null && bytes.size > StoredEventBlob.MAX_INLINE_BYTES) {
+            withContext(Dispatchers.IO) {
+                StoredEventBlob.encode(blobs.write(conversationId, bytes), event, encoded)
+            }
+        } else {
+            encoded
+        }
+        val rowId = dao.insertEventIfConversationExists(
             id = event.id,
             taskId = event.taskId,
             conversationId = conversationId,
             at = event.at,
-            payload = TaskEventJson.encode(event),
+            payload = payload,
         )
+        if (event is TaskEvent.ToolCallRequested || event is TaskEvent.ToolResult) {
+            check(rowId != -1L) { "Cannot append tool event to missing conversation: $conversationId" }
+        }
     }
 
     override fun observe(conversationId: String): Flow<List<TaskEvent>> =
@@ -51,15 +70,34 @@ internal class RoomEventRepository(private val dao: LumynoidDao) : EventReposito
     override suspend fun unfinishedTasks(): List<UnfinishedTask> =
         dao.taskLastEvents().filter { row ->
             val payload = row.lastPayload ?: return@filter true
-            // Unreadable payloads and unknown types count as finished, like TaskEvent.Unknown.
-            when (runCatching { TaskEventJson.decode(payload) }.getOrNull()) {
-                is TaskEvent.TaskQueued, is TaskEvent.UserMessage, is TaskEvent.AssistantMessage -> true
-                else -> false
-            }
+            // Recovery only needs the row metadata, even when the last event's blob has gone missing.
+            runCatching {
+                if (StoredEventBlob.isEnvelope(payload)) {
+                    StoredEventBlob.decode(payload).needsRecovery
+                } else {
+                    TaskEventJson.decode(payload).needsRecovery
+                }
+            }.getOrDefault(false)
         }.map { UnfinishedTask(it.taskId, it.conversationId) }
 
-    private fun TaskEventEntity.toEvent(): TaskEvent =
-        runCatching { TaskEventJson.decode(payload) }.getOrDefault(TaskEvent.Unknown(id, taskId, at))
+    private suspend fun TaskEventEntity.toEvent(): TaskEvent = try {
+        if (StoredEventBlob.isEnvelope(payload)) {
+            withContext(Dispatchers.IO) {
+                val blob = StoredEventBlob.decode(payload)
+                val encoded = blobs.read(conversationId, blob.ref)
+                check(StoredEventBlob.eventType(encoded) == blob.eventType)
+                TaskEventJson.decode(encoded).also {
+                    check(it.id == id && it.taskId == taskId && it.at == at)
+                }
+            }
+        } else {
+            TaskEventJson.decode(payload)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        TaskEvent.Unknown(id, taskId, at)
+    }
 }
 
 internal class RoomConversationPort(

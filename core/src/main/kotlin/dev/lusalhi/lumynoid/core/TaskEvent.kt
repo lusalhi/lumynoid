@@ -35,6 +35,12 @@ sealed class TaskEvent {
     abstract val taskId: String
     abstract val at: Long
 
+    val needsRecovery: Boolean
+        get() = when (this) {
+            is TaskQueued, is UserMessage, is AssistantMessage, is ToolCallRequested, is ToolResult -> true
+            is TaskFinished, is TaskFailed, is TaskCancelled, is Unknown -> false
+        }
+
     @Serializable
     @SerialName("task_queued")
     data class TaskQueued(
@@ -60,6 +66,30 @@ sealed class TaskEvent {
         override val taskId: String,
         override val at: Long,
         val text: String,
+    ) : TaskEvent()
+
+    @Serializable
+    data class RequestedToolCall(val call: ToolCall, val description: UiText)
+
+    /** One assistant reply can request several calls; each result carries its own call ID. */
+    @Serializable
+    @SerialName("tool_call_requested")
+    data class ToolCallRequested(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val assistantText: String,
+        val calls: List<RequestedToolCall>,
+    ) : TaskEvent()
+
+    @Serializable
+    @SerialName("tool_result")
+    data class ToolResult(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val callId: String,
+        val outcome: ToolOutcome,
     ) : TaskEvent()
 
     @Serializable

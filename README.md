@@ -30,6 +30,8 @@ Requirements: JDK 17 and the Android SDK (platform 37).
 ./gradlew :app:assembleRelease        # unsigned arm64-v8a APK unless the release key env vars are set
 ```
 
+The structured-tool loop is exercised only by in-process JVM fixtures. The Android app does not register tools or run shell commands.
+
 ## Checks that gate every change
 
 CI runs on every push and pull request, and these gates fail the build:

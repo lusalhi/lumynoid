@@ -11,6 +11,7 @@ import dev.lusalhi.lumynoid.core.ProviderConfigStore
 import dev.lusalhi.lumynoid.core.SecretPort
 import dev.lusalhi.lumynoid.core.SystemClock
 import dev.lusalhi.lumynoid.core.UuidV7
+import java.io.File
 
 /** Entry point of `:data`: opens the single database and exposes its ports. */
 class LumynoidData(
@@ -25,7 +26,7 @@ class LumynoidData(
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4) // no destructive fallback (AD-19)
             .build()
 
-    val events: EventRepository = RoomEventRepository(database.dao())
+    val events: EventRepository = RoomEventRepository(database.dao(), EventBlobStore(File(appContext.filesDir, "event-blobs")))
     val conversations: ConversationPort = RoomConversationPort(database.dao(), ids, clock)
     val providerConfigs: ProviderConfigStore = RoomProviderConfigStore(database.dao())
     val secrets: SecretPort = KeystoreSecretStore(appContext)

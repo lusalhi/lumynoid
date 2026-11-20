@@ -43,6 +43,35 @@ class ContextAssemblerTest {
     }
 
     @Test
+    fun onlyCompleteSameTaskToolRoundsEnterTheContext() {
+        val old = ToolCall("old-call", "web_fixture_lookup", "{}")
+        val failedCall = ToolCall("failed-call", old.name, "{}")
+        val current = ToolCall("current-call", old.name, "{}")
+        fun request(task: String, call: ToolCall) = TaskEvent.ToolCallRequested(
+            "request-$task", task, 0L, "", listOf(TaskEvent.RequestedToolCall(call, UiText("card.fixture.lookup"))),
+        )
+        fun result(task: String, call: ToolCall, output: String) =
+            TaskEvent.ToolResult("result-$task", task, 0L, call.id, ToolOutcome(output))
+        val history = listOf(
+            user("old", "previous"), request("old", old),
+            user("failed", "failed"), request("failed", failedCall), result("failed", failedCall, "failed output"),
+            answer("failed", "interrupted answer"), failed("failed"),
+            user("current", "now"), user("later", "later"),
+            result("later", old, "wrong task"), answer("old", "previous answer"),
+            request("current", current), result("current", current, "right task"),
+        )
+
+        assertEquals(
+            listOf(
+                u("previous"), a("previous answer"), u("now"),
+                LlmMessage(Role.ASSISTANT, "", toolCalls = listOf(current)),
+                LlmMessage(Role.TOOL, "right task", toolCallId = current.id),
+            ),
+            ContextAssembler.assemble(history, "current").messages,
+        )
+    }
+
+    @Test
     fun titleIsTheFirstNonBlankLineCollapsedAndCut() {
         assertEquals("hello big world", ConversationTitle.from("\n  \n  hello   big\tworld \nsecond line"))
         assertEquals("", ConversationTitle.from("  \n\t "))
