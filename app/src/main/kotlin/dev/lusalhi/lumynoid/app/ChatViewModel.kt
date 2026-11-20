@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -32,7 +31,6 @@ data class ChatState(
     val providerConfigured: Boolean = false,
     val events: List<TaskEvent> = emptyList(),
     val live: LiveAnswer? = null,
-    val sending: Boolean = false,
     val conversations: List<Conversation> = emptyList(),
     val conversationId: String? = null,
     /** Title of the open conversation; empty for a new or untitled one. */
@@ -95,9 +93,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         agent.connect()
         viewModelScope.launch {
             conversationId.value = graph.data.conversations.latest()?.id
-            val configured = graph.providerAdmin.overview().active != null
-            providerConfigured.value = configured
-            screen.value = if (configured) Screen.CHAT else Screen.PROVIDER
+            screen.value = if (refreshConfigured()) Screen.CHAT else Screen.PROVIDER
         }
     }
 
@@ -106,10 +102,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** Leaves the provider screen for the chat, once the app has a provider and model to chat with. */
     fun closeProvider() {
         viewModelScope.launch {
-            val configured = graph.providerAdmin.overview().active != null
-            providerConfigured.value = configured
-            if (configured) screen.value = Screen.CHAT
+            if (refreshConfigured()) screen.value = Screen.CHAT
         }
+    }
+
+    /** Re-reads whether the app has an active provider and model, and returns it. */
+    private suspend fun refreshConfigured(): Boolean {
+        val configured = graph.providerAdmin.overview().active != null
+        providerConfigured.value = configured
+        return configured
+    }
+
+    /** First run finished: the app has its first provider, so chat starts in an empty new conversation, not the latest old one. */
+    fun providerReady() {
+        providerConfigured.value = true
+        newConversation()
     }
 
     fun openConversations() { screen.value = Screen.CONVERSATIONS }

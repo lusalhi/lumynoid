@@ -40,6 +40,8 @@ fun ConversationListScreen(
     conversations: List<Conversation>,
     openId: String?,
     streamingId: String?,
+    providerConfigured: Boolean,
+    onOpenProvider: () -> Unit,
     onOpen: (String) -> Unit,
     onNew: () -> Unit,
     onRename: (String, String) -> Unit,
@@ -64,9 +66,14 @@ fun ConversationListScreen(
         }
         if (conversations.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.conversations_empty), Modifier.padding(24.dp))
+                if (providerConfigured) {
+                    Text(stringResource(R.string.conversations_empty), Modifier.padding(24.dp))
+                } else {
+                    SetupPrompt(R.string.setup_first, onOpenProvider, Modifier.padding(24.dp))
+                }
             }
         } else {
+            if (!providerConfigured) SetupBanner(onOpenProvider, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             LazyColumn(Modifier.weight(1f)) {
                 items(conversations, key = { it.id }) { c ->
                     ConversationRow(

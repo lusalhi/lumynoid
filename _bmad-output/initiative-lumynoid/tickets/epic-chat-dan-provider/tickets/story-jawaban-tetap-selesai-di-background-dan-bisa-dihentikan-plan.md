@@ -3,7 +3,7 @@ title: 'Answers finish in the background and can be stopped'
 type: feature
 ticket: '8'
 created: '2026-11-15'
-status: built
+status: done
 baseline_revision: '691a49f9c36f541789cf34043d8da1402642ce74'
 route: full
 route_source: auto

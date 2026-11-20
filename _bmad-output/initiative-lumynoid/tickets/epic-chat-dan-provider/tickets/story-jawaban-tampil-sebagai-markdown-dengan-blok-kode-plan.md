@@ -3,7 +3,7 @@ title: 'Assistant answers render as markdown with code blocks'
 type: feature
 ticket: '6'
 created: '2026-11-15'
-status: built
+status: done
 baseline_revision: '0cbc533ad3eb03c718e3110a6e13386732e5322c'
 route: full
 route_source: auto

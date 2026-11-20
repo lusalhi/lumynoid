@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The only place the app shares files from: the copy of a crash report made just before sharing (AD-25). -->
+<paths>
+    <cache-path name="export" path="export/" />
+</paths>

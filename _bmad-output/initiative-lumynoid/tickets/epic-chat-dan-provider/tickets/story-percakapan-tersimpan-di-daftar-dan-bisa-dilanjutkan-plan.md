@@ -3,7 +3,7 @@ title: 'Saved conversations in a list that can be resumed'
 type: feature
 ticket: '7'
 created: '2026-11-15'
-status: built
+status: done
 baseline_revision: '93fb95650be7ac9f879309905865ea9b442d5e3a'
 route: full
 route_source: auto

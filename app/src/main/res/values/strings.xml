@@ -10,6 +10,7 @@
     <string name="chat_settings">AI provider</string>
     <string name="chat_needs_provider">Add your AI provider before you chat.</string>
     <string name="chat_open_provider">Set up AI provider</string>
+    <string name="setup_first">Set up your AI provider first, then you can start chatting.</string>
     <string name="chat_conversations">Conversations</string>
     <string name="chat_new">New</string>
 
@@ -80,7 +81,19 @@
     <string name="provider_save">Save</string>
     <string name="provider_cancel">Cancel</string>
     <string name="provider_back">Back</string>
+    <string name="provider_welcome_title">Welcome to Lumynoid</string>
+    <string name="provider_welcome_body">Connect an AI provider and you can start chatting. Pick one below, paste your API key and choose a model. Your key stays on this phone.</string>
+    <string name="provider_key_hint">You can create a key in your %1$s account, in its API keys section.</string>
+    <string name="provider_key_hint_custom">Paste the API key your provider gave you.</string>
+    <string name="provider_connect">Connect and start</string>
+    <string name="provider_save_anyway">Save anyway</string>
     <string name="provider_missing_base_url">Enter the base URL.</string>
     <string name="provider_missing_api_key">Enter your API key.</string>
     <string name="provider_missing_model">Enter a model name.</string>
+
+    <string name="crash_banner_title">Lumynoid closed unexpectedly last time.</string>
+    <string name="crash_banner_body">A crash report was saved on this phone. It has no messages, keys or prompts. Share it if you want to help find the cause.</string>
+    <string name="crash_share">Share</string>
+    <string name="crash_dismiss">Dismiss</string>
+    <string name="crash_share_failed">Could not share the report.</string>
 </resources>

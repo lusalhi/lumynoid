@@ -1,5 +1,6 @@
 package dev.lusalhi.lumynoid.app
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -31,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.lusalhi.lumynoid.core.FailureReason
@@ -82,32 +86,31 @@ fun ChatScreen(
 
         Box(Modifier.weight(1f)) {
             if (itemCount == 0) {
-                Text(
-                    stringResource(R.string.chat_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                )
-            }
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(state.events.filter { it.isVisible() }, key = { it.id }) { event -> EventRow(event) }
-                state.live?.let { item(key = "live") { Bubble(it.text, fromUser = false) } }
+                if (state.providerConfigured) {
+                    Text(
+                        stringResource(R.string.chat_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                    )
+                } else {
+                    SetupPrompt(R.string.setup_first, onOpenProvider, Modifier.align(Alignment.Center).padding(24.dp))
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(state.events.filter { it.isVisible() }, key = { it.id }) { event -> EventRow(event) }
+                    state.live?.let { item(key = "live") { Bubble(it.text, fromUser = false) } }
+                }
             }
         }
 
         if (!state.providerConfigured) {
-            Row(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(stringResource(R.string.chat_needs_provider), Modifier.weight(1f))
-                Button(onClick = onOpenProvider) { Text(stringResource(R.string.chat_open_provider)) }
-            }
+            // An empty chat already shows the prompt and its button above.
+            if (itemCount > 0) SetupBanner(onOpenProvider, Modifier.padding(16.dp))
         } else {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
@@ -183,4 +186,52 @@ private fun FailureReason.messageRes(): Int = when (this) {
     FailureReason.NETWORK -> R.string.error_network
     FailureReason.SERVER -> R.string.error_server
     FailureReason.INTERRUPTED -> R.string.error_interrupted
+}
+
+/** Offers the saved crash report. Shown above every screen, so a crash during first-run setup can be shared too. */
+@Composable
+fun CrashBanner(onShare: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(
+                stringResource(R.string.crash_banner_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Text(
+                stringResource(R.string.crash_banner_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.crash_dismiss)) }
+                TextButton(onClick = onShare) { Text(stringResource(R.string.crash_share)) }
+            }
+        }
+    }
+}
+
+/** Shown in place of an empty list or chat while no provider is set up: what to do, and the button that does it. */
+@Composable
+fun SetupPrompt(@StringRes message: Int, onOpenProvider: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(stringResource(message), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        Button(onClick = onOpenProvider) { Text(stringResource(R.string.chat_open_provider)) }
+    }
+}
+
+/** A one-line reminder with the setup button, for screens that already show content. */
+@Composable
+fun SetupBanner(onOpenProvider: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(stringResource(R.string.chat_needs_provider), Modifier.weight(1f))
+        Button(onClick = onOpenProvider) { Text(stringResource(R.string.chat_open_provider)) }
+    }
 }

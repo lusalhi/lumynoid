@@ -9,14 +9,21 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
+import io.ktor.client.request.preparePost
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.readLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.IOException
@@ -51,6 +58,56 @@ internal fun HttpResponse.toLlmError(): LlmError = when (status) {
     HttpStatusCode.TooManyRequests ->
         LlmError.RateLimited(headers[HttpHeaders.RetryAfter]?.toLongOrNull()?.times(1000))
     else -> LlmError.Server
+}
+
+/** `[baseUrl]` without a trailing slash, followed by [path]. */
+internal fun joinUrl(baseUrl: String, path: String): String = baseUrl.trimEnd('/') + path
+
+/**
+ * POSTs the JSON [body] to [url] and hands a successful response to [readStream]. A failed status, an IO
+ * error or any other exception (a decode error inside [readStream] included) becomes a typed
+ * [LlmChunk.Failed]; only cancellation is rethrown. Call it inside the adapter's `flow`.
+ */
+internal suspend fun FlowCollector<LlmChunk>.streamPost(
+    client: HttpClient,
+    url: String,
+    body: String,
+    auth: HttpRequestBuilder.() -> Unit,
+    readStream: suspend FlowCollector<LlmChunk>.(HttpResponse) -> Unit,
+) {
+    try {
+        client.preparePost(url) {
+            auth()
+            accept(ContentType.Text.EventStream)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }.execute { response ->
+            if (!response.status.isSuccess()) {
+                emit(LlmChunk.Failed(response.toLlmError()))
+            } else {
+                readStream(response)
+            }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: IOException) {
+        emit(LlmChunk.Failed(LlmError.Network))
+    } catch (e: Exception) {
+        emit(LlmChunk.Failed(LlmError.Server))
+    }
+}
+
+/**
+ * Reads the server-sent `data:` payloads of [response] one by one, skipping `event:` names, blank
+ * separators and comments. [onData] returns false to stop reading.
+ */
+internal suspend inline fun HttpResponse.readDataLines(onData: (String) -> Boolean) {
+    val channel: ByteReadChannel = bodyAsChannel()
+    while (true) {
+        val line = channel.readLine() ?: break
+        if (!line.startsWith("data:")) continue
+        if (!onData(line.removePrefix("data:").trim())) break
+    }
 }
 
 @Serializable

@@ -121,6 +121,13 @@ class AnthropicAdapterTest {
     }
 
     @Test
+    fun aMalformedStreamPayloadFailsWithServerAfterTheTextSoFar() = runTest {
+        val body = events(start, delta("par")) + "event: content_block_delta\ndata: <html>not json</html>\n\n"
+        val chunks = run(MockEngine { respond(body) })
+        assertEquals(listOf(LlmChunk.TextDelta("par"), LlmChunk.Failed(LlmError.Server)), chunks)
+    }
+
+    @Test
     fun anErrorEventAfterPartialTextFailsWithoutDone() = runTest {
         fun errorEvent(type: String) = """{"type":"error","error":{"type":"$type","message":"details"}}"""
 
