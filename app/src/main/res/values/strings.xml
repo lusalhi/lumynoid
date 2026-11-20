@@ -34,6 +34,10 @@
     <string name="error_network">Could not reach the provider. Check your connection and the address.</string>
     <string name="error_server">The provider returned an error or an empty answer. Try again.</string>
     <string name="error_interrupted">This answer was interrupted.</string>
+    <string name="error_tool_denied">This tool action was blocked.</string>
+    <string name="error_approval_denied">You declined the tool action.</string>
+    <string name="error_approval_expired">Approval for the tool action expired.</string>
+    <string name="error_approval_changed">The tool action changed after approval and was blocked.</string>
     <string name="task_cancelled">Stopped.</string>
 
     <string name="notification_channel_task_running">Answer in progress</string>

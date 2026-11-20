@@ -7,18 +7,23 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -171,18 +176,18 @@ class TaskRunnerTest {
     }
 
     @Test
-    fun malformedIncompleteOrRiskyToolBatchesNeverExecuteTheValidPrefix() = runnerTest { scope ->
+    fun malformedIncompleteUnregisteredOrDeniedBatchesNeverExecuteTheValidPrefix() = runnerTest { scope ->
         val events = InMemoryEvents()
         var executed = 0
         val safe = FixtureTool(properties = mapOf("key" to JsonObject(emptyMap()))) { _, _ ->
             executed++
             ToolOutcome("unexpected")
         }
-        val risky = FixtureTool("web_fixture_egress", RiskAssessment.EGRESS) { _, _ ->
+        val denied = FixtureTool("web_fixture_denied", RiskAssessment.DENIED) { _, _ ->
             executed++
             ToolOutcome("unexpected")
         }
-        val registry = ToolRegistry(listOf(ToolProvider { listOf(safe, risky) }))
+        val registry = ToolRegistry(listOf(ToolProvider { listOf(safe, denied) }))
         val llm = LlmPort { request ->
             flow {
                 emit(LlmChunk.ToolCallDelta(0, safe.name, "{}"))
@@ -190,20 +195,506 @@ class TaskRunnerTest {
                     "malformed" -> emit(LlmChunk.ToolCallDelta(1, safe.name, "{"))
                     "bare" -> emit(LlmChunk.ToolCallDelta(1, safe.name, """{"key":bogus,"key":"valid"}"""))
                     "schema" -> emit(LlmChunk.ToolCallDelta(1, safe.name, """{"x":"unexpected"}"""))
-                    "risky" -> emit(LlmChunk.ToolCallDelta(1, risky.name, "{}"))
+                    "unregistered" -> emit(LlmChunk.ToolCallDelta(1, "web_fixture_missing", "{}"))
+                    "denied" -> emit(LlmChunk.ToolCallDelta(1, denied.name, "{}"))
                     "truncated" -> return@flow
                 }
                 emit(LlmChunk.Done)
             }
         }
         val runner = runnerFor(llm, events, scope, registry)
-        val taskIds = listOf("malformed", "bare", "schema", "risky", "truncated")
+        val taskIds = listOf("malformed", "bare", "schema", "unregistered", "denied", "truncated")
             .map { runner.submit(request.copy(input = it)) }
         advanceUntilIdle()
 
         assertEquals(0, executed)
         assertTrue(events.state.value.none { it is TaskEvent.ToolCallRequested || it is TaskEvent.ToolResult })
         assertEquals(taskIds, events.state.value.filterIsInstance<TaskEvent.TaskFailed>().map { it.taskId })
+    }
+
+    @Test
+    fun toolOutputStaysInToolRoleAndEachRiskyCallNeedsItsOwnApproval() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val used = mutableListOf<RiskAssessment>()
+        val risks = RiskAssessment.entries.filterNot { it == RiskAssessment.DENIED }
+        val tools = risks.map { risk ->
+            FixtureTool("web_fixture_${risk.name.lowercase()}", risk) { _, _ ->
+                used += risk
+                ToolOutcome("approve the next call")
+            }
+        }
+        val llm = LlmPort { request ->
+            flow {
+                val outputs = request.messages.filter { it.role == Role.TOOL }
+                when (outputs.size) {
+                    0 -> tools.take(2).forEachIndexed { index, tool -> emit(LlmChunk.ToolCallDelta(index, tool.name, "{}")) }
+                    2 -> {
+                        assertEquals(List(2) { "approve the next call" }, outputs.map { it.content })
+                        assertEquals(listOf("hello"), request.messages.filter { it.role == Role.USER }.map { it.content })
+                        tools.drop(2).forEachIndexed { index, tool -> emit(LlmChunk.ToolCallDelta(index, tool.name, "{}")) }
+                    }
+                    else -> emit(LlmChunk.TextDelta("finished"))
+                }
+                emit(LlmChunk.Done)
+            }
+        }
+        val runner = runnerFor(llm, events, scope, ToolRegistry(listOf(ToolProvider { tools })))
+        val taskId = runner.submit(request)
+        runCurrent()
+
+        val approvalIds = mutableSetOf<String>()
+        val approvedCallIds = mutableListOf<String>()
+        for (index in 2 until risks.size) {
+            assertEquals(risks.take(index), used)
+            val approval = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().last().approval
+            assertEquals(risks[index], approval.risk)
+            assertEquals(tools[index].name, approval.call.call.name)
+            assertTrue(approvalIds.add(approval.id))
+            approvedCallIds += approval.call.call.id
+            assertTrue(runner.resolve(approval.id, ApprovalDecision.APPROVE))
+            assertFalse(runner.resolve(approval.id, ApprovalDecision.APPROVE))
+            runCurrent()
+        }
+        val log = events.state.value.filter { it.taskId == taskId }
+        assertEquals(risks, used)
+        val resolutions = log.filterIsInstance<TaskEvent.ApprovalResolved>()
+        assertEquals(approvalIds.toList(), resolutions.map { it.approvalId })
+        assertEquals(approvedCallIds, resolutions.map { it.callId })
+        assertTrue(resolutions.all { it.decision == ApprovalResolution.APPROVED })
+        val results = log.filterIsInstance<TaskEvent.ToolResult>()
+        assertEquals(approvedCallIds, results.drop(2).map { it.callId })
+        for ((resolution, result) in resolutions.zip(results.drop(2))) {
+            assertTrue(log.indexOf(resolution) < log.indexOf(result))
+        }
+        assertIs<TaskEvent.TaskFinished>(log.last())
+    }
+
+    @Test
+    fun pauseReleasesTheSlotAndResourcesAndKeepsItsOwnTurnStateAcrossAnotherTurn() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val releaseGate = CompletableDeferred<Unit>()
+        val timeline = mutableListOf<String>()
+        val invocations = mutableListOf<ToolContext>()
+        val safe = FixtureTool { _, context ->
+            invocations += context
+            ToolOutcome("first result")
+        }
+        val risky = FixtureTool("web_fixture_risky", RiskAssessment.EGRESS) { _, context ->
+            invocations += context
+            ToolOutcome("approved result")
+        }
+        var available = listOf<Tool>(safe, risky)
+        val registry = ToolRegistry(listOf(ToolProvider { available }))
+        val requests = mutableListOf<LlmRequest>()
+        val llm = LlmPort { request ->
+            flow {
+                requests += request
+                when (request.messages.last().content) {
+                    "A" -> {
+                        emit(LlmChunk.ToolCallDelta(0, safe.name, "{}"))
+                        emit(LlmChunk.ToolCallDelta(1, risky.name, "{}"))
+                    }
+                    "B" -> {
+                        timeline += "model B"
+                        emit(LlmChunk.TextDelta("B answer"))
+                    }
+                    "approved result" -> emit(LlmChunk.TextDelta("A answer"))
+                    else -> error("Unexpected request $request")
+                }
+                emit(LlmChunk.Done)
+            }
+        }
+        val runner = TaskRunner(llm, events, scope, Clock { 1L }, Counter(), registry, ToolSessionRelease { context ->
+            if (context.workspaceId == "A") {
+                releaseGate.await()
+                timeline += "released A"
+            }
+        })
+        val a = runner.submit(request.copy(workspaceId = "A", input = "A"))
+        runCurrent()
+        assertTrue(runner.busy.value)
+        assertEquals(a, runner.active.value?.taskId)
+        val b = runner.submit(request.copy(workspaceId = "B", input = "B"))
+        available = emptyList()
+        runCurrent()
+        assertEquals(1, requests.size)
+        assertEquals(emptyList(), timeline)
+
+        releaseGate.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("released A", "model B"), timeline)
+        assertIs<TaskEvent.TaskFinished>(events.state.value.last { it.taskId == b })
+        assertEquals(listOf("B"), requests[1].messages.map { it.content })
+        assertFalse(runner.busy.value)
+        assertEquals(null, runner.active.value)
+        assertEquals(setOf(request.conversationId), runner.pendingConversations.value)
+
+        val approval = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval
+        assertTrue(runner.resolve(approval.id, ApprovalDecision.APPROVE))
+        runCurrent()
+        assertEquals(List(2) { ToolContext(a, request.conversationId, "A") }, invocations)
+        assertEquals(listOf("A", "", "first result", "approved result"), requests.last().messages.map { it.content })
+        assertEquals(requests.first().tools, requests.last().tools)
+        assertTrue(requests[1].tools.isEmpty())
+        assertEquals(3, requests.size)
+        assertIs<TaskEvent.TaskFinished>(events.state.value.last { it.taskId == a })
+        assertEquals(emptySet(), runner.pendingConversations.value)
+        assertEquals(listOf("released A", "model B", "released A"), timeline)
+    }
+
+    @Test
+    fun resolutionFromAnEventObserverWaitsForRegistrationAndCancellationBeforeDispatchWins() = runnerTest { scope ->
+        val log = InMemoryEvents()
+        val requestReturn = CompletableDeferred<Unit>()
+        val resolutionReturn = CompletableDeferred<Unit>()
+        val events = object : EventRepository by log {
+            override suspend fun append(conversationId: String, event: TaskEvent) {
+                log.append(conversationId, event)
+                when (event) {
+                    is TaskEvent.ApprovalRequested -> requestReturn.await()
+                    is TaskEvent.ApprovalResolved -> resolutionReturn.await()
+                    else -> Unit
+                }
+            }
+        }
+        var dispatched = false
+        val tool = FixtureTool(risk = RiskAssessment.PERSISTENT) { _, _ ->
+            dispatched = true
+            ToolOutcome("unexpected")
+        }
+        val runner = TaskRunner(toolReply(tool), events, scope, Clock { 1L }, Counter(), registryFor(tool))
+        val taskId = runner.submit(request)
+        var accepted: Boolean? = null
+        val observer = scope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            val event = log.observe(request.conversationId).first { history -> history.any { it is TaskEvent.ApprovalRequested } }
+                .filterIsInstance<TaskEvent.ApprovalRequested>().single()
+            accepted = runner.resolve(event.approval.id, ApprovalDecision.APPROVE)
+        }
+        runCurrent()
+        assertEquals(null, accepted)
+        assertTrue(log.state.value.none { it is TaskEvent.ApprovalResolved })
+
+        requestReturn.complete(Unit)
+        runCurrent()
+        assertEquals(ApprovalResolution.APPROVED, log.state.value.filterIsInstance<TaskEvent.ApprovalResolved>().single().decision)
+        assertFalse(dispatched)
+        runner.cancel(taskId)
+        resolutionReturn.complete(Unit)
+        runCurrent()
+
+        assertEquals(true, accepted)
+        assertFalse(dispatched)
+        assertIs<TaskEvent.TaskCancelled>(log.state.value.last())
+        assertEquals(1, log.state.value.filterIsInstance<TaskEvent.ApprovalResolved>().size)
+        observer.join()
+    }
+
+    @Test
+    fun cancellationAfterTheToolReturnsKeepsTheOutcomeAndStopsTheNextModelCall() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        lateinit var runner: TaskRunner
+        val tool = FixtureTool(risk = RiskAssessment.EGRESS) { _, context ->
+            runner.cancel(context.taskId)
+            ToolOutcome("completed before cancellation")
+        }
+        var modelCalls = 0
+        val reply = toolReply(tool)
+        val llm = LlmPort { request -> modelCalls++; reply.stream(request) }
+        runner = runnerFor(llm, events, scope, registryFor(tool))
+        runner.submit(request)
+        runCurrent()
+        val approval = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval
+        assertTrue(runner.resolve(approval.id, ApprovalDecision.APPROVE))
+        runCurrent()
+
+        assertEquals(1, modelCalls)
+        val result = events.state.value.filterIsInstance<TaskEvent.ToolResult>().single()
+        assertEquals("completed before cancellation", result.outcome.output)
+        assertIs<TaskEvent.TaskCancelled>(events.state.value.last())
+    }
+
+    @Test
+    fun approvedWorkTakesPriorityWithoutPreemptingRunningWork() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val running = CompletableDeferred<Unit>()
+        val order = mutableListOf<String>()
+        val tool = FixtureTool(risk = RiskAssessment.FINANCIAL) { _, _ ->
+            order += "approved"
+            ToolOutcome("result")
+        }
+        val llm = LlmPort { request ->
+            flow {
+                when (request.messages.last().content) {
+                    "hello" -> emit(LlmChunk.ToolCallDelta(0, tool.name, "{}"))
+                    "running" -> {
+                        order += "started running"
+                        running.await()
+                        order += "finished running"
+                        emit(LlmChunk.TextDelta("done"))
+                    }
+                    "queued" -> {
+                        order += "started queued"
+                        emit(LlmChunk.TextDelta("done"))
+                    }
+                    else -> emit(LlmChunk.TextDelta("done"))
+                }
+                emit(LlmChunk.Done)
+            }
+        }
+        val runner = runnerFor(llm, events, scope, registryFor(tool))
+        runner.submit(request)
+        runCurrent()
+        val id = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval.id
+        runner.submit(request.copy(input = "running"))
+        runner.submit(request.copy(input = "queued"))
+        runCurrent()
+        assertTrue(runner.resolve(id, ApprovalDecision.APPROVE))
+        runCurrent()
+        assertEquals(listOf("started running"), order)
+
+        running.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("started running", "finished running", "approved", "started queued"), order)
+        assertFalse(runner.busy.value)
+    }
+
+    @Test
+    fun denialExpiryAndCancellationResolvePendingRequestsExactlyOnceAcrossWallClockChanges() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val tool = FixtureTool(risk = RiskAssessment.EGRESS) { _, _ -> error("Unexpected dispatch") }
+        var wallTime = 2_000L
+        val runner = TaskRunner(
+            toolReply(tool), events, scope, Clock { wallTime }, Counter(), registryFor(tool),
+            elapsedMillis = { testScheduler.currentTime },
+        )
+        assertFalse(runner.resolve("unknown", ApprovalDecision.DENY))
+        val denied = runner.submit(request)
+        val expired = runner.submit(request)
+        val cancelled = runner.submit(request)
+        runCurrent()
+        val approvals = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().associateBy { it.taskId }
+        val deniedId = approvals.getValue(denied).approval.id
+        val expiredId = approvals.getValue(expired).approval.id
+        val cancelledId = approvals.getValue(cancelled).approval.id
+
+        wallTime += 43_200_000L
+        assertTrue(runner.resolve(deniedId, ApprovalDecision.DENY))
+        assertFalse(runner.resolve(deniedId, ApprovalDecision.APPROVE))
+        runner.cancel(cancelled)
+        assertFalse(runner.resolve(cancelledId, ApprovalDecision.APPROVE))
+        runCurrent()
+        assertEquals(43_202_000L, approvals.getValue(expired).approval.expiresAt)
+        advanceTimeBy(43_199_999L)
+        runCurrent()
+        assertTrue(events.state.value.last { it.taskId == expired } is TaskEvent.ApprovalRequested)
+        wallTime = 1_000L
+        advanceTimeBy(1L)
+        runCurrent()
+        assertFalse(runner.resolve(expiredId, ApprovalDecision.APPROVE))
+
+        val decisions = events.state.value.filterIsInstance<TaskEvent.ApprovalResolved>()
+        assertEquals(listOf(ApprovalResolution.DENIED, ApprovalResolution.CANCELLED, ApprovalResolution.EXPIRED), decisions.map { it.decision })
+        assertEquals(listOf(deniedId, cancelledId, expiredId), decisions.map { it.approvalId })
+        val failures = events.state.value.filterIsInstance<TaskEvent.TaskFailed>()
+        assertEquals(listOf(FailureReason.APPROVAL_DENIED, FailureReason.APPROVAL_EXPIRED), failures.map { it.reason })
+        assertEquals(cancelled, events.state.value.filterIsInstance<TaskEvent.TaskCancelled>().single().taskId)
+        assertEquals(emptySet(), runner.pendingConversations.value)
+        assertTrue(events.state.value.none { it is TaskEvent.ToolResult })
+    }
+
+    @Test
+    fun approvalExpiresBeforeDispatchEvenWhenItWasAcceptedBeforeTheDeadline() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val running = CompletableDeferred<Unit>()
+        val tool = FixtureTool(risk = RiskAssessment.EGRESS) { _, _ -> error("Unexpected dispatch") }
+        val llm = LlmPort { request ->
+            flow {
+                if (request.messages.last().content == "blocker") {
+                    running.await()
+                    emit(LlmChunk.TextDelta("done"))
+                } else {
+                    emit(LlmChunk.ToolCallDelta(0, tool.name, "{}"))
+                }
+                emit(LlmChunk.Done)
+            }
+        }
+        var wallTime = 2_000L
+        val runner = TaskRunner(
+            llm, events, scope, Clock { wallTime }, Counter(), registryFor(tool),
+            elapsedMillis = { testScheduler.currentTime },
+        )
+        val taskId = runner.submit(request)
+        runCurrent()
+        val approval = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval
+        val blocker = runner.submit(request.copy(input = "blocker"))
+        runCurrent()
+        assertTrue(runner.resolve(approval.id, ApprovalDecision.APPROVE))
+        wallTime = 1_000L
+        advanceTimeBy(43_200_000L)
+        assertEquals(blocker, runner.active.value?.taskId)
+        running.complete(Unit)
+        runCurrent()
+
+        val taskEvents = events.state.value.filter { it.taskId == taskId }
+        assertEquals(ApprovalResolution.APPROVED, taskEvents.filterIsInstance<TaskEvent.ApprovalResolved>().single().decision)
+        assertEquals(FailureReason.APPROVAL_EXPIRED, assertIs<TaskEvent.TaskFailed>(taskEvents.last()).reason)
+        assertTrue(taskEvents.none { it is TaskEvent.ToolResult })
+    }
+
+    @Test
+    fun aCommittedDenialRemainsFinalWhenTheResolutionReportsAnErrorAndTheTerminalWriteRetries() = runnerTest { scope ->
+        val log = InMemoryEvents()
+        var terminalAttempts = 0
+        val events = object : EventRepository by log {
+            override suspend fun append(conversationId: String, event: TaskEvent) {
+                if (event is TaskEvent.TaskFailed && terminalAttempts++ == 0) error("Before terminal commit")
+                log.append(conversationId, event)
+                if (event is TaskEvent.ApprovalResolved) error("After resolution commit")
+            }
+        }
+        val tool = FixtureTool(risk = RiskAssessment.EGRESS) { _, _ -> error("Unexpected dispatch") }
+        val runner = TaskRunner(toolReply(tool), events, scope, Clock { 1L }, Counter(), registryFor(tool))
+        runner.submit(request)
+        runCurrent()
+        val approvalId = log.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval.id
+
+        assertTrue(runner.resolve(approvalId, ApprovalDecision.DENY))
+        assertFalse(runner.resolve(approvalId, ApprovalDecision.APPROVE))
+        assertEquals(setOf(request.conversationId), runner.pendingConversations.value)
+        assertFalse(runner.busy.value)
+        advanceTimeBy(1_000L)
+        runCurrent()
+
+        assertEquals(2, terminalAttempts)
+        assertEquals(emptySet(), runner.pendingConversations.value)
+        assertEquals(ApprovalResolution.DENIED, log.state.value.filterIsInstance<TaskEvent.ApprovalResolved>().single().decision)
+        assertEquals(FailureReason.APPROVAL_DENIED, assertIs<TaskEvent.TaskFailed>(log.state.value.last()).reason)
+    }
+
+    @Test
+    fun anUncommittedApprovalDoesNotOverrideCancellationOrElapsedExpiry() = runnerTest { scope ->
+        val log = InMemoryEvents()
+        val failedWrites = mutableListOf<TaskEvent.ApprovalResolved>()
+        val events = object : EventRepository by log {
+            override suspend fun append(conversationId: String, event: TaskEvent) {
+                if (event is TaskEvent.ApprovalResolved && event.decision == ApprovalResolution.APPROVED) {
+                    failedWrites += event
+                    error("Before resolution commit")
+                }
+                log.append(conversationId, event)
+            }
+        }
+        val tool = FixtureTool(risk = RiskAssessment.EGRESS) { _, _ -> error("Unexpected dispatch") }
+        val runner = TaskRunner(
+            toolReply(tool), events, scope, Clock { 1L }, Counter(), registryFor(tool),
+            elapsedMillis = { testScheduler.currentTime },
+        )
+        val cancelled = runner.submit(request)
+        val expired = runner.submit(request)
+        runCurrent()
+        val requests = log.state.value.filterIsInstance<TaskEvent.ApprovalRequested>()
+        for (event in requests) {
+            assertFailsWith<IllegalStateException> { runner.resolve(event.approval.id, ApprovalDecision.APPROVE) }
+        }
+
+        runner.cancel(cancelled)
+        runCurrent()
+        advanceTimeBy(43_200_000L)
+        assertFalse(runner.resolve(requests.last().approval.id, ApprovalDecision.APPROVE))
+        runCurrent()
+
+        val resolutions = log.state.value.filterIsInstance<TaskEvent.ApprovalResolved>()
+        assertEquals(failedWrites.map { it.id }, resolutions.map { it.id })
+        assertEquals(listOf(ApprovalResolution.CANCELLED, ApprovalResolution.EXPIRED), resolutions.map { it.decision })
+        assertIs<TaskEvent.TaskCancelled>(log.state.value.last { it.taskId == cancelled })
+        assertEquals(FailureReason.APPROVAL_EXPIRED, assertIs<TaskEvent.TaskFailed>(log.state.value.last { it.taskId == expired }).reason)
+    }
+
+    @Test
+    fun approvalFailsClosedIfRiskOrTheDescribedActionChanges() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        var risk = RiskAssessment.DESTRUCTIVE
+        var target = "original"
+        var executions = 0
+        val fixture = FixtureTool { _, _ ->
+            executions++
+            ToolOutcome("unexpected")
+        }
+        val tool = object : Tool by fixture {
+            override fun assess(args: JsonObject) = risk
+            override fun describe(args: JsonObject) = UiText("fixture.target", mapOf("target" to JsonPrimitive(target)))
+        }
+        val runner = runnerFor(toolReply(tool), events, scope, registryFor(tool))
+
+        val changedRisk = runner.submit(request)
+        runCurrent()
+        risk = RiskAssessment.READ_ONLY
+        val first = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().last().approval
+        assertTrue(runner.resolve(first.id, ApprovalDecision.APPROVE))
+        runCurrent()
+
+        risk = RiskAssessment.DESTRUCTIVE
+        val changedTarget = runner.submit(request)
+        runCurrent()
+        target = "replacement"
+        val second = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().last().approval
+        assertTrue(runner.resolve(second.id, ApprovalDecision.APPROVE))
+        runCurrent()
+
+        assertEquals(0, executions)
+        val failures = events.state.value.filterIsInstance<TaskEvent.TaskFailed>()
+        assertEquals(listOf(changedRisk, changedTarget), failures.map { it.taskId })
+        assertEquals(List(2) { FailureReason.APPROVAL_CHANGED }, failures.map { it.reason })
+    }
+
+    @Test
+    fun resumingRevalidatesLaterCallsBeforeDispatchingTheApprovedCall() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        var laterRisk = RiskAssessment.READ_ONLY
+        var executed = 0
+        val risky = FixtureTool(risk = RiskAssessment.EGRESS) { _, _ ->
+            executed++
+            ToolOutcome("unexpected")
+        }
+        val fixture = FixtureTool("web_fixture_later") { _, _ ->
+            executed++
+            ToolOutcome("unexpected")
+        }
+        val later = object : Tool by fixture {
+            override fun assess(args: JsonObject) = laterRisk
+        }
+        val llm = LlmPort {
+            flow {
+                emit(LlmChunk.ToolCallDelta(0, risky.name, "{}"))
+                emit(LlmChunk.ToolCallDelta(1, later.name, "{}"))
+                emit(LlmChunk.Done)
+            }
+        }
+        val runner = runnerFor(llm, events, scope, ToolRegistry(listOf(ToolProvider { listOf(risky, later) })))
+        val taskId = runner.submit(request)
+        runCurrent()
+        val approval = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval
+
+        laterRisk = RiskAssessment.DENIED
+        assertTrue(runner.resolve(approval.id, ApprovalDecision.APPROVE))
+        runCurrent()
+
+        assertEquals(0, executed)
+        val failure = assertIs<TaskEvent.TaskFailed>(events.state.value.last { it.taskId == taskId })
+        assertEquals(FailureReason.TOOL_DENIED, failure.reason)
+    }
+
+    private fun registryFor(tool: Tool) = ToolRegistry(listOf(ToolProvider { listOf(tool) }))
+
+    private fun toolReply(tool: Tool) = LlmPort { request ->
+        flow {
+            if (request.messages.last().role == Role.TOOL) {
+                emit(LlmChunk.TextDelta("answer"))
+            } else {
+                emit(LlmChunk.ToolCallDelta(0, tool.name, "{}"))
+            }
+            emit(LlmChunk.Done)
+        }
     }
 
     @Test

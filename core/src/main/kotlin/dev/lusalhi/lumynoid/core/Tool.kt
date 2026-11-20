@@ -1,5 +1,6 @@
 package dev.lusalhi.lumynoid.core
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -38,9 +39,23 @@ fun parseToolArguments(text: String): JsonObject? {
 @Serializable
 data class UiText(val key: String, val args: Map<String, JsonPrimitive> = emptyMap())
 
-enum class RiskAssessment { READ_ONLY, LOCAL_WRITE, DESTRUCTIVE, FINANCIAL, EGRESS, PERSISTENT, DENIED }
+@Serializable
+enum class RiskAssessment {
+    @SerialName("read_only") READ_ONLY,
+    @SerialName("local_write") LOCAL_WRITE,
+    @SerialName("destructive") DESTRUCTIVE,
+    @SerialName("financial") FINANCIAL,
+    @SerialName("egress") EGRESS,
+    @SerialName("persistent") PERSISTENT,
+    @SerialName("denied") DENIED,
+}
 
 data class ToolContext(val taskId: String, val conversationId: String, val workspaceId: String)
+
+/** Releases task-owned tool resources before the runner hands the execution slot to another turn. */
+fun interface ToolSessionRelease {
+    suspend fun release(context: ToolContext)
+}
 
 @Serializable
 data class ToolOutcome(
@@ -57,8 +72,9 @@ interface Tool {
     val description: String
     val inputSchema: JsonObject
 
-    /** Validate against the tool's input contract and return DENIED when the arguments are invalid. */
+    /** Assess current risk without performing the action. Return [RiskAssessment.DENIED] for invalid arguments. */
     fun assess(args: JsonObject): RiskAssessment
+    /** Describe the action and its target for approval using the same state as [assess]. */
     fun describe(args: JsonObject): UiText
     suspend fun execute(args: JsonObject, context: ToolContext): ToolOutcome
 }

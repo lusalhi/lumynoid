@@ -23,6 +23,26 @@ enum class FailureReason {
     @SerialName("network") NETWORK,
     @SerialName("server") SERVER,
     @SerialName("interrupted") INTERRUPTED,
+    @SerialName("tool_denied") TOOL_DENIED,
+    @SerialName("approval_denied") APPROVAL_DENIED,
+    @SerialName("approval_expired") APPROVAL_EXPIRED,
+    @SerialName("approval_changed") APPROVAL_CHANGED,
+}
+
+@Serializable
+data class ToolApproval(
+    val id: String,
+    val call: TaskEvent.RequestedToolCall,
+    val risk: RiskAssessment,
+    val expiresAt: Long,
+)
+
+@Serializable
+enum class ApprovalResolution {
+    @SerialName("approved") APPROVED,
+    @SerialName("denied") DENIED,
+    @SerialName("expired") EXPIRED,
+    @SerialName("cancelled") CANCELLED,
 }
 
 /**
@@ -37,7 +57,8 @@ sealed class TaskEvent {
 
     val needsRecovery: Boolean
         get() = when (this) {
-            is TaskQueued, is UserMessage, is AssistantMessage, is ToolCallRequested, is ToolResult -> true
+            is TaskQueued, is UserMessage, is AssistantMessage, is ToolCallRequested, is ToolResult,
+            is ApprovalRequested, is ApprovalResolved -> true
             is TaskFinished, is TaskFailed, is TaskCancelled, is Unknown -> false
         }
 
@@ -90,6 +111,26 @@ sealed class TaskEvent {
         override val at: Long,
         val callId: String,
         val outcome: ToolOutcome,
+    ) : TaskEvent()
+
+    @Serializable
+    @SerialName("approval_requested")
+    data class ApprovalRequested(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val approval: ToolApproval,
+    ) : TaskEvent()
+
+    @Serializable
+    @SerialName("approval_resolved")
+    data class ApprovalResolved(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val approvalId: String,
+        val callId: String,
+        val decision: ApprovalResolution,
     ) : TaskEvent()
 
     @Serializable

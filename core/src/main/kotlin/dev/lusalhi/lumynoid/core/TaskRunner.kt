@@ -3,21 +3,24 @@ package dev.lusalhi.lumynoid.core
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import java.util.TreeMap
-import java.util.concurrent.ConcurrentHashMap
 
 /** The answer currently streaming. Deltas are hot state, never persisted (AD-4). */
 data class LiveAnswer(val taskId: String, val conversationId: String, val text: String)
@@ -27,27 +30,53 @@ data class ActiveTask(val taskId: String, val conversationId: String)
 
 /**
  * The single execution path (AD-2): every LLM turn enters through [submit], runs one at a time in
- * FIFO order (AD-3), and leaves its trace as events that only this class appends (AD-4).
+ * FIFO order with priority for approved continuations (AD-3), and leaves its trace in the event log (AD-4).
  */
 class TaskRunner(
     private val llm: LlmPort,
     private val events: EventRepository,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
     private val clock: Clock = SystemClock,
     private val ids: IdGenerator = UuidV7,
     private val tools: ToolRegistry = ToolRegistry(),
-) {
-    private class Queued(val taskId: String, val request: TaskRequest)
+    private val toolSessions: ToolSessionRelease = ToolSessionRelease {},
+    private val elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000L },
+) : ApprovalPort {
+    private class Task(val taskId: String, val request: TaskRequest) {
+        val context = ToolContext(taskId, request.conversationId, request.workspaceId)
+        var cancelled = false
+        var job: Job? = null
+        var waiting: WaitingApproval? = null
+    }
 
-    private val queue = Channel<Queued>(Channel.UNLIMITED)
-    private val cancelled = ConcurrentHashMap.newKeySet<String>()
-    private val running = MutableStateFlow<Pair<String, Job>?>(null)
+    private class Work(val task: Task, val resumed: WaitingApproval? = null)
+
+    private class WaitingApproval(
+        val task: Task,
+        val approval: ToolApproval,
+        val continuation: Continuation,
+        val elapsedDeadline: Long,
+        val resolutionId: String,
+    ) {
+        var expiryJob: Job? = null
+        var resolution: TaskEvent.ApprovalResolved? = null
+    }
+
+    private val stateLock = Any()
+    private val tasks = mutableMapOf<String, Task>()
+    private val queue = ArrayDeque<Work>()
+    private val approved = ArrayDeque<Work>()
+    private val wake = Channel<Unit>(Channel.CONFLATED)
+    private var runnable = 0
+
+    // Hold through the durable write so an observer can resolve a request as soon as it sees the event.
+    private val approvalLock = Mutex()
+    private val approvals = mutableMapOf<String, WaitingApproval>()
+
     private val _live = MutableStateFlow<LiveAnswer?>(null)
     private val _active = MutableStateFlow<ActiveTask?>(null)
     private val _busy = MutableStateFlow(false)
     private val _pendingConversations = MutableStateFlow<Set<String>?>(null)
-    private val pendingLock = Any()
-    private val pendingCounts = mutableMapOf<String, Int>()
 
     /** Completed once crash recovery has closed the tasks of the previous run; submit waits for it. */
     private val recovered = CompletableDeferred<Unit>()
@@ -57,10 +86,10 @@ class TaskRunner(
     /** The task being executed, set before its first token and cleared after it ended. */
     val active: StateFlow<ActiveTask?> = _active.asStateFlow()
 
-    /** True from [submit] until the last queued or running task has ended, with no gap between tasks. */
+    /** True while a task is submitting, runnable or running. Waiting for approval does not keep it true. */
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
-    /** Conversations with tasks being submitted, queued, or executed; null during crash recovery. */
+    /** Conversations with unfinished tasks, including those waiting for approval; null during recovery. */
     val pendingConversations: StateFlow<Set<String>?> = _pendingConversations.asStateFlow()
 
     init {
@@ -71,20 +100,15 @@ class TaskRunner(
                 _pendingConversations.value = emptySet()
                 recovered.complete(Unit)
             }
-            for (item in queue) {
-                // ATOMIC: the body always starts, so a cancel that lands before it runs still reaches
-                // execute's own handler and records TaskCancelled.
-                val job = launch(start = CoroutineStart.ATOMIC) { execute(item) }
-                running.value = item.taskId to job
-                _active.value = ActiveTask(item.taskId, item.request.conversationId)
-                // cancel() adds the id first and reads `running` second; this registers first and reads
-                // the id second, so one side always sees the other and no cancel is lost.
-                if (cancelled.remove(item.taskId)) job.cancel()
-                job.join()
-                running.value = null
-                _active.value = null
-                cancelled.remove(item.taskId)
-                adjustPending(item.request.conversationId, -1)
+            for (signal in wake) {
+                while (true) {
+                    val work = synchronized(stateLock) {
+                        (approved.removeFirstOrNull() ?: queue.removeFirstOrNull())?.also {
+                            _active.value = ActiveTask(it.task.taskId, it.task.request.conversationId)
+                        }
+                    } ?: break
+                    launch { execute(work) }.join()
+                }
             }
         }
     }
@@ -113,88 +137,226 @@ class TaskRunner(
         }
     }
 
-    private fun adjustPending(conversationId: String, delta: Int) = synchronized(pendingLock) {
-        val previous = pendingCounts[conversationId] ?: 0
-        val count = previous + delta
-        if (count == 0) pendingCounts.remove(conversationId) else pendingCounts[conversationId] = count
-        if (previous == 0 || count == 0) {
-            _pendingConversations.value = pendingCounts.keys.toSet()
-            _busy.value = pendingCounts.isNotEmpty()
-        }
+    private fun updatePending() {
+        _pendingConversations.value = tasks.values.mapTo(mutableSetOf()) { it.request.conversationId }
+        _busy.value = runnable > 0
     }
 
     /** Records the task and its user message, queues it, and returns the task id. */
     suspend fun submit(request: TaskRequest): String {
         recovered.await()
-        val taskId = ids.next()
+        val task = Task(ids.next(), request)
         val now = clock.nowMillis()
-        adjustPending(request.conversationId, 1)
+        synchronized(stateLock) {
+            tasks[task.taskId] = task
+            runnable++
+            updatePending()
+        }
         try {
-            events.createTask(taskId, request, now)
-            val item = Queued(taskId, request)
-            append(item, TaskEvent.TaskQueued(ids.next(), taskId, now))
-            append(item, TaskEvent.UserMessage(ids.next(), taskId, now, request.origin, request.input))
-            queue.send(item)
+            events.createTask(task.taskId, request, now)
+            append(task, TaskEvent.TaskQueued(ids.next(), task.taskId, now))
+            append(task, TaskEvent.UserMessage(ids.next(), task.taskId, now, request.origin, request.input))
+            synchronized(stateLock) { queue.addLast(Work(task)) }
+            wake.trySend(Unit)
         } catch (e: Throwable) {
-            adjustPending(request.conversationId, -1)
+            synchronized(stateLock) {
+                tasks.remove(task.taskId)
+                runnable--
+                updatePending()
+            }
             throw e
         }
-        return taskId
+        return task.taskId
     }
 
     /** The only cancellation path (AD-22). */
     fun cancel(taskId: String) {
-        cancelled.add(taskId)
-        running.value?.takeIf { it.first == taskId }?.second?.cancel()
+        val (job, waiting) = synchronized(stateLock) {
+            val task = tasks[taskId] ?: return
+            if (task.cancelled) return
+            task.cancelled = true
+            task.job to task.waiting
+        }
+        job?.cancel()
+        if (waiting != null) scope.launch { resolveWhenDue(waiting) }
     }
 
-    private suspend fun execute(item: Queued) {
+    override suspend fun resolve(approvalId: String, decision: ApprovalDecision): Boolean = approvalLock.withLock {
+        val waiting = approvals[approvalId] ?: return@withLock false
+        val requested = when (decision) {
+            ApprovalDecision.APPROVE -> ApprovalResolution.APPROVED
+            ApprovalDecision.DENY -> ApprovalResolution.DENIED
+        }
         try {
-            currentCoroutineContext().ensureActive()
-            val registry = tools.snapshot()
-            var request = ContextAssembler.assemble(events.history(item.request.conversationId), item.taskId)
-            if (registry.isNotEmpty()) request = request.copy(tools = registry.values.map { it.definition })
-            var toolTurn = false
-            while (true) {
-                val reply = readReply(item, request)
-                if (reply.terminal is LlmChunk.Failed) {
-                    fail(item, reply.terminal.error.toReason())
-                    return
-                }
-                val fragments = reply.fragments
-                if (fragments == null) {
-                    if (reply.text.isEmpty() || (toolTurn && reply.terminal != LlmChunk.Done)) {
-                        fail(item, FailureReason.SERVER)
-                    } else {
-                        append(item, TaskEvent.AssistantMessage(ids.next(), item.taskId, clock.nowMillis(), reply.text))
-                        append(item, TaskEvent.TaskFinished(ids.next(), item.taskId, clock.nowMillis()))
-                    }
-                    return
-                }
-                val calls = if (reply.terminal == LlmChunk.Done) prepareCalls(fragments, registry) else null
-                if (calls == null) {
-                    fail(item, LlmError.MalformedToolCall.toReason())
-                    return
-                }
-                request = request.copy(messages = runToolRound(item, request.messages, reply.text, calls))
-                toolTurn = true
-                _live.value = null
-            }
-        } catch (e: CancellationException) {
-            withContext(NonCancellable) {
-                append(item, TaskEvent.TaskCancelled(ids.next(), item.taskId, clock.nowMillis()))
+            resolveWaiting(waiting, requested) == requested
+        } catch (e: Exception) {
+            waiting.expiryJob?.cancel()
+            waiting.expiryJob = scope.launch {
+                delay(APPROVAL_WRITE_RETRY_MS)
+                resolveWhenDue(waiting)
             }
             throw e
+        }
+    }
+
+    private suspend fun execute(work: Work) {
+        val task = work.task
+        val job = currentCoroutineContext().job
+        synchronized(stateLock) { task.job = job }
+        try {
+            val result = try {
+                ensureRunnable(task)
+                runSlice(work)
+            } finally {
+                withContext(NonCancellable) { toolSessions.release(task.context) }
+            }
+            ensureRunnable(task)
+            when (result) {
+                is SliceResult.Finished -> withContext(NonCancellable) {
+                    append(task, TaskEvent.AssistantMessage(ids.next(), task.taskId, clock.nowMillis(), result.text))
+                    append(task, TaskEvent.TaskFinished(ids.next(), task.taskId, clock.nowMillis()))
+                }
+                is SliceResult.Failed -> withContext(NonCancellable) { fail(task, result.reason) }
+                is SliceResult.Paused -> {
+                    _live.value = null
+                    publishApproval(task, result)
+                }
+            }
         } catch (e: Exception) {
             // A broken adapter or a failed write must end this task, not the queue or the process.
-            runCatching {
+            if (synchronized(stateLock) { task.job != null }) {
+                val cancelled = e is CancellationException || !currentCoroutineContext().isActive || isCancelled(task)
                 withContext(NonCancellable) {
-                    fail(item, FailureReason.SERVER)
+                    runCatching {
+                        if (cancelled) recordCancellation(task) else fail(task, FailureReason.SERVER)
+                    }
                 }
             }
         } finally {
             _live.value = null
+            synchronized(stateLock) {
+                if (task.job != null) {
+                    task.job = null
+                    _active.value = null
+                    tasks.remove(task.taskId)
+                    runnable--
+                    updatePending()
+                }
+            }
         }
+    }
+
+    private fun isCancelled(task: Task): Boolean = synchronized(stateLock) { task.cancelled }
+
+    private suspend fun ensureRunnable(task: Task) {
+        currentCoroutineContext().ensureActive()
+        if (isCancelled(task)) throw CancellationException()
+    }
+
+    private suspend fun publishApproval(task: Task, paused: SliceResult.Paused) = approvalLock.withLock {
+        ensureRunnable(task)
+        withContext(NonCancellable) {
+            val now = clock.nowMillis()
+            val approval = ToolApproval(ids.next(), paused.call, paused.risk, now + APPROVAL_LIFETIME_MS)
+            val event = TaskEvent.ApprovalRequested(ids.next(), task.taskId, now, approval)
+            val elapsedDeadline = elapsedMillis() + APPROVAL_LIFETIME_MS
+            val waiting = WaitingApproval(task, approval, paused.continuation, elapsedDeadline, ids.next())
+            appendOrConfirm(task, event)
+            approvals[approval.id] = waiting
+            synchronized(stateLock) {
+                task.waiting = waiting
+                task.job = null
+                _active.value = null
+                runnable--
+                updatePending()
+            }
+            waiting.expiryJob = scope.launch { resolveWhenDue(waiting) }
+        }
+    }
+
+    private suspend fun resolveWhenDue(waiting: WaitingApproval) {
+        while (true) {
+            val nextCheck = try {
+                approvalLock.withLock {
+                    if (approvals[waiting.approval.id] !== waiting) return
+                    val remaining = waiting.elapsedDeadline - elapsedMillis()
+                    if (waiting.resolution != null || remaining <= 0 || isCancelled(waiting.task)) {
+                        resolveWaiting(waiting)
+                        return
+                    }
+                    remaining
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The request remains waiting if writing its resolution failed. Retry without dispatching.
+                APPROVAL_WRITE_RETRY_MS
+            }
+            delay(nextCheck)
+        }
+    }
+
+    /** Called with [approvalLock] held. The event must commit before the task changes state. */
+    private suspend fun resolveWaiting(
+        waiting: WaitingApproval,
+        requested: ApprovalResolution? = null,
+    ): ApprovalResolution? = withContext(NonCancellable) {
+        val task = waiting.task
+        val approval = waiting.approval
+        val resolution = waiting.resolution ?: run {
+            val now = clock.nowMillis()
+            val decision = when {
+                isCancelled(task) -> ApprovalResolution.CANCELLED
+                elapsedMillis() >= waiting.elapsedDeadline -> ApprovalResolution.EXPIRED
+                else -> requested ?: return@withContext null
+            }
+            TaskEvent.ApprovalResolved(waiting.resolutionId, task.taskId, now, approval.id, approval.call.call.id, decision).also {
+                // Keep the same decision and event ID if the database cannot confirm the write.
+                waiting.resolution = it
+            }
+        }
+        appendOrConfirm(task, resolution) { waiting.resolution = null }
+        approvals.remove(approval.id)
+        waiting.expiryJob?.cancel()
+        val decision = resolution.decision
+        when (decision) {
+            ApprovalResolution.APPROVED -> {
+                synchronized(stateLock) {
+                    task.waiting = null
+                    approved.addLast(Work(task, waiting))
+                    runnable++
+                    updatePending()
+                }
+                wake.trySend(Unit)
+            }
+            ApprovalResolution.DENIED -> closeWaiting(task, failedEvent(task, FailureReason.APPROVAL_DENIED))
+            ApprovalResolution.EXPIRED -> closeWaiting(task, failedEvent(task, FailureReason.APPROVAL_EXPIRED))
+            ApprovalResolution.CANCELLED -> closeWaiting(task, cancelledEvent(task))
+        }
+        decision
+    }
+
+    private suspend fun closeWaiting(task: Task, event: TaskEvent) {
+        synchronized(stateLock) { task.waiting = null }
+        if (appendWaitingTerminal(task, event)) return
+        scope.launch {
+            do {
+                delay(APPROVAL_WRITE_RETRY_MS)
+            } while (!withContext(NonCancellable) { appendWaitingTerminal(task, event) })
+        }
+    }
+
+    private suspend fun appendWaitingTerminal(task: Task, event: TaskEvent): Boolean {
+        try {
+            appendOrConfirm(task, event)
+        } catch (_: Exception) {
+            return false
+        }
+        synchronized(stateLock) {
+            tasks.remove(task.taskId)
+            updatePending()
+        }
+        return true
     }
 
     private class ToolFragments {
@@ -208,14 +370,14 @@ class TaskRunner(
         val terminal: LlmChunk?,
     )
 
-    private suspend fun readReply(item: Queued, request: LlmRequest): Reply {
+    private suspend fun readReply(task: Task, request: LlmRequest): Reply {
         val text = StringBuilder()
         var fragments: TreeMap<Int, ToolFragments>? = null
         val terminal = llm.stream(request).firstOrNull { chunk ->
             when (chunk) {
                 is LlmChunk.TextDelta -> {
                     text.append(chunk.text)
-                    _live.value = LiveAnswer(item.taskId, item.request.conversationId, text.toString())
+                    _live.value = LiveAnswer(task.taskId, task.request.conversationId, text.toString())
                 }
                 is LlmChunk.ToolCallDelta -> {
                     val calls = fragments ?: TreeMap<Int, ToolFragments>().also { fragments = it }
@@ -234,8 +396,13 @@ class TaskRunner(
     private data class PreparedCall(
         val tool: Tool,
         val args: JsonObject,
-        val request: TaskEvent.RequestedToolCall,
-    )
+        val call: ToolCall,
+    ) {
+        fun describe(): TaskEvent.RequestedToolCall {
+            val description = tool.describe(args)
+            return TaskEvent.RequestedToolCall(call, description.copy(args = description.args.toMap()))
+        }
+    }
 
     private fun prepareCalls(
         fragments: Map<Int, ToolFragments>,
@@ -247,43 +414,125 @@ class TaskRunner(
             val tool = registry[name]?.tool ?: return null
             val argsJson = fragmentsAtIndex.arguments.toString()
             val args = parseToolArguments(argsJson) ?: return null
-            // The approval policy is not installed yet. Never dispatch work of uncertain or higher risk.
-            if (tool.assess(args) != RiskAssessment.READ_ONLY) return null
-            val call = TaskEvent.RequestedToolCall(ToolCall(ids.next(), name, argsJson), tool.describe(args))
-            add(PreparedCall(tool, args, call))
+            add(PreparedCall(tool, args, ToolCall(ids.next(), name, argsJson)))
         }
     }
 
-    private suspend fun runToolRound(
-        item: Queued,
-        messages: List<LlmMessage>,
-        assistantText: String,
-        calls: List<PreparedCall>,
-    ): List<LlmMessage> {
-        val request = TaskEvent.ToolCallRequested(
-            ids.next(), item.taskId, clock.nowMillis(), assistantText, calls.map { it.request },
-        )
-        append(item, request)
-        val context = ToolContext(item.taskId, item.request.conversationId, item.request.workspaceId)
-        return buildList(messages.size + calls.size + 1) {
-            addAll(messages)
-            add(request.toLlmMessage())
-            for (call in calls) {
-                currentCoroutineContext().ensureActive()
-                val outcome = call.tool.execute(call.args, context)
-                val callId = call.request.call.id
-                val result = TaskEvent.ToolResult(ids.next(), item.taskId, clock.nowMillis(), callId, outcome)
-                append(item, result)
-                add(result.toLlmMessage())
+    private class ToolRound(val calls: List<PreparedCall>, val messages: MutableList<LlmMessage>) {
+        var nextCall = 0
+    }
+
+    private class Continuation(
+        val request: LlmRequest,
+        val registry: Map<String, ToolRegistry.Entry>,
+        val round: ToolRound,
+    )
+
+    private sealed interface SliceResult {
+        data class Finished(val text: String) : SliceResult
+        data class Failed(val reason: FailureReason) : SliceResult
+        data class Paused(
+            val call: TaskEvent.RequestedToolCall,
+            val risk: RiskAssessment,
+            val continuation: Continuation,
+        ) : SliceResult
+    }
+
+    private suspend fun runSlice(work: Work): SliceResult {
+        val task = work.task
+        val resumed = work.resumed?.continuation
+        val registry = resumed?.registry ?: tools.snapshot()
+        var request = resumed?.request ?: ContextAssembler.assemble(events.history(task.request.conversationId), task.taskId)
+            .copy(tools = registry.values.map { it.definition })
+        var round = resumed?.round
+        var resumedApproval = work.resumed
+        // Changes during the wait can invalidate later calls. Check them before running the approved call.
+        val laterCallDenied = resumed?.round?.let {
+            it.calls.subList(it.nextCall + 1, it.calls.size).any { call -> call.tool.assess(call.args) == RiskAssessment.DENIED }
+        } ?: false
+        var toolTurn = round != null
+        while (true) {
+            if (round == null) {
+                ensureRunnable(task)
+                val reply = readReply(task, request)
+                if (reply.terminal is LlmChunk.Failed) return SliceResult.Failed(reply.terminal.error.toReason())
+                val fragments = reply.fragments
+                if (fragments == null) {
+                    return if (reply.text.isEmpty() || (toolTurn && reply.terminal != LlmChunk.Done)) {
+                        SliceResult.Failed(FailureReason.SERVER)
+                    } else {
+                        SliceResult.Finished(reply.text)
+                    }
+                }
+                val calls = if (reply.terminal == LlmChunk.Done) prepareCalls(fragments, registry) else null
+                if (calls == null) return SliceResult.Failed(LlmError.MalformedToolCall.toReason())
+                if (calls.any { it.tool.assess(it.args) == RiskAssessment.DENIED }) {
+                    return SliceResult.Failed(FailureReason.TOOL_DENIED)
+                }
+                val event = TaskEvent.ToolCallRequested(
+                    ids.next(), task.taskId, clock.nowMillis(), reply.text, calls.map { it.describe() },
+                )
+                append(task, event)
+                round = ToolRound(calls, (request.messages + event.toLlmMessage()).toMutableList())
             }
+
+            while (round.nextCall < round.calls.size) {
+                ensureRunnable(task)
+                val call = round.calls[round.nextCall]
+                val risk = call.tool.assess(call.args)
+                if (resumedApproval != null) {
+                    val approval = resumedApproval.approval
+                    if (risk != approval.risk || call.describe() != approval.call) {
+                        return SliceResult.Failed(FailureReason.APPROVAL_CHANGED)
+                    }
+                    if (elapsedMillis() >= resumedApproval.elapsedDeadline) {
+                        return SliceResult.Failed(FailureReason.APPROVAL_EXPIRED)
+                    }
+                    if (laterCallDenied) return SliceResult.Failed(FailureReason.TOOL_DENIED)
+                    resumedApproval = null
+                } else {
+                    when (risk) {
+                        RiskAssessment.READ_ONLY, RiskAssessment.LOCAL_WRITE -> Unit
+                        RiskAssessment.DENIED -> return SliceResult.Failed(FailureReason.TOOL_DENIED)
+                        RiskAssessment.DESTRUCTIVE, RiskAssessment.FINANCIAL, RiskAssessment.EGRESS, RiskAssessment.PERSISTENT ->
+                            return SliceResult.Paused(call.describe(), risk, Continuation(request, registry, round))
+                    }
+                }
+                ensureRunnable(task)
+                val outcome = call.tool.execute(call.args, task.context)
+                val result = TaskEvent.ToolResult(ids.next(), task.taskId, clock.nowMillis(), call.call.id, outcome)
+                withContext(NonCancellable) { append(task, result) }
+                round.messages.add(result.toLlmMessage())
+                round.nextCall++
+            }
+            request = request.copy(messages = round.messages.toList())
+            round = null
+            toolTurn = true
+            _live.value = null
         }
     }
 
-    private suspend fun fail(item: Queued, reason: FailureReason) =
-        append(item, TaskEvent.TaskFailed(ids.next(), item.taskId, clock.nowMillis(), reason))
+    private fun failedEvent(task: Task, reason: FailureReason) =
+        TaskEvent.TaskFailed(ids.next(), task.taskId, clock.nowMillis(), reason)
 
-    private suspend fun append(item: Queued, event: TaskEvent) =
-        events.append(item.request.conversationId, event)
+    private fun cancelledEvent(task: Task) = TaskEvent.TaskCancelled(ids.next(), task.taskId, clock.nowMillis())
+
+    private suspend fun fail(task: Task, reason: FailureReason) = append(task, failedEvent(task, reason))
+
+    private suspend fun recordCancellation(task: Task) = append(task, cancelledEvent(task))
+
+    private suspend fun append(task: Task, event: TaskEvent) = events.append(task.request.conversationId, event)
+
+    private suspend fun appendOrConfirm(task: Task, event: TaskEvent, onConfirmedAbsent: () -> Unit = {}) {
+        try {
+            append(task, event)
+        } catch (e: Exception) {
+            // Storage can report an error after commit, so confirm by the event's unique ID.
+            val stored = runCatching { events.history(task.request.conversationId).any { it.id == event.id } }.getOrNull()
+            if (stored == false) onConfirmedAbsent()
+            if (stored != true) throw e
+        }
+    }
 
     private fun LlmError.toReason(): FailureReason = when (this) {
         is LlmError.AuthFailed -> FailureReason.AUTH_FAILED
@@ -291,5 +540,10 @@ class TaskRunner(
         is LlmError.QuotaExhausted -> FailureReason.QUOTA_EXHAUSTED
         is LlmError.Network -> FailureReason.NETWORK
         is LlmError.ToolsUnsupported, is LlmError.MalformedToolCall, is LlmError.Server -> FailureReason.SERVER
+    }
+
+    private companion object {
+        const val APPROVAL_LIFETIME_MS = 12 * 60 * 60 * 1_000L
+        const val APPROVAL_WRITE_RETRY_MS = 1_000L
     }
 }

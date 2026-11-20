@@ -186,6 +186,10 @@ private fun FailureReason.messageRes(): Int = when (this) {
     FailureReason.NETWORK -> R.string.error_network
     FailureReason.SERVER -> R.string.error_server
     FailureReason.INTERRUPTED -> R.string.error_interrupted
+    FailureReason.TOOL_DENIED -> R.string.error_tool_denied
+    FailureReason.APPROVAL_DENIED -> R.string.error_approval_denied
+    FailureReason.APPROVAL_EXPIRED -> R.string.error_approval_expired
+    FailureReason.APPROVAL_CHANGED -> R.string.error_approval_changed
 }
 
 /** Offers the saved crash report. Shown above every screen, so a crash during first-run setup can be shared too. */

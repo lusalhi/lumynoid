@@ -3,20 +3,29 @@ package dev.lusalhi.lumynoid.data
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import dev.lusalhi.lumynoid.core.ActiveModel
+import dev.lusalhi.lumynoid.core.ApprovalDecision
+import dev.lusalhi.lumynoid.core.ApprovalResolution
 import dev.lusalhi.lumynoid.core.Clock
 import dev.lusalhi.lumynoid.core.FailureReason
+import dev.lusalhi.lumynoid.core.LlmPort
 import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.Origin
 import dev.lusalhi.lumynoid.core.ProviderConfig
 import dev.lusalhi.lumynoid.core.ProviderKind
+import dev.lusalhi.lumynoid.core.RiskAssessment
 import dev.lusalhi.lumynoid.core.SecretRef
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskEventJson
 import dev.lusalhi.lumynoid.core.TaskRequest
+import dev.lusalhi.lumynoid.core.TaskRunner
+import dev.lusalhi.lumynoid.core.ToolApproval
 import dev.lusalhi.lumynoid.core.ToolCall
 import dev.lusalhi.lumynoid.core.ToolOutcome
+import dev.lusalhi.lumynoid.core.ToolProvider
+import dev.lusalhi.lumynoid.core.ToolRegistry
 import dev.lusalhi.lumynoid.core.UiText
 import dev.lusalhi.lumynoid.core.UuidV7
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -122,6 +131,63 @@ class PersistenceTest {
             assertTrue(blob.delete())
             assertEquals(TaskEvent.Unknown(result.id, result.taskId, result.at), reopened.history(c.id).last())
             assertEquals(listOf("t"), reopened.unfinishedTasks().map { it.taskId })
+        } finally {
+            second.close()
+        }
+    }
+
+    @Test
+    fun recoveryClosesPersistedApprovalRequestsAndResolutionsWithoutReplayingEither() = runTest {
+        val file = folder.newFile("lumynoid.db")
+        val first = open(file)
+        val conversation = RoomConversationPort(first.dao(), UuidV7, Clock { 1L }).create("approvals")
+        val events = repository(first.dao())
+        val waitingCall = TaskEvent.RequestedToolCall(
+            ToolCall("wait-call", "web_fixture", """{"text":"${"界".repeat(90_000)}"}"""),
+            UiText("card.fixture"),
+        )
+        val resolvedCall = waitingCall.copy(call = ToolCall("resolved-call", "web_fixture", "{}"))
+        val waiting = TaskEvent.ApprovalRequested(
+            "request-wait", "waiting", 2L, ToolApproval("wait-id", waitingCall, RiskAssessment.EGRESS, 43_200_002L),
+        )
+        val request = TaskEvent.ApprovalRequested(
+            "request-resolved", "resolved", 3L, ToolApproval("resolved-id", resolvedCall, RiskAssessment.EGRESS, 43_200_003L),
+        )
+        val resolution = TaskEvent.ApprovalResolved(
+            "resolution", "resolved", 4L, request.approval.id, resolvedCall.call.id, ApprovalResolution.APPROVED,
+        )
+        for (taskId in listOf(waiting.taskId, request.taskId)) {
+            events.createTask(taskId, TaskRequest(Origin.User, conversation.id, "ws", "x"), 1L)
+        }
+        for (event in listOf(waiting, request, resolution)) events.append(conversation.id, event)
+        val rows = first.dao().events(conversation.id)
+        assertTrue(StoredEventBlob.isEnvelope(rows.first().payload))
+        assertTrue(rows[1].payload.startsWith("""{"type":"approval_requested""""))
+        assertTrue(rows.last().payload.startsWith("""{"type":"approval_resolved""""))
+        first.close()
+
+        val second = open(file)
+        try {
+            val reopened = repository(second.dao())
+            assertEquals(listOf(waiting, request, resolution), reopened.observe(conversation.id).first())
+            assertTrue(blobRoot.walkTopDown().single { it.isFile }.delete())
+            val pending = reopened.unfinishedTasks()
+            assertEquals(setOf(waiting.taskId, request.taskId), pending.map { it.taskId }.toSet())
+            var modelCalls = 0
+            var registrySnapshots = 0
+            val runner = TaskRunner(
+                LlmPort { modelCalls++; emptyFlow() }, reopened, backgroundScope,
+                tools = ToolRegistry(listOf(ToolProvider { registrySnapshots++; emptyList() })),
+            )
+            runner.pendingConversations.first { it != null }
+
+            val afterRecovery = reopened.history(conversation.id).drop(3).map { assertIs<TaskEvent.TaskFailed>(it) }
+            assertEquals(pending.map { it.taskId }.toSet(), afterRecovery.map { it.taskId }.toSet())
+            assertTrue(afterRecovery.all { it.reason == FailureReason.INTERRUPTED })
+            assertTrue(reopened.unfinishedTasks().isEmpty())
+            assertFalse(runner.resolve(waiting.approval.id, ApprovalDecision.APPROVE))
+            assertEquals(0, modelCalls)
+            assertEquals(0, registrySnapshots)
         } finally {
             second.close()
         }
@@ -235,6 +301,13 @@ class PersistenceTest {
         }
         assertFailsWith<IllegalStateException> {
             events.append(c.id, TaskEvent.ToolResult("e3", "t1", 4L, call.call.id, ToolOutcome("not stored")))
+        }
+        val approval = ToolApproval("approval", call, RiskAssessment.EGRESS, 5L)
+        assertFailsWith<IllegalStateException> {
+            events.append(c.id, TaskEvent.ApprovalRequested("e4", "t1", 4L, approval))
+        }
+        assertFailsWith<IllegalStateException> {
+            events.append(c.id, TaskEvent.ApprovalResolved("e5", "t1", 4L, approval.id, call.call.id, ApprovalResolution.APPROVED))
         }
 
         assertEquals(0, db.dao().taskCount())

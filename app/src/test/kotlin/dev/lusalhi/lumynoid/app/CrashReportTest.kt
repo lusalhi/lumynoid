@@ -229,6 +229,7 @@ class CrashReportTest {
                 "android.permission.FOREGROUND_SERVICE",
                 "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
                 "android.permission.WAKE_LOCK",
+                "android.permission.POST_NOTIFICATIONS",
             ),
             permissions.toSet(),
         )

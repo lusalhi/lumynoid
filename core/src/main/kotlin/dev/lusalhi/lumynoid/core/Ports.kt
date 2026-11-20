@@ -137,13 +137,20 @@ data class TaskRequest(
     val input: String,
 )
 
+enum class ApprovalDecision { APPROVE, DENY }
+
+interface ApprovalPort {
+    /** Returns true when this decision was recorded for a still-pending, unexpired request. */
+    suspend fun resolve(approvalId: String, decision: ApprovalDecision): Boolean
+}
+
 /** A task that has no terminal event yet: a crash or kill cut it off, or it never started. */
 data class UnfinishedTask(val taskId: String, val conversationId: String)
 
 /** Event log storage. Only [TaskRunner] may call the write functions (AD-4, AD-5). */
 interface EventRepository {
     suspend fun createTask(taskId: String, request: TaskRequest, at: Long)
-    /** Tool events must be stored before returning; throw if their conversation no longer exists. */
+    /** Tool and approval events must be stored before returning; throw if the conversation no longer exists. */
     suspend fun append(conversationId: String, event: TaskEvent)
     fun observe(conversationId: String): Flow<List<TaskEvent>>
 

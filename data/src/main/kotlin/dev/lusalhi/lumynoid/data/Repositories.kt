@@ -56,8 +56,10 @@ internal class RoomEventRepository(
             at = event.at,
             payload = payload,
         )
-        if (event is TaskEvent.ToolCallRequested || event is TaskEvent.ToolResult) {
-            check(rowId != -1L) { "Cannot append tool event to missing conversation: $conversationId" }
+        if (event is TaskEvent.ToolCallRequested || event is TaskEvent.ToolResult ||
+            event is TaskEvent.ApprovalRequested || event is TaskEvent.ApprovalResolved
+        ) {
+            check(rowId != -1L) { "Cannot append tool or approval event to missing conversation: $conversationId" }
         }
     }
 
