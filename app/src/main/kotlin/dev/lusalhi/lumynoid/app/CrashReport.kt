@@ -1,6 +1,8 @@
 package dev.lusalhi.lumynoid.app
 
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
@@ -71,8 +73,18 @@ class CrashStore(private val dir: File, private val maxReports: Int = MAX_REPORT
         // same millisecond from overwriting each other.
         val name = String.format(Locale.ROOT, "crash-%015d-%03d.txt", nowMillis, sequence.getAndIncrement() % 1000)
         val file = File(dir, name)
-        file.writeText(text)
-        reports().dropLast(maxReports).forEach { it.delete() }
+        // Write under a name reports() ignores, then rename, so a failed write never leaves a partial report to offer.
+        val partial = File(dir, "$name.part")
+        try {
+            partial.writeText(text)
+            Files.move(partial.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        } catch (e: Throwable) {
+            partial.delete()
+            throw e
+        }
+        // Prune by name order, but never the report just written: after the clock moves back its name sorts old.
+        val others = reports().filter { it != file }
+        others.take((others.size - (maxReports - 1)).coerceAtLeast(0)).forEach { it.delete() }
         return file
     }
 

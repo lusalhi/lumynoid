@@ -26,7 +26,7 @@ context:
 
 ## Boundaries & Constraints
 
-**Always:** `:core` stays free of android, ktor and room. Persisted names (`@SerialName`, Room entities, `data/schemas/**`) are untouched. Keep the `try/catch` inside each adapter's `flow` so a `wireJson` decode error still maps to `Server`. Keep `before.active == null` in `ProvidersViewModel.save`. Keep `loadModels`' narrow freshness check separate from `isFresh`. Do not touch `ChatViewModel`'s `visibleLive` logic.
+**Always:** `:core` stays free of android, ktor and room. Persisted names (`@SerialName`, Room entities, `data/schemas/**`) are untouched. Keep the `try/catch` in `streamPost`, called inside each adapter's `flow`, so a `wireJson` decode error still maps to `Server`. Keep `before.active == null` in `ProvidersViewModel.save`. Keep `loadModels`' narrow freshness check separate from `isFresh`. Do not touch `ChatViewModel`'s `visibleLive` logic.
 
 **Never:** No new behavior, UI text, navigation or Room schema change. No window-inset modifier extraction (Compose modifier order, no test coverage), no `LlmError`/`FailureReason` string-mapping merge, no deletion of the unused `ToolsUnsupported`, `MalformedToolCall` and `supportsTools` placeholders (epic-hemat-kuota). The two `deferred-work.md` entries are behavior or hand-off items, not part of this sweep.
 

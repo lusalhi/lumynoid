@@ -1,7 +1,7 @@
 package dev.lusalhi.lumynoid.app
 
 import java.io.File
-import java.nio.file.Files
+import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,7 +9,9 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.w3c.dom.Element
 
 class CrashReportTest {
@@ -17,7 +19,9 @@ class CrashReportTest {
     private val key = "sk-live-SECRETKEY123"
     private val prompt = "my private prompt about taxes"
 
-    private fun tempDir(): File = Files.createTempDirectory("crash-test").toFile().also { it.deleteOnExit() }
+    @get:Rule val temp = TemporaryFolder()
+
+    private fun tempDir(): File = temp.newFolder()
 
     private fun frames(n: Int) = Array(n) { StackTraceElement("com.example.C$it", "m$it", "C.kt", it + 1) }
 
@@ -88,6 +92,22 @@ class CrashReportTest {
         assertEquals(5, files.count { it.exists() })
         assertFalse(files[2].exists())
         assertTrue(files[3].exists())
+    }
+
+    @Test fun clockMovedBackStillKeepsTheReportJustWritten() {
+        val dir = tempDir()
+        val store = CrashStore(dir)
+        (1000L..1004L).forEach { store.write("later$it", it) }
+        val fresh = store.write("fresh", 1L)
+        assertTrue(fresh.exists())
+        assertEquals(5, dir.list()!!.size)
+        assertFalse(File(dir, "crash-%015d-000.txt".format(Locale.ROOT, 1000L)).exists())
+    }
+
+    @Test fun writeLeavesNoPartialFileBehind() {
+        val dir = tempDir()
+        CrashStore(dir).write("body", 7L)
+        assertTrue(dir.list()!!.none { it.endsWith(".part") })
     }
 
     @Test fun sameMillisecondCrashesDoNotOverwrite() {

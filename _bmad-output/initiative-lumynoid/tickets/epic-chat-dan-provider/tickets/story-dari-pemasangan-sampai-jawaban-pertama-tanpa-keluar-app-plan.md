@@ -58,10 +58,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `core/.../ProviderSetup.kt` + test -- test-then-save helper; cases: success saves, failure never saves, incomplete never saves -- R1
-- [ ] `app/.../ProvidersViewModel.kt` -- preselect first preset, `connect`, `saveAnyway`, blank-model path calls `loadModels` -- R1
-- [ ] `app/.../ProviderScreens.kt`, `res/values/strings.xml` -- first-run form copy and buttons -- R1
-- [ ] `app/.../ChatViewModel.kt`, `Screens.kt`, `ConversationScreens.kt`, `MainActivity.kt` -- new conversation after first provider; setup prompt on both screens -- R1
+- [x] `core/.../ProviderSetup.kt` + test -- test-then-save helper; cases: success saves, failure never saves, incomplete never saves -- R1
+- [x] `app/.../ProvidersViewModel.kt` -- preselect first preset, `connect`, `saveAnyway`, blank-model path calls `loadModels` -- R1
+- [x] `app/.../ProviderScreens.kt`, `res/values/strings.xml` -- first-run form copy and buttons -- R1
+- [x] `app/.../ChatViewModel.kt`, `Screens.kt`, `ConversationScreens.kt`, `MainActivity.kt` -- new conversation after first provider; setup prompt on both screens -- R1
 
 **Acceptance Criteria:**
 - Given a clean checkout, when `./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:checkDependencyPolicy` runs, then it passes.
