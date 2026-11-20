@@ -1,5 +1,6 @@
 package dev.lusalhi.lumynoid.app
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.lusalhi.lumynoid.core.FailureReason
@@ -209,5 +211,27 @@ fun CrashBanner(onShare: () -> Unit, onDismiss: () -> Unit, modifier: Modifier =
                 TextButton(onClick = onShare) { Text(stringResource(R.string.crash_share)) }
             }
         }
+    }
+}
+
+/** Shown in place of an empty list or chat while no provider is set up: what to do, and the button that does it. */
+@Composable
+fun SetupPrompt(@StringRes message: Int, onOpenProvider: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(stringResource(message), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        Button(onClick = onOpenProvider) { Text(stringResource(R.string.chat_open_provider)) }
+    }
+}
+
+/** A one-line reminder with the setup button, for screens that already show content. */
+@Composable
+fun SetupBanner(onOpenProvider: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(stringResource(R.string.chat_needs_provider), Modifier.weight(1f))
+        Button(onClick = onOpenProvider) { Text(stringResource(R.string.chat_open_provider)) }
     }
 }

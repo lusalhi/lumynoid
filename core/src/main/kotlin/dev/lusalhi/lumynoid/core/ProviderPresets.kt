@@ -16,4 +16,6 @@ object ProviderPresets {
         ProviderPreset("openai", "OpenAI", "https://api.openai.com/v1"),
         ProviderPreset("anthropic", "Anthropic", "https://api.anthropic.com/v1", ProviderKind.ANTHROPIC),
     )
+
+    fun byId(id: String?): ProviderPreset? = id?.let { wanted -> all.firstOrNull { it.id == wanted } }
 }

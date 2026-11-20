@@ -10,6 +10,7 @@ import dev.lusalhi.lumynoid.core.LlmError
 import dev.lusalhi.lumynoid.core.ModelListResult
 import dev.lusalhi.lumynoid.core.ProviderDraft
 import dev.lusalhi.lumynoid.core.ProviderKind
+import dev.lusalhi.lumynoid.core.ProviderOverview
 import dev.lusalhi.lumynoid.core.ProviderPreset
 import dev.lusalhi.lumynoid.core.ProviderPresets
 import dev.lusalhi.lumynoid.core.ProviderSaveResult
@@ -95,17 +96,25 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
 
     /** Re-reads the saved providers; with none saved, goes straight to the form for the first one. */
     fun refresh() {
-        viewModelScope.launch {
-            val overview = admin.overview()
-            _state.update { current ->
-                val form = current.form ?: if (overview.providers.isEmpty()) firstRunForm() else null
-                current.copy(loaded = true, providers = overview.providers, active = overview.active, form = form)
+        viewModelScope.launch { reloadOverview(closeForm = false) }
+    }
+
+    /** Re-reads the saved providers into the state; [closeForm] also drops the form that was just saved. */
+    private suspend fun reloadOverview(closeForm: Boolean): ProviderOverview {
+        val overview = admin.overview()
+        _state.update { current ->
+            val form = when {
+                closeForm -> null
+                else -> current.form ?: if (overview.providers.isEmpty()) firstRunForm() else null
             }
+            // Only a refresh marks the list as loaded; a save or connect keeps the flag as it was.
+            current.copy(loaded = current.loaded || !closeForm, providers = overview.providers, active = overview.active, form = form)
         }
+        return overview
     }
 
     fun startAdd() = _state.update {
-        it.copy(form = ProviderFormState(makeActive = it.active == null, alreadyActive = false))
+        it.copy(form = ProviderFormState(makeActive = it.active == null))
     }
 
     fun startEdit(provider: ProviderSummary) = _state.update {
@@ -135,7 +144,7 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
         _state.update { s -> s.copy(form = s.form?.let(transform)) }
 
     fun choosePreset(preset: ProviderPreset?) = edit { f ->
-        val previous = ProviderPresets.all.firstOrNull { it.id == f.presetId }
+        val previous = ProviderPresets.byId(f.presetId)
         val nameWasAutomatic = f.name.isBlank() || f.name == previous?.name
         val urlWasAutomatic = f.baseUrl.isBlank() || f.baseUrl == previous?.baseUrl
         f.copy(
@@ -229,9 +238,7 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             when (val outcome = connectAndSave(admin, sent)) {
                 ConnectOutcome.Started -> {
-                    val overview = admin.overview()
-                    _state.update { it.copy(providers = overview.providers, active = overview.active, form = null) }
-                    if (overview.active != null) onStarted()
+                    if (reloadOverview(closeForm = true).active != null) onStarted()
                 }
                 is ConnectOutcome.TestFailed -> patch { current ->
                     // A failure for settings the user has since edited is stale: drop it.
@@ -249,9 +256,6 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** "Save anyway" after a failed test: a plain save, so the provider is kept as typed. */
-    fun saveAnyway(onStarted: () -> Unit) = save(onStarted)
-
     /** Saves the form. [onFirstProviderActive] runs when this save gave the app its first usable provider. */
     fun save(onFirstProviderActive: () -> Unit) {
         val before = _state.value
@@ -264,8 +268,7 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             when (admin.save(form.toDraft())) {
                 ProviderSaveResult.SAVED -> {
-                    val overview = admin.overview()
-                    _state.update { it.copy(providers = overview.providers, active = overview.active, form = null) }
+                    val overview = reloadOverview(closeForm = true)
                     if (before.active == null && overview.active != null) onFirstProviderActive()
                 }
                 // A saved provider whose key went missing also lands here: the key field must ask again.

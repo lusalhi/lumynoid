@@ -7,23 +7,13 @@ import dev.lusalhi.lumynoid.core.ModelListResult
 import dev.lusalhi.lumynoid.core.Role
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
-import io.ktor.client.request.accept
 import io.ktor.client.request.header
-import io.ktor.client.request.preparePost
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.bodyAsChannel
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
-import io.ktor.http.isSuccess
-import io.ktor.utils.io.readLine
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.io.IOException
 
 /**
  * Streams answers from the Anthropic Messages API (AD-11), written directly on Ktor with no vendor SDK.
@@ -46,30 +36,16 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
                 }
             },
         )
-        try {
-            client.preparePost(baseUrl.trimEnd('/') + "/messages") {
-                authenticate(apiKey)
-                accept(ContentType.Text.EventStream)
-                contentType(ContentType.Application.Json)
-                setBody(wireJson.encodeToString(MessagesRequest.serializer(), body))
-            }.execute { response ->
-                if (!response.status.isSuccess()) {
-                    emit(LlmChunk.Failed(response.toLlmError()))
-                } else {
-                    readStream(response)
-                }
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: IOException) {
-            emit(LlmChunk.Failed(LlmError.Network))
-        } catch (e: Exception) {
-            emit(LlmChunk.Failed(LlmError.Server))
-        }
+        streamPost(
+            client,
+            joinUrl(baseUrl, "/messages"),
+            wireJson.encodeToString(MessagesRequest.serializer(), body),
+            auth = { authenticate(apiKey) },
+        ) { readStream(it) }
     }
 
     override suspend fun models(baseUrl: String, apiKey: String): ModelListResult =
-        client.listModelIds(baseUrl.trimEnd('/') + "/models?limit=$MODEL_LIST_LIMIT") { authenticate(apiKey) }
+        client.listModelIds(joinUrl(baseUrl, "/models?limit=$MODEL_LIST_LIMIT")) { authenticate(apiKey) }
 
     private fun HttpRequestBuilder.authenticate(apiKey: String) {
         header("x-api-key", apiKey)
@@ -77,14 +53,11 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
     }
 
     private suspend fun FlowCollector<LlmChunk>.readStream(response: HttpResponse) {
-        val channel = response.bodyAsChannel()
         var inputTokens = 0
         var outputTokens = 0
         var finished = false
-        while (true) {
-            val line = channel.readLine() ?: break
-            if (!line.startsWith("data:")) continue // `event:` names, blank separators and comments
-            val event = wireJson.decodeFromString(StreamEvent.serializer(), line.removePrefix("data:").trim())
+        response.readDataLines { payload ->
+            val event = wireJson.decodeFromString(StreamEvent.serializer(), payload)
             when (event.type) {
                 "message_start" -> inputTokens = event.message?.usage?.inputTokens ?: inputTokens
                 "content_block_delta" ->
@@ -92,14 +65,15 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
                 "message_delta" -> outputTokens = event.usage?.outputTokens ?: outputTokens
                 "message_stop" -> {
                     finished = true
-                    break
+                    return@readDataLines false
                 }
                 "error" -> {
-                    emit(LlmChunk.Failed(event.error?.type.toLlmError()))
+                    emit(LlmChunk.Failed(anthropicError(event.error?.type)))
                     return
                 }
                 // ping, content_block_start/stop and future events carry nothing we need.
             }
+            true
         }
         // A stream that ends without message_stop was cut off: never record it as an answer.
         if (!finished) {
@@ -110,7 +84,7 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
         emit(LlmChunk.Done)
     }
 
-    private fun String?.toLlmError(): LlmError = when (this) {
+    private fun anthropicError(type: String?): LlmError = when (type) {
         "authentication_error", "permission_error" -> LlmError.AuthFailed
         "rate_limit_error" -> LlmError.RateLimited(null)
         "billing_error" -> LlmError.QuotaExhausted

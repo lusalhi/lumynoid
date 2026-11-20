@@ -66,7 +66,7 @@ fun ProvidersRoute(
             onTest = viewModel::testConnection,
             onSave = { viewModel.save(onFirstProviderActive = onLeave) },
             onConnect = { viewModel.connect(onStarted = onFirstRunDone) },
-            onSaveAnyway = { viewModel.saveAnyway(onStarted = onFirstRunDone) },
+            onSaveAnyway = { viewModel.save(onFirstProviderActive = onFirstRunDone) },
             onCancel = viewModel::closeForm,
         )
     } else {
@@ -182,7 +182,7 @@ private fun ProviderFormScreen(
                 )
             }
             if (firstRun) {
-                val preset = ProviderPresets.all.firstOrNull { it.id == form.presetId }
+                val preset = ProviderPresets.byId(form.presetId)
                 Text(
                     if (preset != null) stringResource(R.string.provider_key_hint, preset.name) else stringResource(R.string.provider_key_hint_custom),
                     style = MaterialTheme.typography.bodySmall,

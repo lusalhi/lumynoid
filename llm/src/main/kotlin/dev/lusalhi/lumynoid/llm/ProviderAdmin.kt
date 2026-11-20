@@ -44,11 +44,8 @@ class ProviderAdmin(
     override suspend fun save(draft: ProviderDraft): ProviderSaveResult {
         val existing = draft.id?.let { configs.provider(it) }
         val model = draft.model.trim()
-        if (draft.baseUrl.isBlank() || model.isEmpty()) return ProviderSaveResult.INCOMPLETE
         // No new key and no stored one (a new provider, or a saved one whose secret is gone): nothing to call with.
-        if (draft.apiKey.isBlank() && (existing == null || secrets.get(existing.apiKey).isNullOrBlank())) {
-            return ProviderSaveResult.INCOMPLETE
-        }
+        if (!isComplete(draft) || keyFor(draft) == null) return ProviderSaveResult.INCOMPLETE
         val id = existing?.id ?: ids.next()
         val ref = existing?.apiKey ?: SecretRef("provider_key_$id")
         if (draft.apiKey.isNotBlank()) secrets.put(ref, draft.apiKey.trim())
@@ -69,7 +66,7 @@ class ProviderAdmin(
 
     override suspend fun testConnection(draft: ProviderDraft): ConnectionTestResult {
         val model = draft.model.trim()
-        if (draft.baseUrl.isBlank() || model.isEmpty()) return ConnectionTestResult.Incomplete
+        if (!isComplete(draft)) return ConnectionTestResult.Incomplete
         val key = keyFor(draft) ?: return ConnectionTestResult.Incomplete
         // A real one-word chat request: unlike `/models`, it needs a valid key and a model that exists.
         // The first useful chunk settles it, and `first` cancels the rest of the stream.
@@ -86,6 +83,8 @@ class ProviderAdmin(
         configs.setActive(ActiveModel(providerId, modelId))
     }
 
+    private fun isComplete(draft: ProviderDraft): Boolean = draft.baseUrl.isNotBlank() && draft.model.isNotBlank()
+
     private suspend fun keyFor(draft: ProviderDraft): String? =
         draft.apiKey.trim().ifEmpty {
             draft.id?.let { configs.provider(it) }?.let { secrets.get(it.apiKey) }
@@ -93,7 +92,7 @@ class ProviderAdmin(
 
     private fun nameFor(draft: ProviderDraft, url: String): String =
         draft.name.trim().ifEmpty {
-            ProviderPresets.all.firstOrNull { it.id == draft.presetId }?.name
+            ProviderPresets.byId(draft.presetId)?.name
                 ?: url.substringAfter("://").substringBefore('/')
         }
 
