@@ -1,10 +1,15 @@
 package dev.lusalhi.lumynoid.app
 
+import android.Manifest.permission.POST_NOTIFICATIONS
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -53,6 +58,19 @@ class MainActivity : ComponentActivity() {
 private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(state.screen, state.providerConfigured) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            state.screen == Screen.CHAT && state.providerConfigured &&
+            context.checkSelfPermission(POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val prefs = context.getSharedPreferences("notification_permission", Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("requested", false)) {
+                prefs.edit().putBoolean("requested", true).apply()
+                notificationPermission.launch(POST_NOTIFICATIONS)
+            }
+        }
+    }
     val crashStore = remember { CrashHandler.store(context) }
     // One directory listing on first composition; Dismiss and a successful relaunch are the only ways it changes.
     var crashReport by remember { mutableStateOf(crashStore.newest()) }
@@ -111,7 +129,7 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
         Screen.CONVERSATIONS -> ConversationListScreen(
             conversations = state.conversations,
             openId = state.conversationId,
-            streamingId = state.streamingConversationId,
+            pendingIds = state.pendingConversationIds,
             providerConfigured = state.providerConfigured,
             onOpenProvider = viewModel::openProvider,
             onOpen = viewModel::openConversation,

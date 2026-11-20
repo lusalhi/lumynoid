@@ -35,8 +35,8 @@ data class ChatState(
     val conversationId: String? = null,
     /** Title of the open conversation; empty for a new or untitled one. */
     val title: String = "",
-    /** The conversation whose answer is streaming right now; it cannot be deleted. */
-    val streamingConversationId: String? = null,
+    /** Conversations with pending tasks cannot be deleted. Null until the runner is ready. */
+    val pendingConversationIds: Set<String>? = null,
     /** The runner's active task when it belongs to the open conversation; the chat shows Stop while set. */
     val runningTaskId: String? = null,
 )
@@ -57,9 +57,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     private val live = agent.runner.flatMapLatest { it?.live ?: flowOf(null) }
     private val active = agent.runner.flatMapLatest { it?.active ?: flowOf(null) }
+    private val pending = agent.runner.flatMapLatest { it?.pendingConversations ?: flowOf(null) }
 
     private val conversations = graph.data.conversations.observeAll()
-    private val createLock = Mutex()
+    // Serialize deletion with conversation selection and task submission, including their DB writes.
+    private val conversationLock = Mutex()
 
     private val header = combine(screen, providerConfigured, conversationId, conversations) { screen, configured, id, all ->
         ChatState(
@@ -72,7 +74,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val state: StateFlow<ChatState> =
-        combine(header, events, live, active) { header, tagged, live, active ->
+        combine(header, events, live, active, pending) { header, tagged, live, active, pending ->
             val events = if (tagged.first == header.conversationId) tagged.second else emptyList()
             // The saved AssistantMessage can be observed a moment before the runner clears its live
             // copy; hide the live bubble then so the answer never shows twice. A live answer of
@@ -84,7 +86,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             header.copy(
                 events = events,
                 live = visibleLive,
-                streamingConversationId = active?.conversationId,
+                pendingConversationIds = pending,
                 runningTaskId = active?.takeIf { it.conversationId == header.conversationId }?.taskId,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatState())
@@ -139,11 +141,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteConversation(id: String) {
-        // A cancel would append TaskCancelled after the delete and leave orphan events.
-        if (state.value.streamingConversationId == id) return
         viewModelScope.launch {
-            graph.data.conversations.delete(id)
-            if (conversationId.value == id) conversationId.value = null
+            conversationLock.withLock {
+                val runner = agent.runner.filterNotNull().first()
+                val pending = runner.pendingConversations.filterNotNull().first()
+                if (id in pending) return@withLock
+                graph.data.conversations.delete(id)
+                if (conversationId.value == id) conversationId.value = null
+            }
         }
     }
 
@@ -157,11 +162,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val input = text.trim()
         if (input.isEmpty() || !providerConfigured.value) return
         viewModelScope.launch {
-            val id = createLock.withLock {
-                conversationId.value ?: graph.data.conversations.create(input).id.also { conversationId.value = it }
+            conversationLock.withLock {
+                val id = conversationId.value ?: graph.data.conversations.create(input).id.also { conversationId.value = it }
+                val runner = agent.runner.filterNotNull().first()
+                runner.submit(TaskRequest(Origin.User, id, workspaceId = UuidV7.next(), input = input))
             }
-            val runner = agent.runner.filterNotNull().first()
-            runner.submit(TaskRequest(Origin.User, id, workspaceId = UuidV7.next(), input = input))
         }
     }
 

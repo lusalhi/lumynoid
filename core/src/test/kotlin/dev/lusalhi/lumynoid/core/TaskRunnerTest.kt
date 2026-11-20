@@ -241,6 +241,39 @@ class TaskRunnerTest {
     }
 
     @Test
+    fun queuedConversationsStayPendingUntilTheirLastTaskFinishes() = runnerTest { scope ->
+        val first = CompletableDeferred<Unit>()
+        val last = CompletableDeferred<Unit>()
+        val llm = LlmPort { request ->
+            flow {
+                when (request.messages.last().content) {
+                    "first" -> first.await()
+                    "last" -> last.await()
+                }
+                emit(LlmChunk.TextDelta("done"))
+            }
+        }
+        val runner = runnerFor(llm, InMemoryEvents(), scope)
+        val other = request.copy(conversationId = "conv-2")
+
+        runner.submit(request.copy(input = "first"))
+        runner.submit(other.copy(input = "second"))
+        runner.submit(other.copy(input = "last"))
+        advanceUntilIdle()
+
+        assertEquals(request.conversationId, runner.active.value?.conversationId)
+        assertEquals(setOf(request.conversationId, other.conversationId), runner.pendingConversations.value)
+
+        first.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(setOf(other.conversationId), runner.pendingConversations.value)
+
+        last.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(emptySet(), runner.pendingConversations.value)
+    }
+
+    @Test
     fun cancellingTheRunningTaskRecordsCancellation() = runnerTest { scope ->
         val events = InMemoryEvents()
         val llm = LlmPort {

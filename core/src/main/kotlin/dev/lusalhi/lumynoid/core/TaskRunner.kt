@@ -41,8 +41,9 @@ class TaskRunner(
     private val _live = MutableStateFlow<LiveAnswer?>(null)
     private val _active = MutableStateFlow<ActiveTask?>(null)
     private val _busy = MutableStateFlow(false)
+    private val _pendingConversations = MutableStateFlow<Set<String>?>(null)
     private val pendingLock = Any()
-    private var pending = 0
+    private val pendingCounts = mutableMapOf<String, Int>()
 
     /** Completed once crash recovery has closed the tasks of the previous run; submit waits for it. */
     private val recovered = CompletableDeferred<Unit>()
@@ -55,11 +56,15 @@ class TaskRunner(
     /** True from [submit] until the last queued or running task has ended, with no gap between tasks. */
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
+    /** Conversations with tasks being submitted, queued, or executed; null during crash recovery. */
+    val pendingConversations: StateFlow<Set<String>?> = _pendingConversations.asStateFlow()
+
     init {
         scope.launch {
             try {
                 recoverInterrupted()
             } finally {
+                _pendingConversations.value = emptySet()
                 recovered.complete(Unit)
             }
             for (item in queue) {
@@ -75,7 +80,7 @@ class TaskRunner(
                 running.value = null
                 _active.value = null
                 cancelled.remove(item.taskId)
-                adjustPending(-1)
+                adjustPending(item.request.conversationId, -1)
             }
         }
     }
@@ -104,9 +109,14 @@ class TaskRunner(
         }
     }
 
-    private fun adjustPending(delta: Int) = synchronized(pendingLock) {
-        pending += delta
-        _busy.value = pending > 0
+    private fun adjustPending(conversationId: String, delta: Int) = synchronized(pendingLock) {
+        val previous = pendingCounts[conversationId] ?: 0
+        val count = previous + delta
+        if (count == 0) pendingCounts.remove(conversationId) else pendingCounts[conversationId] = count
+        if (previous == 0 || count == 0) {
+            _pendingConversations.value = pendingCounts.keys.toSet()
+            _busy.value = pendingCounts.isNotEmpty()
+        }
     }
 
     /** Records the task and its user message, queues it, and returns the task id. */
@@ -114,7 +124,7 @@ class TaskRunner(
         recovered.await()
         val taskId = ids.next()
         val now = clock.nowMillis()
-        adjustPending(1)
+        adjustPending(request.conversationId, 1)
         try {
             events.createTask(taskId, request, now)
             val item = Queued(taskId, request)
@@ -122,7 +132,7 @@ class TaskRunner(
             append(item, TaskEvent.UserMessage(ids.next(), taskId, now, request.origin, request.input))
             queue.send(item)
         } catch (e: Throwable) {
-            adjustPending(-1)
+            adjustPending(request.conversationId, -1)
             throw e
         }
         return taskId

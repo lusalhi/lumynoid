@@ -16,6 +16,10 @@ Each release carries one `lumynoid-<version>.apk` and a `SHA256SUMS` file. Relea
 
 Verify an APK with `apksigner verify --print-certs` and the release's `SHA256SUMS`. Maintainers: see [docs/release.md](docs/release.md).
 
+## Background replies
+
+On Android 13+, Lumynoid asks for notification permission the first time you open chat with a provider configured. Allow it to see the in-progress reply notification. Replies still run if you decline; you can enable notifications later in Android's app settings.
+
 ## Build
 
 Requirements: JDK 17 and the Android SDK (platform 37).
