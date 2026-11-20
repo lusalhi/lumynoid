@@ -3,9 +3,11 @@ package dev.lusalhi.lumynoid.llm
 import dev.lusalhi.lumynoid.core.LlmChunk
 import dev.lusalhi.lumynoid.core.LlmError
 import dev.lusalhi.lumynoid.core.LlmMessage
+import dev.lusalhi.lumynoid.core.LlmPort
 import dev.lusalhi.lumynoid.core.LlmRequest
 import dev.lusalhi.lumynoid.core.ModelListResult
 import dev.lusalhi.lumynoid.core.Role
+import dev.lusalhi.lumynoid.core.TaskEvent
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -16,6 +18,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -23,6 +26,7 @@ import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -41,6 +45,16 @@ private val start = """{"type":"message_start","message":{"id":"m","usage":{"inp
 private val ping = """{"type":"ping"}"""
 private val messageDelta = """{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}"""
 private val stop = """{"type":"message_stop"}"""
+
+private fun toolStart(index: Int, name: String, input: String = "{}") =
+    """{"type":"content_block_start","index":$index,"content_block":{"type":"tool_use","id":"vendor-$index","name":"$name","input":$input}}"""
+
+private fun toolDelta(index: Int, fragment: String) =
+    """{"type":"content_block_delta","index":$index,"delta":{"type":"input_json_delta","partial_json":${JsonPrimitive(fragment)}}}"""
+
+private fun blockStop(index: Int) = """{"type":"content_block_stop","index":$index}"""
+
+private fun stopReason(reason: String) = """{"type":"message_delta","delta":{"stop_reason":"$reason"},"usage":{"output_tokens":5}}"""
 
 class AnthropicAdapterTest {
 
@@ -96,8 +110,149 @@ class AnthropicAdapterTest {
         assertEquals("8192", body.getValue("max_tokens").jsonPrimitive.content)
         assertEquals("true", body.getValue("stream").jsonPrimitive.content)
         assertEquals("Be brief.", body.getValue("system").jsonPrimitive.content)
-        val turns = body.getValue("messages").jsonArray.map { it.jsonObject.getValue("role").jsonPrimitive.content }
-        assertEquals(listOf("user", "assistant", "user"), turns)
+        val turns = body.getValue("messages").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("user", "assistant", "user"), turns.map { it.getValue("role").jsonPrimitive.content })
+        assertEquals(listOf(JsonPrimitive("hi"), JsonPrimitive("hello"), JsonPrimitive("again")), turns.map { it["content"] })
+        assertFalse("tools" in body)
+    }
+
+    @Test
+    fun twoFragmentedCallsRoundTripAndKeepTheirIdsInLaterHistory() = runTest {
+        val responses = ArrayDeque(
+            listOf(
+                events(
+                    start,
+                    delta("Checking"),
+                    blockStop(0),
+                    toolStart(1, "web_lookup"),
+                    toolDelta(1, """{"key":"""),
+                    toolDelta(1, """"one"}"""),
+                    blockStop(1),
+                    toolStart(2, "web_read"),
+                    toolDelta(2, """{"limit":"""),
+                    toolDelta(2, "2}"),
+                    blockStop(2),
+                    stopReason("tool_use"),
+                    stop,
+                ),
+                events(start, delta("ok"), messageDelta, stop),
+                events(start, delta("next"), messageDelta, stop),
+            ),
+        )
+        val engine = MockEngine { respond(responses.removeFirst()) }
+        val adapter = adapter(engine)
+        val fixture = ToolRunnerFixture(backgroundScope, LlmPort { adapter.stream(BASE, MODEL, KEY, it) })
+
+        val log = fixture.run("Find fixtures")
+        assertEquals("ok", log.filterIsInstance<TaskEvent.AssistantMessage>().single().text)
+        assertIs<TaskEvent.TaskFinished>(log.last())
+        val localCalls = log.filterIsInstance<TaskEvent.ToolCallRequested>().single().calls.map { it.call }
+        assertEquals(localCalls.map { it.id }, log.filterIsInstance<TaskEvent.ToolResult>().map { it.callId })
+        fixture.run("Ask again")
+
+        val initial = engine.requestJson(0)
+        val continuation = engine.requestJson(1)
+        val history = engine.requestJson(2).getValue("messages").jsonArray
+        val definitions = initial.getValue("tools").jsonArray.map { it.jsonObject }
+        assertEquals(initial["tools"], continuation["tools"])
+        assertEquals(fixture.tools.size, definitions.size)
+        for ((tool, definition) in fixture.tools.zip(definitions)) {
+            assertEquals(JsonPrimitive(tool.name), definition["name"])
+            assertEquals(JsonPrimitive(tool.description), definition["description"])
+            assertEquals(tool.inputSchema, definition["input_schema"])
+        }
+
+        val turns = continuation.getValue("messages").jsonArray.map { it.jsonObject }
+        assertEquals(turns.take(1), initial.getValue("messages").jsonArray.map { it.jsonObject })
+        assertEquals(listOf("user", "assistant", "user"), turns.map { it.getValue("role").jsonPrimitive.content })
+        val assistantBlocks = turns[1].getValue("content").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("text", "tool_use", "tool_use"), assistantBlocks.map { it.getValue("type").jsonPrimitive.content })
+        assertEquals(JsonPrimitive("Checking"), assistantBlocks.first()["text"])
+        val tools = assistantBlocks.drop(1)
+        val ids = tools.map { it.getValue("id").jsonPrimitive.content }
+        assertEquals(2, ids.toSet().size)
+        assertTrue(ids.all { it.matches(Regex("toolu_[A-Za-z0-9_-]+")) })
+        assertTrue(ids.none { it in localCalls.map { call -> call.id } || it == "vendor-1" || it == "vendor-2" })
+        assertEquals(listOf(JsonPrimitive("web_lookup"), JsonPrimitive("web_read")), tools.map { it["name"] })
+        assertEquals(
+            listOf(Json.parseToJsonElement("""{"key":"one"}"""), Json.parseToJsonElement("""{"limit":2}""")),
+            tools.map { it["input"] },
+        )
+        val results = turns[2].getValue("content").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("tool_result", "tool_result"), results.map { it.getValue("type").jsonPrimitive.content })
+        assertEquals(ids.map(::JsonPrimitive), results.map { it["tool_use_id"] })
+        assertEquals(JsonPrimitive("fixture:one"), results[0]["content"])
+        assertFalse("content" in results[1])
+        assertEquals(turns, history.take(turns.size))
+        assertEquals(JsonPrimitive("ok"), history[3].jsonObject["content"])
+        assertEquals(JsonPrimitive("Ask again"), history[4].jsonObject["content"])
+    }
+
+    @Test
+    fun aCompletedEmptyToolBlockEmitsAnEmptyObject() = runTest {
+        val chunks = run(MockEngine { respond(events(toolStart(0, "web_lookup"), blockStop(0), stopReason("tool_use"), stop)) })
+        assertEquals(
+            listOf(
+                LlmChunk.ToolCallDelta(0, nameFragment = "web_lookup"),
+                LlmChunk.ToolCallDelta(0, argumentsFragment = "{}"),
+                LlmChunk.Usage(0, 5),
+                LlmChunk.Done,
+            ),
+            chunks,
+        )
+    }
+
+    @Test
+    fun toolRoundsRequireCompletedBlocksAndAMessageStop() = runTest {
+        val tool = toolStart(0, "web_lookup")
+        suspend fun terminal(vararg streamEvents: String) =
+            run(MockEngine { respond(events(*streamEvents)) }).last()
+
+        assertEquals(LlmChunk.Failed(LlmError.Network), terminal(tool, blockStop(0), stopReason("tool_use")))
+        assertEquals(LlmChunk.Failed(LlmError.AuthFailed), terminal(tool, """{"type":"error","error":{"type":"permission_error"}}"""))
+        assertEquals(LlmChunk.Failed(LlmError.MalformedToolCall), terminal(tool, stopReason("tool_use"), stop))
+        assertEquals(LlmChunk.Failed(LlmError.MalformedToolCall), terminal(tool, blockStop(0), stopReason("max_tokens"), stop))
+        assertEquals(LlmChunk.Failed(LlmError.MalformedToolCall), terminal(stopReason("tool_use"), stop))
+    }
+
+    @Test
+    fun toolArgumentsMustBeStrictJsonObjects() = runTest {
+        for (arguments in listOf("""{"limit":""", """{"limit":bogus}""", "[]")) {
+            val body = events(
+                toolStart(0, "web_lookup", """{"key":"one"}"""),
+                blockStop(0),
+                toolStart(1, "web_read"),
+                toolDelta(1, arguments),
+                blockStop(1),
+                stopReason("tool_use"),
+                stop,
+            )
+            assertEquals(LlmChunk.Failed(LlmError.MalformedToolCall), run(MockEngine { respond(body) }).last(), arguments)
+        }
+    }
+
+    @Test
+    fun malformedArgumentsPreventDispatchOfTheWholeRound() = runTest {
+        val engine = MockEngine {
+            respond(
+                events(
+                    toolStart(0, "web_lookup", """{"key":"one"}"""),
+                    blockStop(0),
+                    toolStart(1, "web_read"),
+                    toolDelta(1, """{"limit":"""),
+                    blockStop(1),
+                    stopReason("tool_use"),
+                    stop,
+                ),
+            )
+        }
+        val adapter = adapter(engine)
+        val log = ToolRunnerFixture(backgroundScope, LlmPort { adapter.stream(BASE, MODEL, KEY, it) })
+            .run("Find fixtures")
+
+        assertIs<TaskEvent.TaskFailed>(log.last())
+        assertTrue(log.none { it is TaskEvent.ToolCallRequested || it is TaskEvent.ToolResult })
+        assertEquals(1, engine.requestHistory.size)
     }
 
     @Test

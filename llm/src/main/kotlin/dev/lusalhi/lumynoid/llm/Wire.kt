@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.IOException
+import java.security.MessageDigest
+import java.util.Base64
 
 /** One wire format (AD-11): how to stream an answer and how to list models. Failures are typed, never thrown. */
 interface WireAdapter {
@@ -62,6 +64,13 @@ internal fun HttpResponse.toLlmError(): LlmError = when (status) {
 
 /** `[baseUrl]` without a trailing slash, followed by [path]. */
 internal fun joinUrl(baseUrl: String, path: String): String = baseUrl.trimEnd('/') + path
+
+/** A short, provider-safe ID derived from the runner's durable ID. */
+internal fun toolCallWireId(prefix: String, localId: String): String {
+    val hash = MessageDigest.getInstance("SHA-256").digest(localId.encodeToByteArray())
+    val suffix = Base64.getUrlEncoder().withoutPadding().encodeToString(hash).take(32)
+    return prefix + suffix
+}
 
 /**
  * POSTs the JSON [body] to [url] and hands a successful response to [readStream]. A failed status, an IO

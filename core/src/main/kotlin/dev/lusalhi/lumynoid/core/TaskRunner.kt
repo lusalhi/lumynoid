@@ -15,27 +15,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
 import java.util.TreeMap
 import java.util.concurrent.ConcurrentHashMap
-import java.util.regex.Pattern
-
-// The tree reader accepts arbitrary bare literals. Check lexical tokens before it checks structure.
-private val jsonToken = Pattern.compile(
-    """[ \t\r\n]++|[{}\[\],:]|"(?:[^"\\\x00-\x1f]++|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*+"|""" +
-        """(?:null|true|false|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?=[ \t\r\n,}\]]|\z)""",
-)
-
-private fun hasStrictJsonTokens(text: String): Boolean {
-    val matcher = jsonToken.matcher(text)
-    var offset = 0
-    while (offset < text.length) {
-        if (!matcher.region(offset, text.length).lookingAt()) return false
-        offset = matcher.end()
-    }
-    return true
-}
 
 /** The answer currently streaming. Deltas are hot state, never persisted (AD-4). */
 data class LiveAnswer(val taskId: String, val conversationId: String, val text: String)
@@ -264,12 +246,7 @@ class TaskRunner(
             val name = fragmentsAtIndex.name.toString()
             val tool = registry[name]?.tool ?: return null
             val argsJson = fragmentsAtIndex.arguments.toString()
-            if (!hasStrictJsonTokens(argsJson)) return null
-            val args = try {
-                TaskEventJson.json.parseToJsonElement(argsJson) as? JsonObject ?: return null
-            } catch (_: SerializationException) {
-                return null
-            }
+            val args = parseToolArguments(argsJson) ?: return null
             // The approval policy is not installed yet. Never dispatch work of uncertain or higher risk.
             if (tool.assess(args) != RiskAssessment.READ_ONLY) return null
             val call = TaskEvent.RequestedToolCall(ToolCall(ids.next(), name, argsJson), tool.describe(args))
