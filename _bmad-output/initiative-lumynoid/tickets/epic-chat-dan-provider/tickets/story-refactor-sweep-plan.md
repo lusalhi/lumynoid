@@ -61,6 +61,8 @@ context:
 
 ## Implementation Notes
 
+Deviation from the frozen Always line (recorded outside the frozen block, 2026-11-20): the shared `streamPost` holds the `try/catch`, and each adapter calls it inside its `flow`; a `wireJson` decode error still maps to `Server`. The frozen wording was left as approved.
+
 Built by a Sonnet subagent. Verified (also re-run on my side after one correction): `./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:checkDependencyPolicy` is BUILD SUCCESSFUL; `data/schemas`, `app/src/main/res` and `AndroidManifest.xml` are unchanged from baseline. Core gained one test (`byId`); the 28 tests moved out of `OpenAiCompatibleAdapterTest.kt` kept their names.
 
 - `streamPost` and `readDataLines` live in `Wire.kt`, with a small `joinUrl` for the repeated `trimEnd('/')`. The `try/catch` is inside `streamPost`, called within each adapter's `flow`, so decode errors still map to `Server`.

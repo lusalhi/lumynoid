@@ -44,7 +44,7 @@ Orang awam memasang APK dan langsung chat dengan AI memakai key miliknya, tanpa 
 - Di HP sungguhan, penguji menambah provider dari preset OpenAI-compatible, URL custom, dan Anthropic; tes koneksi menunjukkan berhasil atau gagal beserta alasannya.
 - Chat menampilkan jawaban streaming dengan markdown dan blok kode; percakapan muncul di daftar dan bisa dilanjutkan setelah app ditutup.
 - Dari pemasangan sampai jawaban pertama, penguji tidak melihat terminal dan tidak keluar dari app.
-- Pesan chat masuk lewat `TaskRunner.submit` di AgentService: jawaban yang sedang streaming tetap selesai dan tersimpan di percakapan saat app dipindah ke background, dan notifikasi FGS hilang setelah tugas selesai.
+- Pesan chat masuk lewat `TaskRunner.submit` di AgentService: jawaban yang sedang streaming tetap selesai dan tersimpan di percakapan saat app dipindah ke background, dan notifikasi FGS hilang setelah tugas selesai. Penyimpangan yang diterima pemilik (Decision 2026-11-16): di Android 13+ tanpa izin notifikasi, notifikasi tidak terlihat, jadi poin notifikasi dibuktikan lewat jawaban yang selesai dan tersimpan di background; notifikasi yang terlihat menjadi milik epic-tugas-terjadwal.
 
 ## Boundaries
 

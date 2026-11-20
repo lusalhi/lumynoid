@@ -66,7 +66,8 @@ internal fun joinUrl(baseUrl: String, path: String): String = baseUrl.trimEnd('/
 /**
  * POSTs the JSON [body] to [url] and hands a successful response to [readStream]. A failed status, an IO
  * error or any other exception (a decode error inside [readStream] included) becomes a typed
- * [LlmChunk.Failed]; only cancellation is rethrown. Call it inside the adapter's `flow`.
+ * [LlmChunk.Failed]. Cancellation and an exception thrown by the downstream collector propagate unchanged.
+ * Call it inside the adapter's `flow`.
  */
 internal suspend fun FlowCollector<LlmChunk>.streamPost(
     client: HttpClient,
@@ -75,6 +76,17 @@ internal suspend fun FlowCollector<LlmChunk>.streamPost(
     auth: HttpRequestBuilder.() -> Unit,
     readStream: suspend FlowCollector<LlmChunk>.(HttpResponse) -> Unit,
 ) {
+    // An exception thrown by the downstream collector must pass through untouched: emitting again after it would break
+    // Flow's exception transparency and hide the real error.
+    var downstream: Throwable? = null
+    val guarded = FlowCollector<LlmChunk> { chunk ->
+        try {
+            emit(chunk)
+        } catch (t: Throwable) {
+            downstream = t
+            throw t
+        }
+    }
     try {
         client.preparePost(url) {
             auth()
@@ -83,17 +95,16 @@ internal suspend fun FlowCollector<LlmChunk>.streamPost(
             setBody(body)
         }.execute { response ->
             if (!response.status.isSuccess()) {
-                emit(LlmChunk.Failed(response.toLlmError()))
+                guarded.emit(LlmChunk.Failed(response.toLlmError()))
             } else {
-                readStream(response)
+                guarded.readStream(response)
             }
         }
     } catch (e: CancellationException) {
         throw e
-    } catch (e: IOException) {
-        emit(LlmChunk.Failed(LlmError.Network))
     } catch (e: Exception) {
-        emit(LlmChunk.Failed(LlmError.Server))
+        if (e === downstream) throw e
+        emit(LlmChunk.Failed(if (e is IOException) LlmError.Network else LlmError.Server))
     }
 }
 

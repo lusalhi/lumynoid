@@ -238,7 +238,15 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             when (val outcome = connectAndSave(admin, sent)) {
                 ConnectOutcome.Started -> {
-                    if (reloadOverview(closeForm = true).active != null) onStarted()
+                    // The tested settings are saved. If the user edited the form while the test ran, keep it open
+                    // with those edits, tied to the saved provider so a later Save updates it instead of adding another.
+                    val edited = _state.value.form?.let { it.toDraft() != sent } == true
+                    val overview = reloadOverview(closeForm = !edited)
+                    if (edited) {
+                        patch { it.copy(test = TestState.Idle, busy = false, id = it.id ?: overview.providers.singleOrNull()?.id) }
+                    } else if (overview.active != null) {
+                        onStarted()
+                    }
                 }
                 is ConnectOutcome.TestFailed -> patch { current ->
                     // A failure for settings the user has since edited is stale: drop it.

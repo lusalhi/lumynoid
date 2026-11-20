@@ -19,8 +19,8 @@ android {
         applicationId = "dev.lusalhi.lumynoid"
         minSdk = 29
         targetSdk = 37
-        versionCode = 2
-        versionName = "v0.2.0"
+        versionCode = 3
+        versionName = "v0.2.1"
     }
 
     signingConfigs {

@@ -1,15 +1,19 @@
 package dev.lusalhi.lumynoid.app
 
 import java.io.File
-import java.nio.file.Files
+import java.io.IOException
+import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.w3c.dom.Element
 
 class CrashReportTest {
@@ -17,7 +21,9 @@ class CrashReportTest {
     private val key = "sk-live-SECRETKEY123"
     private val prompt = "my private prompt about taxes"
 
-    private fun tempDir(): File = Files.createTempDirectory("crash-test").toFile().also { it.deleteOnExit() }
+    @get:Rule val temp = TemporaryFolder()
+
+    private fun tempDir(): File = temp.newFolder()
 
     private fun frames(n: Int) = Array(n) { StackTraceElement("com.example.C$it", "m$it", "C.kt", it + 1) }
 
@@ -88,6 +94,40 @@ class CrashReportTest {
         assertEquals(5, files.count { it.exists() })
         assertFalse(files[2].exists())
         assertTrue(files[3].exists())
+    }
+
+    @Test fun clockMovedBackStillMakesTheNewReportTheNewest() {
+        val dir = tempDir()
+        val store = CrashStore(dir)
+        (1000L..1004L).forEach { store.write("later$it", it) }
+        val fresh = store.write("fresh", 1L)
+        assertEquals(fresh, store.newest())
+        assertEquals("fresh", store.newest()!!.readText())
+        assertEquals(5, dir.list()!!.size)
+        assertFalse(File(dir, "crash-%015d.txt".format(Locale.ROOT, 1000L)).exists())
+    }
+
+    @Test fun writeLeavesNoPartialFileBehind() {
+        val dir = tempDir()
+        CrashStore(dir).write("body", 7L)
+        assertTrue(dir.list()!!.none { it.endsWith(".part") })
+    }
+
+    @Test fun failedRenameRemovesThePartialFile() {
+        val dir = tempDir()
+        // A non-empty directory holds the report's final name, so the rename fails after the .part file was written.
+        val taken = File(dir, "crash-%015d.txt".format(Locale.ROOT, 5L))
+        File(taken, "x").also { it.parentFile.mkdirs() }.writeText("x")
+        assertThrows(IOException::class.java) { CrashStore(dir).write("body", 5L) }
+        assertEquals(listOf(taken.name), dir.list()!!.toList())
+    }
+
+    @Test fun copyForExportFailsWhenTheReportIsMissing() {
+        assertThrows(IOException::class.java) { copyForExport(File(tempDir(), "gone.txt"), tempDir()) }
+    }
+
+    @Test fun storeRejectsANonPositiveLimit() {
+        assertThrows(IllegalArgumentException::class.java) { CrashStore(tempDir(), 0) }
     }
 
     @Test fun sameMillisecondCrashesDoNotOverwrite() {
@@ -172,7 +212,9 @@ class CrashReportTest {
         val providers = doc.getElementsByTagName("provider")
         assertEquals(1, providers.length)
         val p = providers.item(0) as Element
-        assertEquals("androidx.core.content.FileProvider", p.getAttribute("android:name"))
+        // Never the AndroidX base class: AndroidX says declaring it directly crashes on some devices.
+        assertEquals(".LumynoidFileProvider", p.getAttribute("android:name"))
+        assertEquals(androidx.core.content.FileProvider::class.java, LumynoidFileProvider::class.java.superclass)
         assertEquals("\${applicationId}.files", p.getAttribute("android:authorities"))
         assertEquals("false", p.getAttribute("android:exported"))
         assertEquals("true", p.getAttribute("android:grantUriPermissions"))

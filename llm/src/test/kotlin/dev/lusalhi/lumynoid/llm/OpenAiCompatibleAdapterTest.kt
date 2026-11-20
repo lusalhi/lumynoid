@@ -9,11 +9,13 @@ import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -109,6 +111,22 @@ class OpenAiCompatibleAdapterTest {
         }
         val chunks = adapterFor(engine).stream(TEST_URL, TEST_MODEL, SECRET, request).toList()
         assertEquals(listOf(LlmChunk.TextDelta("par"), LlmChunk.Failed(LlmError.Server)), chunks)
+    }
+
+    @Test
+    fun aCollectorThatThrowsSeesItsOwnExceptionNotAFailedChunk() = runTest {
+        val engine = MockEngine {
+            respond(sse("""data: {"choices":[{"delta":{"content":"par"}}]}""", "data: [DONE]"))
+        }
+        val seen = mutableListOf<LlmChunk>()
+        val thrown = assertFailsWith<IllegalStateException> {
+            adapterFor(engine).stream(TEST_URL, TEST_MODEL, SECRET, request).collect {
+                seen += it
+                throw IllegalStateException("collector boom")
+            }
+        }
+        assertEquals("collector boom", thrown.message)
+        assertEquals(listOf<LlmChunk>(LlmChunk.TextDelta("par")), seen)
     }
 
     @Test

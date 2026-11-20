@@ -3,7 +3,7 @@ title: 'Answers finish in the background and can be stopped'
 type: feature
 ticket: '8'
 created: '2026-11-15'
-status: done
+status: built
 baseline_revision: '691a49f9c36f541789cf34043d8da1402642ce74'
 route: full
 route_source: auto
@@ -84,6 +84,8 @@ Not done here, by scope or environment:
 - When the service is not already started and the app is no longer in the foreground as `busy` turns true, Android may refuse `startService` or `startForeground`. The failure is logged and the task still runs, but nothing protects it from being killed.
 
 ## Plan Change Log
+
+Status note, 2026-11-20: set back to `built`. The owner's `v0.1.0` phone run (2026-11-16) recorded only the background-completion check. Stop and the revoked-key reason are still unrecorded; they are on the story 1.12 phone checklist, and this story goes to `done` once they pass.
 
 ## Review Triage Log
 

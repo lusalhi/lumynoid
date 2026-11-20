@@ -60,12 +60,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `app/src/main/kotlin/dev/lusalhi/lumynoid/app/CrashReport.kt` -- formatter and `CrashStore(dir)` with `write`, `newest`, `clear`, retention of 5, and `copyForExport(report, exportDir)` that first empties `exportDir` -- all behavior testable on the JVM
-- [ ] `app/src/main/kotlin/dev/lusalhi/lumynoid/app/CrashHandler.kt` -- install the default handler (write inside try/catch, then call the previous handler) and build the `ACTION_SEND` chooser with `FLAG_GRANT_READ_URI_PERMISSION` -- Android edge kept thin
-- [ ] `LumynoidApp.kt`, `MainActivity.kt`, `Screens.kt`, `strings.xml` -- install on start, show the banner above every screen, wire Share and Dismiss -- user-facing export
-- [ ] `AndroidManifest.xml`, `res/xml/file_paths.xml` -- one `FileProvider` with a single `cache-path` named `export`, path `export/` -- convention
-- [ ] `app/src/debug/...` -- debug manifest adds an exported launcher activity labelled for crash testing that throws in `onCreate` -- lets the tester trigger a crash without adb
-- [ ] `app/src/test/kotlin/dev/lusalhi/lumynoid/app/CrashReportTest.kt` -- cover every I/O row, plus a check that `file_paths.xml` has exactly one `cache-path` `export/` and the main manifest declares the provider once with authority `${applicationId}.files` -- proves hygiene and the convention
+- [x] `app/src/main/kotlin/dev/lusalhi/lumynoid/app/CrashReport.kt` -- formatter and `CrashStore(dir)` with `write`, `newest`, `clear`, retention of 5, and `copyForExport(report, exportDir)` that first empties `exportDir` -- all behavior testable on the JVM
+- [x] `app/src/main/kotlin/dev/lusalhi/lumynoid/app/CrashHandler.kt` -- install the default handler (write inside try/catch, then call the previous handler) and build the `ACTION_SEND` chooser with `FLAG_GRANT_READ_URI_PERMISSION` -- Android edge kept thin
+- [x] `LumynoidApp.kt`, `MainActivity.kt`, `Screens.kt`, `strings.xml` -- install on start, show the banner above every screen, wire Share and Dismiss -- user-facing export
+- [x] `AndroidManifest.xml`, `res/xml/file_paths.xml` -- one `FileProvider` with a single `cache-path` named `export`, path `export/` -- convention
+- [x] `app/src/debug/...` -- debug manifest adds an exported launcher activity labelled for crash testing that throws in `onCreate` -- lets the tester trigger a crash without adb
+- [x] `app/src/test/kotlin/dev/lusalhi/lumynoid/app/CrashReportTest.kt` -- cover every I/O row that runs on the JVM, including copy failure (the UI-only parts, banner, chooser, grant and Toast, need Compose or instrumented tests the repo lacks; see Review Triage row 9), plus a check that `file_paths.xml` has exactly one `cache-path` `export/` and the main manifest declares the provider once with authority `${applicationId}.files` -- proves hygiene and the convention
 
 **Acceptance Criteria:**
 - Given a throwable with a key and prompt text in its message and in its cause's message, when the report is formatted, then neither string appears and the throwable class names and frames do.
@@ -81,6 +81,7 @@ Built by a Sonnet subagent; verified again by the main session (all Verification
 Additions beyond the plan's file list, each forced by testability or safety:
 - `crashRecordingHandler(store, env, now, previous)` lives in `CrashReport.kt` (pure) so "never throws, always chains" is tested on the JVM; `CrashHandler.kt` only wires Android values into it.
 - File names are `crash-<millis>-<seq>.txt` so two crashes in the same millisecond do not overwrite each other.
+- Superseded in story 1.12 (2026-11-20): file names are now `crash-<millis>.txt`, where the stamp is raised above the newest existing report's, so names keep write order, same-millisecond crashes never collide, and `newest()` stays the last write after a clock rollback. The sequence number is gone; `write` is synchronized.
 - `app/src/debug/res/values/strings.xml` holds the debug-only launcher label, so the release build carries no trace of it.
 - A failed Share shows a short Toast (`crash_share_failed`) and leaves the banner.
 
@@ -104,8 +105,8 @@ Pass 1, quick lens (omp, openai-codex/gpt-6.2-sol, high; findings in `story-cras
 | 1 | Crash on a fresh install cannot be exported on relaunch | medium | intent_gap | Resolved by the human (banner on every screen); code re-derived. Real: `ChatViewModel.init` sends an unconfigured app to `Screen.PROVIDER` and only `closeProvider()` with an active model returns to chat; only `ChatScreen` shows the banner. A crash during first-run setup, likely the most useful report, is not offerable until a provider works. The frozen intent says "the chat screen", so showing it elsewhere needs the human. |
 | 2 | Thread name and frame file names written verbatim may carry secrets | false | reject | Both come from code and the JVM, not from user data; only the test builds synthetic frames. No path from a key or prompt reaches them. |
 | 3 | Release logcat still shows the exception message via the platform's pre-handler | false | reject | The platform logs the crash before any app handler; the app adds no logging and this change adds none. Not caused or worsened by the change. |
-| 4 | Base `androidx.core.content.FileProvider` may crash startup | false | reject | The documented caveat is manifest-merge conflicts with another `FileProvider`. The merged release manifest holds our one `FileProvider` (the other provider is not a `FileProvider`), and the provider class loads lazily with a valid paths resource (config test). |
-| 5 | Same-millisecond filename race; partial file after a failed write | low | reject | The first crashing thread ends the process, so a same-millisecond second crash is not reachable in practice. A partial file needs a full disk; the fix (temp file plus rename) adds complexity. |
+| 4 | Base `androidx.core.content.FileProvider` may crash startup | medium | patch (story 1.12) | Wrongly rejected here. AndroidX says declaring the base class directly "is not reliable and will causes crashes on some devices"; the `v0.2.0` pre-release crashed on the owner's phone. Fixed in story 1.12 with the `LumynoidFileProvider` subclass, and `CrashReportTest` now asserts it. |
+| 5 | Same-millisecond filename race; partial file after a failed write | low | reject, then patch (story 1.12) | The same-process sequence number already prevents the race. The partial-file half was rejected here and fixed in story 1.12: `CrashStore.write` writes a `.part` file and renames it into place. |
 | 6 | `"%015d".format` is locale-sensitive; names sort as strings | low | patch | Real: Arabic-Indic digits sort differently, so Share could pick an older report and retention delete the newest. One-line fix: format with `Locale.ROOT`. Folded into the re-derivation (KEEP list in the Plan Change Log). |
 | 7 | `File.delete()` failures ignored | low | reject | Needs a filesystem fault on app-private files; fix adds branches and a result type. |
 | 8 | Throwing previous handler escapes the `try` | low | reject | The previous handler is the platform's, which does not throw; swallowing its exception would hide a real crash. |
@@ -123,7 +124,7 @@ The debug entry is a second launcher icon in debug builds only, so a tester need
 - `./gradlew :app:testDebugUnitTest` -- expected: all tests pass, including `CrashReportTest`
 - `./gradlew :core:test :llm:test :data:testDebugUnitTest :app:assembleDebug :app:assembleRelease` -- expected: BUILD SUCCESSFUL
 - `grep -rnE 'io\.ktor|java\.net' app/src/main/kotlin/dev/lusalhi/lumynoid/app/Crash*.kt` -- expected: no output
-- `"$ANDROID_HOME/build-tools/37.0.0/aapt2" dump xmltree app/build/outputs/apk/release/*.apk --file AndroidManifest.xml | grep -c CrashTest` -- expected: 0
+- `m=$("$ANDROID_HOME/build-tools/37.0.0/aapt2" dump xmltree app/build/outputs/apk/release/*.apk --file AndroidManifest.xml) && ! grep -q CrashTest <<<"$m"` -- expected: exit 0 (aapt2 ran and nothing matched)
 
 **Manual checks (if no CLI):**
 - On a phone with the debug APK: open the crash-test icon, let the app close, open Lumynoid, tap Share, and send the report to a note or mail app; read it and confirm it has frames and no key or prompt. Not runnable on this host (no device).
