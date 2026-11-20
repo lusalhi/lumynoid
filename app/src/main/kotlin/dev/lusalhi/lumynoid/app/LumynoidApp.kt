@@ -30,5 +30,11 @@ class AppGraph(application: Application) {
 }
 
 class LumynoidApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        // First, before the lazy graph: a crash while the graph builds must still be recorded (AD-25).
+        CrashHandler.install(this)
+    }
+
     val graph: AppGraph by lazy { AppGraph(this) }
 }
