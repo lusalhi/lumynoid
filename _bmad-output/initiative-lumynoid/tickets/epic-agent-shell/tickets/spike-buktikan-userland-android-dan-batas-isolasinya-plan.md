@@ -4,7 +4,7 @@ type: chore
 ticket: 1
 created: '2026-11-20'
 status: blocked
-blocked_reason: 'Belum ada HP arm64 API 37 terhubung untuk uji runtime; PRoot satu UID tidak lolos sebagai batas isolasi.'
+blocked_reason: 'Probe baca lulus di HP penguji; isolasi filesystem/egress, npm, dan lifecycle pada desain pengganti PRoot satu UID belum terbukti.'
 baseline_revision: 55d7b1b48bdd66dcaa765097aa95989bce205af0
 route: oneshot
 route_source: auto
@@ -46,5 +46,5 @@ context: []
 
 - Host: [build.sh](../../../../../tools/userland-spike/build.sh) membangun APK dari source yang dipin. Di host Linux arm64, gunakan `CC` berupa Clang arm64 dengan target `aarch64-linux-android29`, sysroot dan compiler-rt NDK r28c, linker LLD arm64, serta `AR=llvm-ar`. Build berhasil dengan Clang dan LLD 18; compiler NDK x86-64 melalui emulasi tidak dipakai untuk build akhir.
 - APK lokal: [`lumynoid-userland-probe.apk`](../../../../../build/diagnostics/userland/lumynoid-userland-probe.apk), 4,350,642 B, SHA-256 `2c5135fa99d28bd7653f89e3d1ce8b21d40f74e8dfad5f409bf587bd6d2edaba`. `aapt` melihat package terpisah tanpa permission manifest, minSdk 29, targetSdk 37, dan `arm64-v8a`. `apksigner verify` dan `zipalign -c -P 16 4` lulus. Kedua ELF native di APK adalah AArch64 dengan segmen LOAD 16 KiB-aligned; tidak ada segmen yang writable sekaligus executable. SHA-256 aset Alpine cocok dengan sumber.
-- Perangkat: `adb devices -l` tidak menemukan perangkat. Di HP arm64 API 37, pasang APK dengan `adb install -r build/diagnostics/userland/lumynoid-userland-probe.apk`; buka **Lumynoid Userland Probe** dan tekan **Run offline userland probe**. Simpan model/API, durasi ekstraksi dan baca, exit status serta hasilnya; yang diharapkan `exit 0` dan `3.22.8`. Hasil selain itu bukan lulus. Ini hanya menguji jalur baca tetap, bukan isolasi produksi.
-- Belum teruji: runtime W^X di HP, npm, batas proses/memori, pembersihan proses anak saat cancel, dan penegakan isolasi filesystem/egress pada desain baru. 2.2 tidak menunggu bukti itu; 2.5 tetap diblokir.
+- Perangkat (laporan penguji): ASUS `ASUS_AI2401_D`, Android API 36, APK diagnostik target SDK 37. Ekstraksi 202 ms; baca 103 ms, `exit 0`, hasil `3.22.8`. Jalur APK → PRoot/loader → baca fixture lulus di perangkat ini. Runtime pada perangkat API 37 belum diuji.
+- Belum teruji: npm, batas proses/memori, pembersihan proses anak saat cancel, dan penegakan isolasi filesystem/egress pada desain baru. 2.2 tidak menunggu bukti itu; 2.5 tetap diblokir.
