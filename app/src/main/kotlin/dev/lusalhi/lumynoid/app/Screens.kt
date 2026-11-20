@@ -82,32 +82,31 @@ fun ChatScreen(
 
         Box(Modifier.weight(1f)) {
             if (itemCount == 0) {
-                Text(
-                    stringResource(R.string.chat_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                )
-            }
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(state.events.filter { it.isVisible() }, key = { it.id }) { event -> EventRow(event) }
-                state.live?.let { item(key = "live") { Bubble(it.text, fromUser = false) } }
+                if (state.providerConfigured) {
+                    Text(
+                        stringResource(R.string.chat_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                    )
+                } else {
+                    SetupPrompt(R.string.setup_first, onOpenProvider, Modifier.align(Alignment.Center).padding(24.dp))
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(state.events.filter { it.isVisible() }, key = { it.id }) { event -> EventRow(event) }
+                    state.live?.let { item(key = "live") { Bubble(it.text, fromUser = false) } }
+                }
             }
         }
 
         if (!state.providerConfigured) {
-            Row(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(stringResource(R.string.chat_needs_provider), Modifier.weight(1f))
-                Button(onClick = onOpenProvider) { Text(stringResource(R.string.chat_open_provider)) }
-            }
+            // An empty chat already shows the prompt and its button above.
+            if (itemCount > 0) SetupBanner(onOpenProvider, Modifier.padding(16.dp))
         } else {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),

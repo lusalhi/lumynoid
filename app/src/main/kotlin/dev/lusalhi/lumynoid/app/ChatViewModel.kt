@@ -112,6 +112,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** First run finished: the app has its first provider, so chat starts in an empty new conversation, not the latest old one. */
+    fun providerReady() {
+        providerConfigured.value = true
+        newConversation()
+    }
+
     fun openConversations() { screen.value = Screen.CONVERSATIONS }
 
     fun closeConversations() { screen.value = Screen.CHAT }

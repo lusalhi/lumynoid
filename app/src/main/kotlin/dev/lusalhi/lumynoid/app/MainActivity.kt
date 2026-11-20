@@ -49,7 +49,12 @@ private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
         }
         Screen.PROVIDER -> {
             LaunchedEffect(Unit) { providers.refresh() }
-            ProvidersRoute(providers, canLeave = state.providerConfigured, onLeave = viewModel::closeProvider)
+            ProvidersRoute(
+                providers,
+                canLeave = state.providerConfigured,
+                onLeave = viewModel::closeProvider,
+                onFirstRunDone = viewModel::providerReady,
+            )
         }
         Screen.CHAT -> ChatScreen(
             state = state,
@@ -63,6 +68,8 @@ private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
             conversations = state.conversations,
             openId = state.conversationId,
             streamingId = state.streamingConversationId,
+            providerConfigured = state.providerConfigured,
+            onOpenProvider = viewModel::openProvider,
             onOpen = viewModel::openConversation,
             onNew = viewModel::newConversation,
             onRename = viewModel::renameConversation,

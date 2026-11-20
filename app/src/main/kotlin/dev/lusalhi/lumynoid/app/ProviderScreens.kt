@@ -42,7 +42,13 @@ import dev.lusalhi.lumynoid.core.ProviderSummary
 
 /** The provider screen: the saved providers, or the add/edit form while one is open. */
 @Composable
-fun ProvidersRoute(viewModel: ProvidersViewModel, canLeave: Boolean, onLeave: () -> Unit) {
+fun ProvidersRoute(
+    viewModel: ProvidersViewModel,
+    canLeave: Boolean,
+    onLeave: () -> Unit,
+    /** The first provider is connected and saved: chat starts in a new conversation. */
+    onFirstRunDone: () -> Unit,
+) {
     val state by viewModel.state.collectAsState()
     val form = state.form
     // Back closes the form first; with no provider saved there is nowhere to go back to.
@@ -53,11 +59,14 @@ fun ProvidersRoute(viewModel: ProvidersViewModel, canLeave: Boolean, onLeave: ()
         ProviderFormScreen(
             form = form,
             canCancel = state.providers.isNotEmpty(),
+            firstRun = state.isFirstRun,
             onEdit = viewModel::edit,
             onPreset = viewModel::choosePreset,
             onLoadModels = viewModel::loadModels,
             onTest = viewModel::testConnection,
             onSave = { viewModel.save(onFirstProviderActive = onLeave) },
+            onConnect = { viewModel.connect(onStarted = onFirstRunDone) },
+            onSaveAnyway = { viewModel.saveAnyway(onStarted = onFirstRunDone) },
             onCancel = viewModel::closeForm,
         )
     } else {
@@ -127,11 +136,14 @@ private fun ProviderListScreen(
 private fun ProviderFormScreen(
     form: ProviderFormState,
     canCancel: Boolean,
+    firstRun: Boolean,
     onEdit: ((ProviderFormState) -> ProviderFormState) -> Unit,
     onPreset: (ProviderPreset?) -> Unit,
     onLoadModels: () -> Unit,
     onTest: () -> Unit,
     onSave: () -> Unit,
+    onConnect: () -> Unit,
+    onSaveAnyway: () -> Unit,
     onCancel: () -> Unit,
 ) {
     Column(
@@ -144,10 +156,15 @@ private fun ProviderFormScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            stringResource(if (form.id == null) R.string.provider_add_title else R.string.provider_edit_title),
-            style = MaterialTheme.typography.headlineSmall,
-        )
+        if (firstRun) {
+            Text(stringResource(R.string.provider_welcome_title), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.provider_welcome_body), style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Text(
+                stringResource(if (form.id == null) R.string.provider_add_title else R.string.provider_edit_title),
+                style = MaterialTheme.typography.headlineSmall,
+            )
+        }
 
         if (form.id == null) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -162,6 +179,13 @@ private fun ProviderFormScreen(
                     selected = form.presetId == null,
                     onClick = { onPreset(null) },
                     label = { Text(stringResource(R.string.provider_custom)) },
+                )
+            }
+            if (firstRun) {
+                val preset = ProviderPresets.all.firstOrNull { it.id == form.presetId }
+                Text(
+                    if (preset != null) stringResource(R.string.provider_key_hint, preset.name) else stringResource(R.string.provider_key_hint_custom),
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
@@ -223,23 +247,42 @@ private fun ProviderFormScreen(
         )
         ModelChoices(form, onLoadModels) { id -> onEdit { it.copy(model = id) } }
 
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Switch(
-                checked = form.makeActive,
-                onCheckedChange = { v -> onEdit { it.copy(makeActive = v) } },
-                enabled = !form.alreadyActive,
-            )
-            Text(stringResource(R.string.provider_use_for_chat), style = MaterialTheme.typography.bodyLarge)
+        // The first provider is always the one used for chat, so the first run does not ask.
+        if (!firstRun) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Switch(
+                    checked = form.makeActive,
+                    onCheckedChange = { v -> onEdit { it.copy(makeActive = v) } },
+                    enabled = !form.alreadyActive,
+                )
+                Text(stringResource(R.string.provider_use_for_chat), style = MaterialTheme.typography.bodyLarge)
+            }
         }
 
         TestResult(form.test)
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = onTest, enabled = form.test != TestState.Running && !form.busy) {
-                Text(stringResource(R.string.provider_test))
+        if (firstRun) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onConnect,
+                    enabled = form.test != TestState.Running && !form.busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.provider_connect)) }
+                // A provider can fail the tiny test request and still chat fine, so a failed test never blocks.
+                if (form.test is TestState.Failed) {
+                    OutlinedButton(onClick = onSaveAnyway, enabled = !form.busy, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.provider_save_anyway))
+                    }
+                }
             }
-            Button(onClick = onSave, enabled = !form.busy) { Text(stringResource(R.string.provider_save)) }
-            if (canCancel) TextButton(onClick = onCancel) { Text(stringResource(R.string.provider_cancel)) }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = onTest, enabled = form.test != TestState.Running && !form.busy) {
+                    Text(stringResource(R.string.provider_test))
+                }
+                Button(onClick = onSave, enabled = !form.busy) { Text(stringResource(R.string.provider_save)) }
+                if (canCancel) TextButton(onClick = onCancel) { Text(stringResource(R.string.provider_cancel)) }
+            }
         }
     }
 }
