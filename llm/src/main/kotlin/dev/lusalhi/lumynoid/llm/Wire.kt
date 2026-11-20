@@ -66,7 +66,8 @@ internal fun joinUrl(baseUrl: String, path: String): String = baseUrl.trimEnd('/
 /**
  * POSTs the JSON [body] to [url] and hands a successful response to [readStream]. A failed status, an IO
  * error or any other exception (a decode error inside [readStream] included) becomes a typed
- * [LlmChunk.Failed]; only cancellation is rethrown. Call it inside the adapter's `flow`.
+ * [LlmChunk.Failed]. Cancellation and an exception thrown by the downstream collector propagate unchanged.
+ * Call it inside the adapter's `flow`.
  */
 internal suspend fun FlowCollector<LlmChunk>.streamPost(
     client: HttpClient,

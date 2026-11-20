@@ -81,6 +81,7 @@ Built by a Sonnet subagent; verified again by the main session (all Verification
 Additions beyond the plan's file list, each forced by testability or safety:
 - `crashRecordingHandler(store, env, now, previous)` lives in `CrashReport.kt` (pure) so "never throws, always chains" is tested on the JVM; `CrashHandler.kt` only wires Android values into it.
 - File names are `crash-<millis>-<seq>.txt` so two crashes in the same millisecond do not overwrite each other.
+- Superseded in story 1.12 (2026-11-20): file names are now `crash-<millis>.txt`, where the stamp is raised above the newest existing report's, so names keep write order, same-millisecond crashes never collide, and `newest()` stays the last write after a clock rollback. The sequence number is gone; `write` is synchronized.
 - `app/src/debug/res/values/strings.xml` holds the debug-only launcher label, so the release build carries no trace of it.
 - A failed Share shows a short Toast (`crash_share_failed`) and leaves the banner.
 
