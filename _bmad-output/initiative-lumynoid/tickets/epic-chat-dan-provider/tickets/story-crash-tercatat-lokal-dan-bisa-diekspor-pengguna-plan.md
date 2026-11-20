@@ -3,7 +3,7 @@ title: 'Crashes are recorded locally and the user can export them'
 type: feature
 ticket: '10'
 created: '2026-11-20'
-status: built
+status: done
 baseline_revision: 'b14467d530a3e3f9770d811aa00c20803376d124'
 route: full
 route_source: auto
@@ -95,6 +95,8 @@ Not done or not covered:
 ## Plan Change Log
 
 - 2026-11-20, review pass 1, intent_gap #1: the frozen intent put the banner on the chat screen only, but a user with no provider set up cannot leave the provider screen. Amended with the human's decision (banner on every screen). Known-bad state avoided: a first-run crash whose report cannot be shared. Code was reverted and re-derived. KEEP: `crashRecordingHandler(store, env, now, previous)` lives in `CrashReport.kt` and stays pure; report file names are `crash-<millis>-<seq>.txt` formatted with `Locale.ROOT` (locale digits broke sorting); a failed Share shows a short Toast and leaves the banner; the debug-only label string lives in `app/src/debug/res/values/strings.xml`; the 16 `CrashReportTest` cases (content, truncation, cause cycle, retention, same-millisecond names, clear, export, handler swallow-and-chain, `file_paths.xml` and manifest hygiene) stay as written; Share copies into `cacheDir/export` and builds the chooser with both `ClipData` and `FLAG_GRANT_READ_URI_PERMISSION`.
+
+Done 2026-11-20: marked done with the epic release. The debug-build phone check ("Crash test" launcher icon, reopen, Share) was never run; the owner accepted that as a debt outside story 1.12, since release builds have no crash trigger.
 
 ## Review Triage Log
 

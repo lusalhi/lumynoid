@@ -3,7 +3,7 @@ title: 'Answers finish in the background and can be stopped'
 type: feature
 ticket: '8'
 created: '2026-11-15'
-status: built
+status: done
 baseline_revision: '691a49f9c36f541789cf34043d8da1402642ce74'
 route: full
 route_source: auto
@@ -85,7 +85,7 @@ Not done here, by scope or environment:
 
 ## Plan Change Log
 
-Status note, 2026-11-20: set back to `built`. The owner's `v0.1.0` phone run (2026-11-16) recorded only the background-completion check. Stop and the revoked-key reason are still unrecorded; they are on the story 1.12 phone checklist, and this story goes to `done` once they pass.
+Status note, 2026-11-20: set back to `built`. The owner's `v0.1.0` phone run (2026-11-16) recorded only the background-completion check. Stop and the revoked-key reason are still unrecorded; they are on the story 1.12 phone checklist, and both passed on the owner's phone with the `v0.2.1` pre-release (2026-11-20), so the story is `done`.
 
 ## Review Triage Log
 
