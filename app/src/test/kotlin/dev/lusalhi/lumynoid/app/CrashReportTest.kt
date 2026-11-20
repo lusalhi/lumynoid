@@ -1,6 +1,7 @@
 package dev.lusalhi.lumynoid.app
 
 import java.io.File
+import java.io.IOException
 import java.util.Locale
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
@@ -8,6 +9,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -94,20 +96,38 @@ class CrashReportTest {
         assertTrue(files[3].exists())
     }
 
-    @Test fun clockMovedBackStillKeepsTheReportJustWritten() {
+    @Test fun clockMovedBackStillMakesTheNewReportTheNewest() {
         val dir = tempDir()
         val store = CrashStore(dir)
         (1000L..1004L).forEach { store.write("later$it", it) }
         val fresh = store.write("fresh", 1L)
-        assertTrue(fresh.exists())
+        assertEquals(fresh, store.newest())
+        assertEquals("fresh", store.newest()!!.readText())
         assertEquals(5, dir.list()!!.size)
-        assertFalse(File(dir, "crash-%015d-000.txt".format(Locale.ROOT, 1000L)).exists())
+        assertFalse(File(dir, "crash-%015d.txt".format(Locale.ROOT, 1000L)).exists())
     }
 
     @Test fun writeLeavesNoPartialFileBehind() {
         val dir = tempDir()
         CrashStore(dir).write("body", 7L)
         assertTrue(dir.list()!!.none { it.endsWith(".part") })
+    }
+
+    @Test fun failedRenameRemovesThePartialFile() {
+        val dir = tempDir()
+        // A non-empty directory holds the report's final name, so the rename fails after the .part file was written.
+        val taken = File(dir, "crash-%015d.txt".format(Locale.ROOT, 5L))
+        File(taken, "x").also { it.parentFile.mkdirs() }.writeText("x")
+        assertThrows(IOException::class.java) { CrashStore(dir).write("body", 5L) }
+        assertEquals(listOf(taken.name), dir.list()!!.toList())
+    }
+
+    @Test fun copyForExportFailsWhenTheReportIsMissing() {
+        assertThrows(IOException::class.java) { copyForExport(File(tempDir(), "gone.txt"), tempDir()) }
+    }
+
+    @Test fun storeRejectsANonPositiveLimit() {
+        assertThrows(IllegalArgumentException::class.java) { CrashStore(tempDir(), 0) }
     }
 
     @Test fun sameMillisecondCrashesDoNotOverwrite() {

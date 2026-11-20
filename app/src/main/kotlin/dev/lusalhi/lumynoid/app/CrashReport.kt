@@ -5,7 +5,6 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.time.Instant
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicInteger
 
 /*
  * Local crash records (AD-25). Pure Kotlin, no android.*, so every rule here runs in JVM tests.
@@ -62,16 +61,20 @@ fun formatCrashReport(env: CrashEnv, timeMillis: Long, threadName: String, throw
     return out.toString()
 }
 
-/** A directory of crash reports. Names sort by time, so the newest is the last name. */
+/** A directory of crash reports. Names sort in write order, so the newest is the last name. */
 class CrashStore(private val dir: File, private val maxReports: Int = MAX_REPORTS) {
-    private val sequence = AtomicInteger()
+    init {
+        require(maxReports >= 1) { "maxReports must be at least 1" }
+    }
 
     /** Writes [text] as a new report, then keeps only the newest [maxReports]. */
+    @Synchronized
     fun write(text: String, nowMillis: Long): File {
         dir.mkdirs()
-        // Fixed-width, Locale.ROOT digits so names sort correctly as strings; the sequence keeps two crashes in the
-        // same millisecond from overwriting each other.
-        val name = String.format(Locale.ROOT, "crash-%015d-%03d.txt", nowMillis, sequence.getAndIncrement() % 1000)
+        // The stamp is always above the newest report's, so names keep the write order even when the clock moved back
+        // or two crashes share a millisecond. Fixed-width Locale.ROOT digits make the names sort as strings.
+        val newestStamp = reports().lastOrNull()?.let(::stampOf) ?: -1L
+        val name = String.format(Locale.ROOT, "crash-%015d.txt", maxOf(nowMillis, newestStamp + 1))
         val file = File(dir, name)
         // Write under a name reports() ignores, then rename, so a failed write never leaves a partial report to offer.
         val partial = File(dir, "$name.part")
@@ -82,9 +85,7 @@ class CrashStore(private val dir: File, private val maxReports: Int = MAX_REPORT
             partial.delete()
             throw e
         }
-        // Prune by name order, but never the report just written: after the clock moves back its name sorts old.
-        val others = reports().filter { it != file }
-        others.take((others.size - (maxReports - 1)).coerceAtLeast(0)).forEach { it.delete() }
+        reports().dropLast(maxReports).forEach { it.delete() }
         return file
     }
 
@@ -93,6 +94,8 @@ class CrashStore(private val dir: File, private val maxReports: Int = MAX_REPORT
     fun clear() {
         reports().forEach { it.delete() }
     }
+
+    private fun stampOf(report: File): Long = report.name.removePrefix("crash-").substringBefore('.').toLongOrNull() ?: 0L
 
     private fun reports(): List<File> =
         dir.listFiles { f -> f.isFile && f.name.startsWith("crash-") && f.name.endsWith(".txt") }

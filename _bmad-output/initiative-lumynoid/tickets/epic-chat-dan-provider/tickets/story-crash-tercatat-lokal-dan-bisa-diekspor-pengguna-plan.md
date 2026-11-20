@@ -65,7 +65,7 @@ context:
 - [x] `LumynoidApp.kt`, `MainActivity.kt`, `Screens.kt`, `strings.xml` -- install on start, show the banner above every screen, wire Share and Dismiss -- user-facing export
 - [x] `AndroidManifest.xml`, `res/xml/file_paths.xml` -- one `FileProvider` with a single `cache-path` named `export`, path `export/` -- convention
 - [x] `app/src/debug/...` -- debug manifest adds an exported launcher activity labelled for crash testing that throws in `onCreate` -- lets the tester trigger a crash without adb
-- [x] `app/src/test/kotlin/dev/lusalhi/lumynoid/app/CrashReportTest.kt` -- cover every I/O row that runs on the JVM (Share, Dismiss and copy-failure rows need Compose or instrumented tests the repo lacks; see Review Triage row 9), plus a check that `file_paths.xml` has exactly one `cache-path` `export/` and the main manifest declares the provider once with authority `${applicationId}.files` -- proves hygiene and the convention
+- [x] `app/src/test/kotlin/dev/lusalhi/lumynoid/app/CrashReportTest.kt` -- cover every I/O row that runs on the JVM, including copy failure (the UI-only parts, banner, chooser, grant and Toast, need Compose or instrumented tests the repo lacks; see Review Triage row 9), plus a check that `file_paths.xml` has exactly one `cache-path` `export/` and the main manifest declares the provider once with authority `${applicationId}.files` -- proves hygiene and the convention
 
 **Acceptance Criteria:**
 - Given a throwable with a key and prompt text in its message and in its cause's message, when the report is formatted, then neither string appears and the throwable class names and frames do.
@@ -123,7 +123,7 @@ The debug entry is a second launcher icon in debug builds only, so a tester need
 - `./gradlew :app:testDebugUnitTest` -- expected: all tests pass, including `CrashReportTest`
 - `./gradlew :core:test :llm:test :data:testDebugUnitTest :app:assembleDebug :app:assembleRelease` -- expected: BUILD SUCCESSFUL
 - `grep -rnE 'io\.ktor|java\.net' app/src/main/kotlin/dev/lusalhi/lumynoid/app/Crash*.kt` -- expected: no output
-- `"$ANDROID_HOME/build-tools/37.0.0/aapt2" dump xmltree app/build/outputs/apk/release/*.apk --file AndroidManifest.xml | grep -q CrashTest; test $? -eq 1` -- expected: exit 0 (no match)
+- `m=$("$ANDROID_HOME/build-tools/37.0.0/aapt2" dump xmltree app/build/outputs/apk/release/*.apk --file AndroidManifest.xml) && ! grep -q CrashTest <<<"$m"` -- expected: exit 0 (aapt2 ran and nothing matched)
 
 **Manual checks (if no CLI):**
 - On a phone with the debug APK: open the crash-test icon, let the app close, open Lumynoid, tap Share, and send the report to a note or mail app; read it and confirm it has frames and no key or prompt. Not runnable on this host (no device).

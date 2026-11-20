@@ -34,9 +34,11 @@ Oneshot: the only code change is two lines in `app/build.gradle.kts`; everything
 
 Built 2026-11-20: version bump done and verified (self-test 19 cases, full Gradle command BUILD SUCCESSFUL, release APK holds only `lib/arm64-v8a`). The docs, live and phone tasks stay open and owner-gated; status `built` means the code part is ready, not that the story is done. Nothing pushed.
 
+Superseded decision, 2026-11-20: the frozen Intent names `v0.2.0` / `versionCode` 2. That pre-release was published and crashed on the owner's phone; on the owner's "crash" instruction, then "fix sekalian temuan cubic", the release is now `v0.2.1` / `versionCode` 3, and the Tasks and Verification above use it. `v0.2.0` stays on GitHub Releases as a pre-release.
+
 Phone result, 2026-11-20: the owner reported a crash with the `v0.2.0` pre-release. Cubic's PR #6 review had flagged the manifest registering `androidx.core.content.FileProvider` directly; AndroidX says that "is not reliable and will causes crashes on some devices", so story 1.10's rejection of that finding was wrong. Fix: `LumynoidFileProvider` subclass registered in the manifest, `CrashReportTest` asserts it, and the version goes to `v0.2.1` / `versionCode` 3. The crash cause on the owner's phone is not yet confirmed to be the provider; a crash report or logcat would settle it.
 
-Same fix commit also takes Cubic's other code findings: `CrashStore.write` writes a `.part` file and renames it and never prunes the report just written (clock moved back); `connect` keeps the form open with the user's edits when they changed it during the test, tied to the saved provider; `streamPost` rethrows a downstream collector's exception instead of emitting `Failed` after it (new test fails without the fix); `CrashReportTest` uses `TemporaryFolder`. Docs corrected: story 1.8 is back to `built` (Stop and revoked-key unrecorded), 1.9 and 1.10 checklists ticked, stale notes and line references fixed, the epic Done-when records the FGS deviation.
+Same fix commit also takes Cubic's other code findings: `CrashStore.write` writes a `.part` file and renames it, and stamps each name above the newest report's so `newest()` is always the last write even when the clock moved back; `connect` keeps the form open with the user's edits (any field, name included) when they changed it during the test, tied to the saved provider; `streamPost` rethrows a downstream collector's exception instead of emitting `Failed` after it (new test fails without the fix); `CrashReportTest` uses `TemporaryFolder`. Docs corrected: story 1.8 is back to `built` (Stop and revoked-key unrecorded), 1.9 and 1.10 checklists ticked, stale notes and line references fixed, the epic Done-when records the FGS deviation.
 
 ## Review Triage Log
 
@@ -53,7 +55,7 @@ Pass 1, quick lens (subagent, same model level). 4 findings: high 0, medium 0, l
 
 - [x] `app/build.gradle.kts` -- `versionCode = 2`, `versionName = "v0.2.0"`
 - [ ] Docs commit -- mark 1.10, 1.11 and this story done in the tree and plans after the live proof
-- [ ] Live (owner go-ahead each step): push branch, PR to `main`, merge, `git tag v0.2.0 origin/main`, push tag, owner approves environment `release`, verify the pre-release holds `lumynoid-v0.2.0.apk` + `SHA256SUMS` and the checksum matches
+- [ ] Live (owner go-ahead each step): push branch, PR to `main`, merge, `git tag v0.2.1 origin/main`, push tag, owner approves environment `release`, verify the pre-release holds `lumynoid-v0.2.1.apk` + `SHA256SUMS` and the checksum matches
 - [ ] Owner on phone, APK from GitHub Releases, per epic Done-when: add provider (OpenAI-compatible preset, custom URL, Anthropic) with connection test showing result and reason; streaming markdown + code block chat; conversation in the list and continues after the app is closed; install to first answer without terminal or leaving the app; answer finishes and is saved with the app in background; plus story 1.8's owed checks: Stop ends an answer with "Stopped.", and a revoked key shows its reason
 
 ## Verification
@@ -61,7 +63,7 @@ Pass 1, quick lens (subagent, same model level). 4 findings: high 0, medium 0, l
 **Commands:**
 - `python3 .github/scripts/check_release.py --self-test` -- expected: exit 0
 - `./gradlew :app:checkDependencyPolicy :core:test :llm:test :data:testDebugUnitTest :app:assembleDebug :app:assembleRelease` -- expected: BUILD SUCCESSFUL
-- `python3 .github/scripts/check_release.py tag --tag v0.2.0 --main origin/main` (after local tag, after merge) -- expected: exit 0
+- `python3 .github/scripts/check_release.py tag --tag v0.2.1 --main origin/main` (after local tag, after merge) -- expected: exit 0
 
 **Manual checks:**
 - Owner runs every Done-when check on the phone and reports pass/fail per check.

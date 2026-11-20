@@ -240,7 +240,7 @@ class ProvidersViewModel(application: Application) : AndroidViewModel(applicatio
                 ConnectOutcome.Started -> {
                     // The tested settings are saved. If the user edited the form while the test ran, keep it open
                     // with those edits, tied to the saved provider so a later Save updates it instead of adding another.
-                    val edited = _state.value.form?.let { !isFresh(it, sent) } == true
+                    val edited = _state.value.form?.let { it.toDraft() != sent } == true
                     val overview = reloadOverview(closeForm = !edited)
                     if (edited) {
                         patch { it.copy(test = TestState.Idle, busy = false, id = it.id ?: overview.providers.singleOrNull()?.id) }

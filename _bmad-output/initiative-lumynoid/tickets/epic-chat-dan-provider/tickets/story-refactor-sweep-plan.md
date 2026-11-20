@@ -26,7 +26,7 @@ context:
 
 ## Boundaries & Constraints
 
-**Always:** `:core` stays free of android, ktor and room. Persisted names (`@SerialName`, Room entities, `data/schemas/**`) are untouched. Keep the `try/catch` in `streamPost`, called inside each adapter's `flow`, so a `wireJson` decode error still maps to `Server`. Keep `before.active == null` in `ProvidersViewModel.save`. Keep `loadModels`' narrow freshness check separate from `isFresh`. Do not touch `ChatViewModel`'s `visibleLive` logic.
+**Always:** `:core` stays free of android, ktor and room. Persisted names (`@SerialName`, Room entities, `data/schemas/**`) are untouched. Keep the `try/catch` inside each adapter's `flow` so a `wireJson` decode error still maps to `Server`. Keep `before.active == null` in `ProvidersViewModel.save`. Keep `loadModels`' narrow freshness check separate from `isFresh`. Do not touch `ChatViewModel`'s `visibleLive` logic.
 
 **Never:** No new behavior, UI text, navigation or Room schema change. No window-inset modifier extraction (Compose modifier order, no test coverage), no `LlmError`/`FailureReason` string-mapping merge, no deletion of the unused `ToolsUnsupported`, `MalformedToolCall` and `supportsTools` placeholders (epic-hemat-kuota). The two `deferred-work.md` entries are behavior or hand-off items, not part of this sweep.
 
@@ -60,6 +60,8 @@ context:
 - Given the adapters, when a stream cuts off, a decode error occurs, or HTTP fails, then the same `LlmError` kinds are emitted as before (existing tests cover it).
 
 ## Implementation Notes
+
+Deviation from the frozen Always line (recorded outside the frozen block, 2026-11-20): the shared `streamPost` holds the `try/catch`, and each adapter calls it inside its `flow`; a `wireJson` decode error still maps to `Server`. The frozen wording was left as approved.
 
 Built by a Sonnet subagent. Verified (also re-run on my side after one correction): `./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease :app:checkDependencyPolicy` is BUILD SUCCESSFUL; `data/schemas`, `app/src/main/res` and `AndroidManifest.xml` are unchanged from baseline. Core gained one test (`byId`); the 28 tests moved out of `OpenAiCompatibleAdapterTest.kt` kept their names.
 
