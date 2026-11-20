@@ -3,7 +3,7 @@ title: 'First run: from install to first answer without leaving the app'
 type: feature
 ticket: '9'
 created: '2026-11-20'
-status: built
+status: done
 baseline_revision: 'c22bf3b941f6ed7d3bada75895b3d7b24ae4da9b'
 route: full
 route_source: auto
