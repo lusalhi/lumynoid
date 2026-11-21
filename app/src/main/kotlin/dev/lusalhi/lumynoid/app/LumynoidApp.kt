@@ -21,7 +21,11 @@ import kotlinx.coroutines.SupervisorJob
 
 /** Composition root (AD-1): the only place adapters are assembled, by hand and without a DI framework. */
 class AppGraph(application: Application) {
-    val data = LumynoidData(application)
+    val data: LumynoidData = LumynoidData(
+        application,
+        deleteWhenIdle = { id, delete -> runner.deleteWhenIdle(id, delete) },
+        deleteWorkspace = { id -> UserlandRuntime.deleteWorkspace(application, id) },
+    )
 
     private val httpClient = HttpClient(OkHttp) {
         install(HttpTimeout) {

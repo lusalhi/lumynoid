@@ -11,10 +11,16 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.nio.channels.FileChannel
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardOpenOption.READ
+import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.UUID
@@ -26,19 +32,24 @@ internal class EventBlobStore(private val root: File) {
         val ref = EventBlobRef(UuidV7.next(), bytes.size, sha256(bytes))
         val directory = Files.createDirectories(directory(conversationId).toPath())
         val temporary = Files.createTempFile(directory, ".event-", ".part")
+        val published = directory.resolve(ref.id)
+        var durable = false
         return try {
             FileOutputStream(temporary.toFile()).use { output ->
                 output.write(bytes)
                 output.fd.sync()
             }
-            Files.move(temporary, directory.resolve(ref.id), ATOMIC_MOVE)
+            Files.move(temporary, published, ATOMIC_MOVE)
             // Publish directory entries before SQLite can commit a reference to the file.
             FileChannel.open(directory, READ).use { it.force(true) }
             FileChannel.open(directory.parent, READ).use { it.force(true) }
             FileChannel.open(directory.parent.parent, READ).use { it.force(true) }
+            durable = true
             ref
         } finally {
-            Files.deleteIfExists(temporary)
+            // The reference has not escaped yet, so no committed row can point at these files.
+            runCatching { Files.deleteIfExists(temporary) }
+            if (!durable) runCatching { Files.deleteIfExists(published) }
         }
     }
 
@@ -51,8 +62,46 @@ internal class EventBlobStore(private val root: File) {
         return bytes.decodeToString(throwOnInvalidSequence = true)
     }
 
-    private fun directory(conversationId: String): File =
-        File(root, Base64.getUrlEncoder().withoutPadding().encodeToString(conversationId.encodeToByteArray()))
+    /** Removes a blob whose event row never committed; other blobs stay untouched. */
+    fun discard(conversationId: String, ref: EventBlobRef) {
+        requireRootIsNotSymlink()
+        require(UUID.fromString(ref.id).toString() == ref.id)
+        val directory = directory(conversationId).toPath()
+        if (Files.notExists(directory, LinkOption.NOFOLLOW_LINKS)) return
+        check(Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) { "Invalid conversation blob directory" }
+        if (Files.deleteIfExists(directory.resolve(ref.id))) FileChannel.open(directory, READ).use { it.force(true) }
+    }
+
+    /** Removes only this conversation's blob tree, never following symbolic links; absent trees are fine. */
+    fun deleteConversation(conversationId: String) {
+        requireRootIsNotSymlink()
+        val directory = directory(conversationId).toPath()
+        if (Files.notExists(directory, LinkOption.NOFOLLOW_LINKS)) return
+        Files.walkFileTree(directory, object : SimpleFileVisitor<Path>() {
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                Files.delete(file)
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult {
+                if (exc != null) throw exc
+                Files.delete(dir)
+                return FileVisitResult.CONTINUE
+            }
+        })
+        // Persist the removed directory entry in the blob root.
+        FileChannel.open(directory.parent, READ).use { it.force(true) }
+    }
+
+    /** A symlinked root could point cleanup outside the app's storage; the encoded leaf below it is safe to unlink. */
+    private fun requireRootIsNotSymlink() {
+        check(!Files.isSymbolicLink(root.toPath())) { "Refusing to touch a symlinked blob root: $root" }
+    }
+
+    private fun directory(conversationId: String): File {
+        require(conversationId.isNotEmpty()) { "Missing conversation ID" }
+        return File(root, Base64.getUrlEncoder().withoutPadding().encodeToString(conversationId.encodeToByteArray()))
+    }
 
     private fun sha256(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)

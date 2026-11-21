@@ -69,6 +69,8 @@ data class ToolOutcome(
     val artifacts: List<ToolArtifact> = emptyList(),
     val sourceUrls: List<String> = emptyList(),
     val truncationHint: String? = null,
+    /** Null when the tool did not record whether its operation succeeded (including legacy results). */
+    val succeeded: Boolean? = null,
 )
 
 interface Tool {

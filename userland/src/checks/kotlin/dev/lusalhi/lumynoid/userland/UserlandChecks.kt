@@ -46,7 +46,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -149,6 +151,7 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
             assertTrue(fixture.terminal(task) is TaskEvent.TaskFinished)
             val result = fixture.results(task).single()
             assertEquals(code, result.exitCode)
+            assertEquals(code == 0, result.succeeded)
             if (scenario == "deadline") assertEquals("deadline", result.output)
             assertTrue("Peer ran before cleanup in $scenario", fixture.terminal(peer) is TaskEvent.TaskFinished)
             fixture.assertScratchEmpty()
@@ -247,6 +250,8 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         assertTrue(fixture.terminal(success) is TaskEvent.TaskFinished)
         val (created, read) = fixture.results(success)
         assertEquals("src/hello.txt", created.artifacts.single().path)
+        assertEquals(true, created.succeeded)
+        assertEquals(true, read.succeeded)
         val reply = requireNotNull(parseToolArguments(read.output))
         assertEquals(text, reply.getValue("content").jsonPrimitive.content)
         assertEquals(sha256(text), reply.getValue("sha256").jsonPrimitive.content)
@@ -258,7 +263,7 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
             val results = fixture.results(task)
             assertTrue(scenario, terminal is TaskEvent.TaskFailed || results.size == 1)
             assertTrue(scenario, results.all {
-                it.artifacts.isEmpty() && parseToolArguments(it.output)?.get("content") == null &&
+                it.succeeded == false && it.artifacts.isEmpty() && parseToolArguments(it.output)?.get("content") == null &&
                     "other-workspace-secret" !in it.output && secret.toString() !in it.output
             })
         }
@@ -353,10 +358,13 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         assertEquals(3, results.size)
         val created = results[0].outcome
         assertEquals(created.output, listOf(ToolArtifact("input.json", "text/plain")), created.artifacts)
+        assertEquals(true, created.succeeded)
         assertEquals(source, root.resolve("input.json").toFile().readText())
         assertEquals(results[1].outcome.output, 0, results[1].outcome.exitCode)
+        assertEquals(true, results[1].outcome.succeeded)
         val replayed = TaskEventJson.decode(TaskEventJson.encode(results[2])) as TaskEvent.ToolResult
         assertEquals(replayed.outcome.output, 0, replayed.outcome.exitCode)
+        assertEquals(true, replayed.outcome.succeeded)
         assertEquals(listOf(ToolArtifact("formatted.json", "application/json")), replayed.outcome.artifacts)
         assertEquals(
             "{\n  \"n\": 9007199254740993,\n  \"n\": -0,\n  \"s\": \"hello,  world\",\n  \"x\": [\n    true,\n    null\n  ]\n}\n",
@@ -370,10 +378,11 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         fixture.terminal(bad)
         val badOutcome = fixture.results(bad).single()
         assertTrue(badOutcome.output, badOutcome.exitCode != null && badOutcome.exitCode != 0)
+        assertEquals(false, badOutcome.succeeded)
         assertTrue(badOutcome.artifacts.isEmpty())
         val collision = fixture.submit(runner, "collision")
         fixture.terminal(collision)
-        assertTrue(fixture.results(collision).all { it.artifacts.isEmpty() })
+        assertTrue(fixture.results(collision).all { it.artifacts.isEmpty() && it.succeeded == false })
         val peerTask = fixture.submit(runner, "peer-format", "peer")
         fixture.terminal(peerTask)
         assertTrue(fixture.results(peerTask).all { it.artifacts.isEmpty() })
@@ -387,13 +396,157 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         Files.write(entrypoint, "throw Error('unverified package')".toByteArray())
         val tampered = fixture.submit(runner, "tampered")
         fixture.terminal(tampered)
-        assertTrue(fixture.results(tampered).single().artifacts.isEmpty())
+        assertTrue(fixture.results(tampered).single().let { it.artifacts.isEmpty() && it.succeeded == false })
         assertTrue(Files.notExists(root.resolve("tampered.json")))
         val repair = fixture.submit(runner, "repair")
         fixture.terminal(repair)
         assertEquals("repaired.json", fixture.results(repair).last().artifacts.single().path)
+        assertEquals(true, fixture.results(repair).last().succeeded)
         assertEquals(root.resolve("formatted.json").toFile().readText(), root.resolve("repaired.json").toFile().readText())
         fixture.assertScratchEmpty()
+    }
+
+    suspend fun workspaceDeletionIsScopedAndNeverFollowsLinks() = withFixture { fixture ->
+        val runner = fixture.runner(
+            mapOf(
+                "install" to listOf(setup),
+                "seed" to listOf(
+                    create("data.txt", "workspace-data"),
+                    call("shell_npm_install", "package" to "@lumynoid/json-tools"),
+                ),
+                "peer-seed" to listOf(create("secret.txt", "peer-secret")),
+                "peer-after" to listOf(create("after.txt", "still-usable")),
+            ),
+        )
+        fixture.install(runner)
+        val rootfs = requireNotNull(fixture.installer.locate())
+        val seeded = fixture.submit(runner, "seed")
+        assertTrue(fixture.terminal(seeded) is TaskEvent.TaskFinished)
+        assertTrue(fixture.results(seeded).all { it.succeeded == true })
+        val peerSeeded = fixture.submit(runner, "peer-seed", "peer")
+        assertTrue(fixture.terminal(peerSeeded) is TaskEvent.TaskFinished)
+
+        val peerWorkspace = fixture.workspace.parent.resolve("peer")
+        val installs = fixture.workspace.parent.resolveSibling("coding-installs")
+        val peerInstall = Files.createDirectories(installs.resolve("peer/pinned"))
+        Files.write(peerInstall.resolve("index.js"), "peer-install".toByteArray())
+        Files.createSymbolicLink(fixture.workspace.resolve("peer-file-link"), peerWorkspace.resolve("secret.txt"))
+        Files.createSymbolicLink(fixture.workspace.resolve("peer-dir-link"), peerWorkspace)
+        Files.createSymbolicLink(fixture.workspace.resolve("rootfs-link"), rootfs)
+        val nested = Files.createDirectory(fixture.workspace.resolve("nested"))
+        Files.createSymbolicLink(nested.resolve("escape"), peerWorkspace)
+
+        fixture.runtime.deleteWorkspace("workspace")
+        assertTrue(Files.notExists(fixture.workspace, NOFOLLOW_LINKS))
+        assertTrue(Files.notExists(installs.resolve("workspace"), NOFOLLOW_LINKS))
+        assertEquals("peer-secret", peerWorkspace.resolve("secret.txt").toFile().readText())
+        assertEquals("peer-install", peerInstall.resolve("index.js").toFile().readText())
+        assertTrue(Files.isDirectory(rootfs, NOFOLLOW_LINKS))
+        assertNotNull(fixture.installer.locate())
+        assertTrue(Files.isDirectory(fixture.workspace.parent, NOFOLLOW_LINKS))
+        fixture.assertScratchEmpty()
+        val after = fixture.submit(runner, "peer-after", "peer")
+        assertTrue(fixture.terminal(after) is TaskEvent.TaskFinished)
+        assertEquals("still-usable", peerWorkspace.resolve("after.txt").toFile().readText())
+
+        fixture.runtime.deleteWorkspace("workspace") // Missing trees stay a no-op.
+        for (id in listOf("", "../peer", "peer/..", "a/b", ".hidden", "-lead", "bad:id", "two words", "x".repeat(129))) {
+            try {
+                fixture.runtime.deleteWorkspace(id)
+                throw AssertionError("Accepted invalid workspace ID: $id")
+            } catch (_: IllegalArgumentException) {
+            }
+        }
+        assertEquals("peer-secret", peerWorkspace.resolve("secret.txt").toFile().readText())
+
+        // Non-directory entries are refused and preserved, never followed.
+        val linked = fixture.workspace.parent.resolve("linked")
+        Files.createSymbolicLink(linked, peerWorkspace)
+        try {
+            fixture.runtime.deleteWorkspace("linked")
+            throw AssertionError("Deleted a symlinked workspace entry")
+        } catch (_: IOException) {
+        }
+        assertTrue(Files.isSymbolicLink(linked))
+        val flat = Files.write(fixture.workspace.parent.resolve("flat-file"), "keep".toByteArray())
+        try {
+            fixture.runtime.deleteWorkspace("flat-file")
+            throw AssertionError("Deleted a non-directory workspace entry")
+        } catch (_: IOException) {
+        }
+        assertEquals("keep", flat.toFile().readText())
+        assertEquals("peer-secret", peerWorkspace.resolve("secret.txt").toFile().readText())
+
+        // Symlinked roots are refused without touching their targets.
+        val base = fixture.workspace.parent.parent
+        val realRoot = Files.createDirectory(base.resolve("real-root"))
+        val victim = Files.createDirectory(realRoot.resolve("victim"))
+        val rootLink = base.resolve("root-link")
+        Files.createSymbolicLink(rootLink, realRoot)
+        val linkedRootRuntime = UserlandRuntime(
+            fixture.native, rootLink, fixture.scratch, fixture.installer, fixture.processes,
+            "https://example.invalid/unused", target.assets,
+        )
+        try {
+            linkedRootRuntime.deleteWorkspace("victim")
+            throw AssertionError("Followed a symlinked workspace root")
+        } catch (_: IOException) {
+        }
+        assertTrue(Files.isDirectory(victim, NOFOLLOW_LINKS))
+
+        val otherBase = Files.createDirectory(base.resolve("other"))
+        Files.createDirectory(otherBase.resolve("workspaces"))
+        val realInstalls = Files.createDirectory(otherBase.resolve("real-installs"))
+        val keptInstall = Files.createDirectory(realInstalls.resolve("victim"))
+        Files.createSymbolicLink(otherBase.resolve("coding-installs"), realInstalls)
+        val linkedInstallRuntime = UserlandRuntime(
+            fixture.native, otherBase.resolve("workspaces"), fixture.scratch, fixture.installer, fixture.processes,
+            "https://example.invalid/unused", target.assets,
+        )
+        try {
+            linkedInstallRuntime.deleteWorkspace("victim")
+            throw AssertionError("Followed a symlinked install root")
+        } catch (_: IOException) {
+        }
+        assertTrue(Files.isDirectory(keptInstall, NOFOLLOW_LINKS))
+    }
+
+    suspend fun companionDeleteWorkspaceUsesProductionRootsOffline() {
+        val files = target.filesDir.toPath()
+        val workspaces = files.resolve("workspaces")
+        val installs = files.resolve("coding-installs")
+        val id = "offline-delete-check"
+        val absentRoots = listOf(workspaces, installs).filter { Files.notExists(it, NOFOLLOW_LINKS) }
+        try {
+            // Absent roots are never created, including for invalid IDs.
+            UserlandRuntime.deleteWorkspace(target, id)
+            try {
+                UserlandRuntime.deleteWorkspace(target, "../escape")
+                throw AssertionError("Accepted invalid workspace ID")
+            } catch (_: IllegalArgumentException) {
+            }
+            absentRoots.forEach { assertTrue(Files.notExists(it, NOFOLLOW_LINKS)) }
+
+            val workspace = Files.createDirectories(workspaces.resolve(id))
+            Files.write(workspace.resolve("data.txt"), "offline-data".toByteArray())
+            Files.createSymbolicLink(workspace.resolve("escape"), files)
+            val install = Files.createDirectories(installs.resolve(id).resolve("pinned"))
+            Files.write(install.resolve("index.js"), "offline-install".toByteArray())
+            val peer = Files.createDirectories(workspaces.resolve("peer-offline"))
+            Files.write(peer.resolve("keep.txt"), "peer".toByteArray())
+
+            UserlandRuntime.deleteWorkspace(target, id)
+            assertTrue(Files.notExists(workspace, NOFOLLOW_LINKS))
+            assertTrue(Files.notExists(installs.resolve(id), NOFOLLOW_LINKS))
+            assertEquals("peer", peer.resolve("keep.txt").toFile().readText())
+            assertTrue(Files.isDirectory(files, NOFOLLOW_LINKS))
+            UserlandRuntime.deleteWorkspace(target, id) // Idempotent.
+        } finally {
+            deleteWorkspaceTree(workspaces, id)
+            deleteWorkspaceTree(installs, id)
+            deleteWorkspaceTree(workspaces, "peer-offline")
+            absentRoots.forEach { runCatching { Files.delete(it) } }
+        }
     }
 
     private suspend fun withFixture(test: suspend (Fixture) -> Unit) {
@@ -407,10 +560,10 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
 
     private inner class Fixture {
         private val spec = RootfsSpec.load(target.assets)
-        private val native = Paths.get(target.applicationInfo.nativeLibraryDir)
+        val native = Paths.get(target.applicationInfo.nativeLibraryDir)
         private val files = Files.createTempDirectory(target.filesDir.toPath(), "userland-test-")
         private val rootfsDirectory = files.resolve("rootfs")
-        private val scratch = files.resolve("scratch")
+        val scratch = files.resolve("scratch")
         val workspace: Path = Files.createDirectories(files.resolve("workspaces/workspace"))
         private val pidFiles = listOf(workspace.resolve("direct.pid"), workspace.resolve("detached.pid"))
         val opens = AtomicInteger()
@@ -418,7 +571,7 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         @Volatile var sourceMode = SourceMode.VALID
         val processes = UserlandProcesses(native.resolve("libuserland_supervisor.so"))
         val installer = RootfsInstaller(rootfsDirectory, spec, RootfsSource(::transfer), processes)
-        private val runtime = UserlandRuntime(
+        val runtime = UserlandRuntime(
             native, workspace.parent, scratch, installer, processes, "https://example.invalid/${spec.asset}", target.assets,
         )
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -549,8 +702,8 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
                     return whileActive()
                 }
                 return when (val result = session.await(timeout)) {
-                    ProcessResult.Deadline -> ToolOutcome("deadline")
-                    is ProcessResult.Exited -> ToolOutcome(result.output, exitCode = result.code)
+                    ProcessResult.Deadline -> ToolOutcome("deadline", succeeded = false)
+                    is ProcessResult.Exited -> ToolOutcome(result.output, exitCode = result.code, succeeded = result.code == 0)
                 }
             }
         }

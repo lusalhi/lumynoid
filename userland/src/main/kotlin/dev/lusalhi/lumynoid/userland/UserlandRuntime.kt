@@ -44,7 +44,7 @@ class UserlandRuntime internal constructor(
 ) : ToolProvider, ToolSessionRelease {
     private val codingWorkspace = CodingWorkspace(workspaceRoot)
     private val codingRuntime = CodingRuntime(
-        this, codingWorkspace, assets, workspaceRoot.resolveSibling("coding-installs"), scratchRoot,
+        this, codingWorkspace, assets, installRoot(workspaceRoot), scratchRoot,
     )
     private val codingTools = CodingTools(codingWorkspace, codingRuntime)
 
@@ -52,17 +52,19 @@ class UserlandRuntime internal constructor(
 
     override suspend fun release(context: ToolContext) = processes.release(context.taskId)
 
+    internal suspend fun deleteWorkspace(id: String) = deleteWorkspace(workspaceRoot, id)
+
     suspend fun operate(operation: RuntimeOperation, context: ToolContext): ToolOutcome = withContext(Dispatchers.IO) {
         currentCoroutineContext().ensureActive()
         val session = try {
             startGuest(context, operation.argv, operation.cwd)
         } catch (e: UserlandSetupRequired) {
-            return@withContext ToolOutcome(e.message.orEmpty(), target = operation.wireName)
+            return@withContext ToolOutcome(e.message.orEmpty(), target = operation.wireName, succeeded = false)
         }
         when (val result = session.await(30_000)) {
-            ProcessResult.Deadline -> ToolOutcome("Runtime operation exceeded its deadline.", target = operation.wireName)
+            ProcessResult.Deadline -> ToolOutcome("Runtime operation exceeded its deadline.", target = operation.wireName, succeeded = false)
             is ProcessResult.Exited -> ToolOutcome(
-                redactHostPaths(result.output), target = operation.wireName, exitCode = result.code,
+                redactHostPaths(result.output), target = operation.wireName, exitCode = result.code, succeeded = result.code == 0,
             )
         }
     }
@@ -145,7 +147,7 @@ class UserlandRuntime internal constructor(
         override suspend fun execute(args: JsonObject, context: ToolContext): ToolOutcome {
             require(args.isEmpty())
             rootfs.install(context.taskId)
-            return ToolOutcome("Installed ${rootfs.spec.version}.", target = rootfs.spec.version)
+            return ToolOutcome("Installed ${rootfs.spec.version}.", target = rootfs.spec.version, succeeded = true)
         }
     }
 
@@ -191,15 +193,28 @@ class UserlandRuntime internal constructor(
             val url = "https://github.com/lusalhi/lumynoid/releases/download/$releaseTag/${spec.asset}"
             val processes = UserlandProcesses(supervisor)
             val files = context.filesDir.toPath()
+            val workspaces = workspaceRoot(context)
             return UserlandRuntime(
                 nativeLibraries,
-                files.resolve("workspaces"),
+                workspaces,
                 context.cacheDir.toPath().resolve("userland"),
                 RootfsInstaller(files.resolve("userland"), spec, ReleaseRootfsSource(http, url), processes),
                 processes,
                 url,
                 context.assets,
             )
+        }
+
+        private fun workspaceRoot(context: Context): Path = context.filesDir.toPath().resolve("workspaces")
+
+        private fun installRoot(workspaceRoot: Path): Path = workspaceRoot.resolveSibling("coding-installs")
+
+        /** Removes one idle conversation's workspace and install without initializing the runtime. */
+        suspend fun deleteWorkspace(context: Context, id: String) = deleteWorkspace(workspaceRoot(context), id)
+
+        private suspend fun deleteWorkspace(workspaces: Path, id: String) = withContext(Dispatchers.IO) {
+            deleteWorkspaceTree(workspaces, id)
+            deleteWorkspaceTree(installRoot(workspaces), id)
         }
 
         private fun schema(properties: JsonObject): JsonObject = buildJsonObject {

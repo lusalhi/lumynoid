@@ -209,7 +209,12 @@ class TaskRunnerTest {
         advanceUntilIdle()
 
         assertEquals(0, executed)
-        assertTrue(events.state.value.none { it is TaskEvent.ToolCallRequested || it is TaskEvent.ToolResult })
+        assertTrue(events.state.value.none { it is TaskEvent.ToolResult })
+        val rejected = events.state.value.filterIsInstance<TaskEvent.ToolCallRequested>()
+        assertEquals(listOf(taskIds[2], taskIds[4]), rejected.map { it.taskId })
+        assertEquals(listOf(safe.name, safe.name), rejected[0].calls.map { it.call.name })
+        assertEquals(listOf(safe.name, denied.name), rejected[1].calls.map { it.call.name })
+        for (batch in rejected) assertEquals(listOf(batch.calls.last().call.id), batch.deniedCallIds)
         assertEquals(taskIds, events.state.value.filterIsInstance<TaskEvent.TaskFailed>().map { it.taskId })
     }
 
@@ -530,6 +535,7 @@ class TaskRunnerTest {
         assertFalse(runner.busy.value)
         assertEquals(null, runner.active.value)
         assertEquals(setOf(request.conversationId), runner.pendingConversations.value)
+        assertFalse(runner.deleteWhenIdle(request.conversationId) { error("deleted while awaiting approval") })
 
         val approval = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval
         assertTrue(runner.resolve(approval.id, ApprovalDecision.APPROVE))
@@ -893,6 +899,8 @@ class TaskRunnerTest {
         runCurrent()
 
         assertEquals(0, executed)
+        val requests = events.state.value.filterIsInstance<TaskEvent.ToolCallRequested>().single()
+        assertEquals(requests.calls.last().call.id, events.state.value.filterIsInstance<TaskEvent.ToolExecutionDenied>().single().callId)
         val failure = assertIs<TaskEvent.TaskFailed>(events.state.value.last { it.taskId == taskId })
         assertEquals(FailureReason.TOOL_DENIED, failure.reason)
     }
@@ -1124,6 +1132,8 @@ class TaskRunnerTest {
 
         assertEquals(request.conversationId, runner.active.value?.conversationId)
         assertEquals(setOf(request.conversationId, other.conversationId), runner.pendingConversations.value)
+        assertFalse(runner.deleteWhenIdle(request.conversationId) { error("deleted while running") })
+        assertFalse(runner.deleteWhenIdle(other.conversationId) { error("deleted while queued") })
 
         first.complete(Unit)
         advanceUntilIdle()
@@ -1132,6 +1142,27 @@ class TaskRunnerTest {
         last.complete(Unit)
         advanceUntilIdle()
         assertEquals(emptySet(), runner.pendingConversations.value)
+    }
+
+    @Test
+    fun submissionWaitsForConversationDeletionToLeaveStorage() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val runner = runnerFor(LlmPort { flowOf(LlmChunk.TextDelta("done")) }, events, scope)
+        val cleanup = CompletableDeferred<Unit>()
+        val delete = launch { assertTrue(runner.deleteWhenIdle(request.conversationId) { cleanup.await() }) }
+        runCurrent()
+
+        val submit = launch { runner.submit(request) }
+        runCurrent()
+        try {
+            assertTrue(events.tasks.isEmpty())
+            assertFalse(submit.isCompleted)
+        } finally {
+            cleanup.complete(Unit)
+        }
+        runCurrent()
+        assertTrue(delete.isCompleted)
+        assertIs<TaskEvent.TaskFinished>(events.state.value.last())
     }
 
     @Test

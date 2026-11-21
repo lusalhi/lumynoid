@@ -74,6 +74,8 @@ class TaskRunner(
         var resolution: TaskEvent.ApprovalResolved? = null
     }
 
+    // Deletion and submission reserve the same boundary before touching conversation storage.
+    private val admissionLock = Mutex()
     private val stateLock = Any()
     private val tasks = mutableMapOf<String, Task>()
     private val queue = ArrayDeque<Work>()
@@ -165,10 +167,12 @@ class TaskRunner(
         recovered.await()
         val task = Task(ids.next(), request, limit)
         val now = clock.nowMillis()
-        synchronized(stateLock) {
-            tasks[task.taskId] = task
-            runnable++
-            updatePending()
+        admissionLock.withLock {
+            synchronized(stateLock) {
+                tasks[task.taskId] = task
+                runnable++
+                updatePending()
+            }
         }
         try {
             events.createTask(task.taskId, request, now)
@@ -185,6 +189,16 @@ class TaskRunner(
             throw e
         }
         return task.taskId
+    }
+
+    /** Keeps new submissions out through cleanup; existing work must have released its resources. */
+    suspend fun deleteWhenIdle(conversationId: String, delete: suspend () -> Unit): Boolean {
+        recovered.await()
+        return admissionLock.withLock {
+            if (conversationId in checkNotNull(_pendingConversations.value)) return@withLock false
+            withContext(NonCancellable) { delete() }
+            true
+        }
     }
 
     /** The only cancellation path (AD-22). */
@@ -467,9 +481,11 @@ class TaskRunner(
         var round = resumed?.round
         var resumedApproval = work.resumed
         // Changes during the wait can invalidate later calls. Check them before running the approved call.
-        val laterCallDenied = resumed?.round?.let {
-            it.calls.subList(it.nextCall + 1, it.calls.size).any { call -> call.tool.assess(call.args) == RiskAssessment.DENIED }
-        } ?: false
+        val deniedLaterCall = resumed?.round?.let {
+            it.calls.subList(it.nextCall + 1, it.calls.size).firstOrNull { call ->
+                call.tool.assess(call.args) == RiskAssessment.DENIED
+            }
+        }
         var toolTurn = round != null
         var repairNext = false
         while (true) {
@@ -501,14 +517,16 @@ class TaskRunner(
                         SliceResult.Finished(reply.text)
                     }
                 }
-                if (calls.any { it.tool.assess(it.args) == RiskAssessment.DENIED }) {
-                    return SliceResult.Failed(FailureReason.TOOL_DENIED)
-                }
+                val denied = calls.firstOrNull { it.tool.assess(it.args) == RiskAssessment.DENIED }
                 _live.value = null
                 val event = TaskEvent.ToolCallRequested(
-                    ids.next(), task.taskId, clock.nowMillis(), reply.text, calls.map { it.describe() },
+                    ids.next(), task.taskId, clock.nowMillis(),
+                    if (denied == null) reply.text else "",
+                    calls.map { it.describe() },
+                    deniedCallIds = if (denied == null) emptyList() else listOf(denied.call.id),
                 )
                 append(task, event)
+                if (denied != null) return SliceResult.Failed(FailureReason.TOOL_DENIED)
                 round = ToolRound(calls, (request.messages + event.toLlmMessage()).toMutableList())
             }
 
@@ -518,18 +536,25 @@ class TaskRunner(
                 val risk = call.tool.assess(call.args)
                 if (resumedApproval != null) {
                     val approval = resumedApproval.approval
+                    if (risk == RiskAssessment.DENIED) recordToolDenial(task, call.call.id)
                     if (risk != approval.risk || call.describe() != approval.call) {
                         return SliceResult.Failed(FailureReason.APPROVAL_CHANGED)
                     }
                     if (elapsedMillis() >= resumedApproval.elapsedDeadline) {
                         return SliceResult.Failed(FailureReason.APPROVAL_EXPIRED)
                     }
-                    if (laterCallDenied) return SliceResult.Failed(FailureReason.TOOL_DENIED)
+                    if (deniedLaterCall != null) {
+                        recordToolDenial(task, deniedLaterCall.call.id)
+                        return SliceResult.Failed(FailureReason.TOOL_DENIED)
+                    }
                     resumedApproval = null
                 } else {
                     when (risk) {
                         RiskAssessment.READ_ONLY, RiskAssessment.LOCAL_WRITE -> Unit
-                        RiskAssessment.DENIED -> return SliceResult.Failed(FailureReason.TOOL_DENIED)
+                        RiskAssessment.DENIED -> {
+                            recordToolDenial(task, call.call.id)
+                            return SliceResult.Failed(FailureReason.TOOL_DENIED)
+                        }
                         RiskAssessment.DESTRUCTIVE, RiskAssessment.FINANCIAL, RiskAssessment.EGRESS, RiskAssessment.PERSISTENT ->
                             return SliceResult.Paused(call.describe(), risk, Continuation(request, registry, round))
                     }
@@ -547,6 +572,9 @@ class TaskRunner(
             _live.value = null
         }
     }
+
+    private suspend fun recordToolDenial(task: Task, callId: String) =
+        append(task, TaskEvent.ToolExecutionDenied(ids.next(), task.taskId, clock.nowMillis(), callId))
 
     private fun failedEvent(task: Task, reason: FailureReason) =
         TaskEvent.TaskFailed(ids.next(), task.taskId, clock.nowMillis(), reason)

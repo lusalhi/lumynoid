@@ -7,6 +7,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -36,7 +37,7 @@ internal class CodingRuntime(
 
     suspend fun install(context: ToolContext): ToolOutcome = mutex.withLock {
         val target = installedDirectory(context)
-        if (verifiedInstall(target)) return ToolOutcome("$PACKAGE_ID is already installed.", target = PACKAGE_ID)
+        if (verifiedInstall(target)) return ToolOutcome("$PACKAGE_ID is already installed.", target = PACKAGE_ID, succeeded = true)
 
         val parent = Files.createDirectories(target.parent)
         Files.newDirectoryStream(parent, ".install-*").use { abandoned -> abandoned.forEach(::deleteTree) }
@@ -46,7 +47,7 @@ internal class CodingRuntime(
             val encoded = assets.open(BUNDLE_ASSET).bufferedReader().use { it.readText() }
             Files.write(archive, Base64.getMimeDecoder().decode(encoded))
             if (Files.size(archive) != BUNDLE_SIZE || !matchesDigest(archive, BUNDLE_SHA256)) {
-                return ToolOutcome("Bundled package failed digest verification.", target = PACKAGE_ID)
+                return ToolOutcome("Bundled package failed digest verification.", target = PACKAGE_ID, succeeded = false)
             }
             Files.write(stage.resolve("package.json"), APP_MANIFEST.encodeToByteArray())
             Files.write(stage.resolve("npmrc"), APP_NPMRC.encodeToByteArray())
@@ -80,7 +81,7 @@ internal class CodingRuntime(
     suspend fun format(context: ToolContext, input: ByteArray): CodingFormatResult = mutex.withLock {
         val installed = installedDirectory(context)
         if (!verifiedInstall(installed)) return CodingFormatResult(
-            ToolOutcome("$PACKAGE_ID is not installed in this workspace; run shell_npm_install first.", target = SCRIPT_ID),
+            ToolOutcome("$PACKAGE_ID is not installed in this workspace; run shell_npm_install first.", target = SCRIPT_ID, succeeded = false),
         )
         val stage = Files.createTempDirectory(Files.createDirectories(stageRoot), "coding-")
         try {
@@ -119,13 +120,13 @@ internal class CodingRuntime(
         val session = try {
             userland.startGuest(context, argv, cwd, binds, environment)
         } catch (e: UserlandSetupRequired) {
-            return ToolOutcome(e.message.orEmpty(), target = target)
+            return ToolOutcome(e.message.orEmpty(), target = target, succeeded = false)
         }
         return when (val result = session.await(timeout)) {
-            ProcessResult.Deadline -> ToolOutcome("Coding runtime operation exceeded its deadline.", target = target)
+            ProcessResult.Deadline -> ToolOutcome("Coding runtime operation exceeded its deadline.", target = target, succeeded = false)
             is ProcessResult.Exited -> ToolOutcome(
                 userland.redactHostPaths(result.output).replace(installRoot.toString(), "<host-path>"),
-                target = target, exitCode = result.code,
+                target = target, exitCode = result.code, succeeded = result.code == 0,
             )
         }
     }
@@ -149,7 +150,7 @@ internal class CodingRuntime(
             MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file)).toHexString() == expected
 
     private fun ToolOutcome.withCheckFailure(message: String) =
-        copy(output = if (output.isEmpty()) message else "$output\n$message")
+        copy(output = if (output.isEmpty()) message else "$output\n$message", succeeded = false)
 
     companion object {
         const val PACKAGE_ID = "@lumynoid/json-tools"

@@ -39,6 +39,18 @@ class UserlandInstrumentedTest {
     fun codingNpmAndFormatterUseOnlyBundledAssets() =
         runCheck(UserlandChecks::codingNpmAndFormatterUseOnlyBundledAssets)
 
+    @Test
+    fun workspaceDeletionIsScopedAndNeverFollowsLinks() =
+        runCheck(UserlandChecks::workspaceDeletionIsScopedAndNeverFollowsLinks)
+
+    @Test
+    fun companionDeleteWorkspaceUsesProductionRootsOffline() = runBlocking {
+        // Offline cleanup must also work where the arm64 runtime is unavailable.
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        UserlandChecks(instrumentation.targetContext, instrumentation.context.assets)
+            .companionDeleteWorkspaceUsesProductionRootsOffline()
+    }
+
     private fun runCheck(check: suspend (UserlandChecks) -> Unit) = runBlocking {
         assumeTrue("arm64 runtime", "arm64-v8a" in Build.SUPPORTED_64_BIT_ABIS)
         val instrumentation = InstrumentationRegistry.getInstrumentation()

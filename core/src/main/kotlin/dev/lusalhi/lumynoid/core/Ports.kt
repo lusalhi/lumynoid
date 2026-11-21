@@ -126,8 +126,8 @@ interface ConversationPort {
     /** Returns false and keeps the old title when [title] is blank. */
     suspend fun rename(id: String, title: String): Boolean
 
-    /** Removes the conversation, its tasks and all its events in one transaction. */
-    suspend fun delete(id: String)
+    /** Removes the conversation and its owned data. Returns false while it has an unfinished task. */
+    suspend fun delete(id: String): Boolean
 }
 
 data class TaskRequest(

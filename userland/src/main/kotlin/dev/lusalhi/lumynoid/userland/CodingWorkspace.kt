@@ -1,12 +1,16 @@
 package dev.lusalhi.lumynoid.userland
 
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.file.FileAlreadyExistsException
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption.READ
+import java.nio.file.attribute.BasicFileAttributes
 
 /** Maximum size of a workspace file the coding tools read or write. */
 internal const val CODING_FILE_LIMIT = 256 * 1024
@@ -23,7 +27,7 @@ internal class CodingWorkspace(private val root: Path) {
 
     /** The private directory for one workspace ID, created on first use. Same identity rules as the runtime mount. */
     fun directory(id: String): Path {
-        require(WORKSPACE_ID.matches(id)) { "Invalid workspace ID" }
+        require(isValidId(id)) { "Invalid workspace ID" }
         Files.createDirectories(root)
         require(Files.isDirectory(root, NOFOLLOW_LINKS)) { "Invalid workspace root" }
         val workspace = root.toRealPath().resolve(id)
@@ -101,6 +105,9 @@ internal class CodingWorkspace(private val root: Path) {
     companion object {
         private val WORKSPACE_ID = Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 
+        /** The same identity rules as [directory], checked without creating anything. */
+        fun isValidId(id: String): Boolean = WORKSPACE_ID.matches(id)
+
         /** Splits a safe workspace-relative path into components, or null for absolute, traversal, empty or NUL-bearing paths. */
         fun pathComponents(path: String): List<String>? {
             if (path.isEmpty() || path.startsWith("/") || '\u0000' in path) return null
@@ -109,4 +116,26 @@ internal class CodingWorkspace(private val root: Path) {
             return components
         }
     }
+}
+
+/** Deletes one idle workspace-owned tree. A missing tree needs no cleanup. */
+internal fun deleteWorkspaceTree(root: Path, id: String) {
+    require(CodingWorkspace.isValidId(id)) { "Invalid workspace ID" }
+    if (Files.notExists(root, NOFOLLOW_LINKS)) return
+    if (!Files.isDirectory(root, NOFOLLOW_LINKS)) throw IOException("Invalid workspace storage root")
+    val directory = root.resolve(id)
+    if (Files.notExists(directory, NOFOLLOW_LINKS)) return
+    if (!Files.isDirectory(directory, NOFOLLOW_LINKS)) throw IOException("Workspace entry is not a directory")
+    Files.walkFileTree(directory, object : SimpleFileVisitor<Path>() {
+        override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+            Files.delete(file)
+            return FileVisitResult.CONTINUE
+        }
+
+        override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult {
+            if (exc != null) throw exc
+            Files.delete(dir)
+            return FileVisitResult.CONTINUE
+        }
+    })
 }

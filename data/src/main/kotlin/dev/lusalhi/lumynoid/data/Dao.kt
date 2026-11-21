@@ -27,6 +27,9 @@ internal interface LumynoidDao {
     @Query("UPDATE conversation SET title = :title WHERE id = :id")
     suspend fun setTitle(id: String, title: String): Int
 
+    @Query("SELECT EXISTS(SELECT 1 FROM conversation WHERE id = :id)")
+    suspend fun conversationExists(id: String): Boolean
+
     @Query("DELETE FROM task_event WHERE conversation_id = :id")
     suspend fun deleteEvents(id: String)
 
@@ -47,13 +50,13 @@ internal interface LumynoidDao {
     @Query("SELECT COUNT(*) FROM task")
     suspend fun taskCount(): Int
 
-    /** Writes only while the conversation row exists, atomically against [deleteConversation]. */
+    /** Writes only while the conversation row exists, atomically against [deleteConversation]; -1 when it is gone. */
     @Query(
         "INSERT INTO task (id, conversation_id, workspace_id, origin, created_at) " +
             "SELECT :id, :conversationId, :workspaceId, :origin, :createdAt " +
             "WHERE EXISTS (SELECT 1 FROM conversation WHERE id = :conversationId)",
     )
-    suspend fun insertTaskIfConversationExists(id: String, conversationId: String, workspaceId: String, origin: String, createdAt: Long)
+    suspend fun insertTaskIfConversationExists(id: String, conversationId: String, workspaceId: String, origin: String, createdAt: Long): Long
 
     /** Writes only while the conversation row exists, atomically against [deleteConversation]. */
     @Query(

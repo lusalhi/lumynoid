@@ -60,7 +60,7 @@ sealed class TaskEvent {
     val needsRecovery: Boolean
         get() = when (this) {
             is TaskQueued, is UserMessage, is AssistantMessage, is ToolCallRequested, is ToolResult,
-            is ApprovalRequested, is ApprovalResolved, is ToolCallRejected, is LlmRetry -> true
+            is ApprovalRequested, is ApprovalResolved, is ToolCallRejected, is ToolExecutionDenied, is LlmRetry -> true
             is TaskFinished, is TaskFailed, is TaskCancelled, is Unknown -> false
         }
 
@@ -103,6 +103,8 @@ sealed class TaskEvent {
         override val at: Long,
         val assistantText: String,
         val calls: List<RequestedToolCall>,
+        /** The first denied assessment stopped this whole batch before any tool ran. */
+        val deniedCallIds: List<String> = emptyList(),
     ) : TaskEvent()
 
     @Serializable
@@ -113,6 +115,16 @@ sealed class TaskEvent {
         override val at: Long,
         val callId: String,
         val outcome: ToolOutcome,
+    ) : TaskEvent()
+
+    /** A previously requested call was denied when its risk was checked again. */
+    @Serializable
+    @SerialName("tool_execution_denied")
+    data class ToolExecutionDenied(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val callId: String,
     ) : TaskEvent()
 
     /** A malformed assistant reply was discarded. [callNumber] is its one-based LLM invocation number. */

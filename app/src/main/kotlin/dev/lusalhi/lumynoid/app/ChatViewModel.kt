@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-enum class Screen { LOADING, CHAT, PROVIDER, CONVERSATIONS }
+enum class Screen { LOADING, CHAT, PROVIDER, CONVERSATIONS, ACTION_LOG }
 
 /** Each notification tap requests a fresh scroll, even when its target has not changed. */
 class ApprovalFocus(val eventId: String)
@@ -192,6 +192,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun closeConversations() { screen.value = Screen.CHAT }
 
+    /** Opens the read-only action log of the open conversation; a new unsaved conversation has none. */
+    fun openActionLog() {
+        if (conversationId.value != null) screen.value = Screen.ACTION_LOG
+    }
+
+    fun closeActionLog() { screen.value = Screen.CHAT }
+
     fun openConversation(id: String) {
         approvalFocus.value = null
         conversationId.value = id
@@ -212,11 +219,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteConversation(id: String) {
         viewModelScope.launch {
             conversationLock.withLock {
-                val runner = agent.runner.filterNotNull().first()
-                val pending = runner.pendingConversations.filterNotNull().first()
-                if (id in pending) return@withLock
-                graph.data.conversations.delete(id)
-                if (conversationId.value == id) conversationId.value = null
+                try {
+                    if (!graph.data.conversations.delete(id)) {
+                        Toast.makeText(getApplication(), R.string.conversation_delete_busy, Toast.LENGTH_SHORT).show()
+                    } else if (conversationId.value == id) {
+                        conversationId.value = null
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    Toast.makeText(getApplication(), R.string.conversation_delete_failed, Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -232,10 +245,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (input.isEmpty() || !providerConfigured.value) return
         viewModelScope.launch {
             conversationLock.withLock {
-                val id = conversationId.value ?: graph.data.conversations.create(input).id.also { conversationId.value = it }
-                val runner = agent.runner.filterNotNull().first()
-                approvalFocus.value = null
-                runner.submit(TaskRequest(Origin.User, id, workspaceId = id, input = input))
+                try {
+                    val id = conversationId.value ?: graph.data.conversations.create(input).id.also { conversationId.value = it }
+                    val runner = agent.runner.filterNotNull().first()
+                    approvalFocus.value = null
+                    runner.submit(TaskRequest(Origin.User, id, workspaceId = id, input = input))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    Toast.makeText(getApplication(), R.string.chat_send_failed, Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

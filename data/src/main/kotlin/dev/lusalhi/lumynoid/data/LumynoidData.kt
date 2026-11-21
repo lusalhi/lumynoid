@@ -20,11 +20,20 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/** Entry point of `:data`: opens the single database and exposes its ports. */
+/**
+ * Entry point of `:data`: opens the single database and exposes its ports.
+ *
+ * [deleteWhenIdle] gates conversation deletion against unfinished work and keeps the gate through
+ * cleanup; production passes `TaskRunner::deleteWhenIdle`. The default deletes immediately.
+ * [deleteWorkspace] reclaims the conversation's scoped workspace and bundled-package install;
+ * production passes the userland cleanup. The default owns no files.
+ */
 class LumynoidData(
     context: Context,
     ids: IdGenerator = UuidV7,
     clock: Clock = SystemClock,
+    deleteWhenIdle: suspend (String, suspend () -> Unit) -> Boolean = { _, delete -> delete(); true },
+    deleteWorkspace: suspend (String) -> Unit = {},
 ) {
     private val appContext = context.applicationContext
     private val database: LumynoidDatabase =
@@ -32,9 +41,11 @@ class LumynoidData(
             .setDriver(AndroidSQLiteDriver())
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4) // no destructive fallback (AD-19)
             .build()
+    private val blobs = EventBlobStore(File(appContext.filesDir, "event-blobs"))
 
-    val events: EventRepository = RoomEventRepository(database.dao(), EventBlobStore(File(appContext.filesDir, "event-blobs")))
-    val conversations: ConversationPort = RoomConversationPort(database.dao(), ids, clock)
+    val events: EventRepository = RoomEventRepository(database.dao(), blobs)
+    val conversations: ConversationPort =
+        RoomConversationPort(database.dao(), ids, clock, blobs, deleteWhenIdle, deleteWorkspace)
     val providerConfigs: ProviderConfigStore = RoomProviderConfigStore(database.dao())
     val secrets: SecretPort = KeystoreSecretStore(appContext)
     val taskSettings: TaskSettings = PreferenceTaskSettings(appContext.getSharedPreferences("task_settings", Context.MODE_PRIVATE))

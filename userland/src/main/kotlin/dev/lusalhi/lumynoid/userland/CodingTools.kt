@@ -83,7 +83,7 @@ internal class CodingTools(
         })
 
         override suspend fun execute(args: JsonObject, context: ToolContext): ToolOutcome {
-            if (assess(args) == RiskAssessment.DENIED) return ToolOutcome("Invalid coding arguments.")
+            if (assess(args) == RiskAssessment.DENIED) return ToolOutcome("Invalid coding arguments.", succeeded = false)
             return withContext(Dispatchers.IO) {
                 try {
                     when (operation) {
@@ -94,9 +94,9 @@ internal class CodingTools(
                         Operation.FORMAT -> format(context, args.text("input"), args.text("output"))
                     }
                 } catch (e: CodingReject) {
-                    ToolOutcome(e.message.orEmpty())
+                    ToolOutcome(e.message.orEmpty(), succeeded = false)
                 } catch (_: IOException) {
-                    ToolOutcome("Coding operation failed.")
+                    ToolOutcome("Coding operation failed.", succeeded = false)
                 }
             }
         }
@@ -108,7 +108,7 @@ internal class CodingTools(
             put("content", decodeUtf8(bytes))
             put("sha256", sha256(bytes))
         }
-        ToolOutcome(output.toString(), target = path)
+        ToolOutcome(output.toString(), target = path, succeeded = true)
     }
 
     private suspend fun write(context: ToolContext, path: String, content: String, expected: String?): ToolOutcome {
@@ -135,7 +135,7 @@ internal class CodingTools(
                 "Replaced"
             }
         }
-        return ToolOutcome("$status $path.", target = path, artifacts = listOf(ToolArtifact(path, "text/plain")))
+        return ToolOutcome("$status $path.", target = path, artifacts = listOf(ToolArtifact(path, "text/plain")), succeeded = true)
     }
 
     private suspend fun format(context: ToolContext, input: String, output: String): ToolOutcome {
@@ -164,6 +164,7 @@ internal class CodingTools(
             output = if (report.isEmpty()) status else "$report\n$status",
             target = output,
             artifacts = if (failure == null) listOf(ToolArtifact(output, "application/json")) else emptyList(),
+            succeeded = failure == null,
         )
     }
 

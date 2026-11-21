@@ -159,7 +159,7 @@ private fun ToolDetails(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun CallFields(description: UiText, exclude: Set<String> = emptySet()) {
+internal fun CallFields(description: UiText, exclude: Set<String> = emptySet()) {
     for ((key, value) in description.args) {
         if (key in exclude) continue
         val label = fieldLabel(key)
@@ -168,7 +168,7 @@ private fun CallFields(description: UiText, exclude: Set<String> = emptySet()) {
 }
 
 @Composable
-private fun ToolField(@StringRes label: Int, value: String) = LabeledValue(stringResource(label), value)
+internal fun ToolField(@StringRes label: Int, value: String) = LabeledValue(stringResource(label), value)
 
 @Composable
 private fun LabeledValue(label: String, value: String) {

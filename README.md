@@ -28,6 +28,8 @@ The configured model must support structured tool calls on arm64; the provider c
 
 The first Linux runtime download and each file replacement require approval in chat. If you enabled notifications, tapping the approval notification takes you to its card; it cannot approve or decline the action. Leaving chat without killing the process keeps the request available. After process death, unfinished work is marked interrupted and is not replayed.
 
+Open **Log** in chat to see tool targets, approvals and the full stored output, including after relaunch. A tool's own capture limit still applies. Deleting a conversation removes its log and private workspace, including its bundled package install. You can delete it once its queued, running or approval-waiting tasks have ended.
+
 ## Build
 
 Build with JDK 17, Android SDK platform 37, Build Tools 37.0.0, and NDK 28.2.13676358. The native build also uses GNU Make, Python 3, curl, unzip, and patch. On an arm64 Linux host it uses a native Clang and LLD with the pinned NDK sysroot.
@@ -39,7 +41,7 @@ For a macOS app build, install GNU Make as `gmake`.
 ./gradlew :app:assembleRelease        # unsigned arm64-v8a APK unless the release key env vars are set
 ```
 
-The arm64 instrumentation suite exercises the runtime installer, TaskRunner process cleanup, workspace file operations, overwrite approval, and the bundled offline npm and JSON formatter flow. Building the fixture archive requires a Linux host with `chroot` access through root or passwordless sudo. On x86-64, install `qemu-aarch64-static` before building it.
+The arm64 instrumentation suite exercises the runtime installer, TaskRunner process cleanup, workspace file operations and deletion, overwrite approval, and the bundled offline npm and JSON formatter flow. Building the fixture archive requires a Linux host with `chroot` access through root or passwordless sudo. On x86-64, install `qemu-aarch64-static` before building it.
 
 The rootfs build is offline: it uses the Alpine inputs bundled in `tools/userland/alpine-inputs.tar` and checks each one against `alpine-inputs.lock` before installation.
 The lock records the upstream URLs; `alpine-source-provenance.tsv` records the exact Alpine recipes and licenses for the installed packages.
@@ -52,7 +54,7 @@ adb install -t -r userland/build/outputs/apk/androidTest/debug/userland-debug-an
 adb shell am instrument -w dev.lusalhi.lumynoid.userland.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-For a phone-only check, build `./gradlew :userland-check:assembleDebug`. Install `tools/userland-check/build/outputs/apk/debug/userland-check-debug.apk`, open **Lumynoid Test**, and tap **Jalankan tes**. Version 2.7.1 runs the same eight checks offline. **Hapus fixture lama** opens Android's uninstall confirmation for the instrumentation APK, not for the main Lumynoid app.
+For a phone-only check, build `./gradlew :userland-check:assembleDebug`. Install `tools/userland-check/build/outputs/apk/debug/userland-check-debug.apk`, open **Lumynoid Test**, and tap **Jalankan tes**. It runs the eight offline runtime and coding checks; run the instrumentation suite above for workspace deletion. **Hapus fixture lama** opens Android's uninstall confirmation for the instrumentation APK, not for the main Lumynoid app.
 
 ## Checks that gate every change
 

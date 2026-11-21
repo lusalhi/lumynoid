@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -142,15 +143,33 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
                 onFirstRunDone = viewModel::providerReady,
             )
         }
-        Screen.CHAT -> ChatScreen(
-            state = state,
-            onSend = viewModel::send,
-            onStop = viewModel::stop,
-            onOpenProvider = viewModel::openProvider,
-            onOpenConversations = viewModel::openConversations,
-            onNewConversation = viewModel::newConversation,
-            onApprovalDecision = viewModel::resolveApproval,
-        )
+        Screen.CHAT, Screen.ACTION_LOG -> {
+            // The chat's saveable state (its unsent draft) survives a trip to the action log and back.
+            val chatSaveable = rememberSaveableStateHolder()
+            if (state.screen == Screen.CHAT) {
+                chatSaveable.SaveableStateProvider("chat") {
+                    ChatScreen(
+                        state = state,
+                        onSend = viewModel::send,
+                        onStop = viewModel::stop,
+                        onOpenProvider = viewModel::openProvider,
+                        onOpenConversations = viewModel::openConversations,
+                        onNewConversation = viewModel::newConversation,
+                        onApprovalDecision = viewModel::resolveApproval,
+                        onOpenActionLog = viewModel::openActionLog,
+                    )
+                }
+            } else {
+                state.conversationId?.let { id ->
+                    ActionLogScreen(
+                        conversationId = id,
+                        events = state.events,
+                        title = state.title,
+                        onBack = viewModel::closeActionLog,
+                    )
+                }
+            }
+        }
         Screen.CONVERSATIONS -> ConversationListScreen(
             conversations = state.conversations,
             openId = state.conversationId,

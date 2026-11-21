@@ -13,6 +13,7 @@
     <string name="setup_first">Set up your AI provider first, then you can start chatting.</string>
     <string name="chat_conversations">Conversations</string>
     <string name="chat_new">New</string>
+    <string name="chat_action_log">Log</string>
 
     <string name="conversation_untitled">New conversation</string>
     <string name="conversations_title">Conversations</string>
@@ -25,7 +26,7 @@
     <string name="conversation_save">Save</string>
     <string name="conversation_delete">Delete</string>
     <string name="conversation_delete_title">Delete this conversation?</string>
-    <string name="conversation_delete_body">Its messages are removed from this phone and cannot be restored.</string>
+    <string name="conversation_delete_body">Its messages, action log and stored outputs, and its private project files are permanently removed from this phone and cannot be restored.</string>
     <string name="conversation_cancel">Cancel</string>
 
     <string name="error_auth_failed">The provider did not accept your key. Check it in the AI provider settings.</string>
@@ -41,6 +42,9 @@
     <string name="error_malformed_tool_call">The AI provider returned an invalid tool call after a retry.</string>
     <string name="error_budget_exhausted">This task reached its limit for AI calls. You can change the limit in AI provider settings.</string>
     <string name="task_cancelled">Stopped.</string>
+    <string name="conversation_delete_busy">This conversation still has work in progress. Wait for it to finish, then delete it.</string>
+    <string name="conversation_delete_failed">Could not delete the conversation. Try again.</string>
+    <string name="chat_send_failed">Could not send the message. Try again.</string>
 
     <string name="notification_channel_task_running">Answer in progress</string>
     <string name="notification_task_running_title">Lumynoid</string>
@@ -155,4 +159,33 @@
     <string name="tool_risk_egress">Makes an external request</string>
     <string name="tool_risk_financial">Financial action</string>
     <string name="tool_risk_persistent">Continues beyond this task</string>
+
+    <string name="action_log_title">Action log</string>
+    <string name="action_log_back">Back</string>
+    <string name="action_log_empty">No actions recorded in this conversation yet.</string>
+    <string name="action_notice_finished">Task finished.</string>
+    <string name="action_notice_rejected">The provider returned an invalid tool call; it was discarded. (AI call %1$d)</string>
+    <string name="action_notice_retry">A corrected request was sent to the provider. (AI call %1$d)</string>
+    <string name="action_notice_unknown">An event could not be read.</string>
+    <string name="action_status_succeeded">Succeeded</string>
+    <string name="action_status_failed">Failed</string>
+    <string name="action_status_unconfirmed">Result recorded; success not confirmed</string>
+    <string name="action_status_denied_preflight">Denied before the batch ran</string>
+    <string name="action_status_denied_execution">Denied before execution</string>
+    <string name="action_status_not_run_batch">Did not run; the batch was denied</string>
+    <string name="action_status_approval_denied">Declined; did not run</string>
+    <string name="action_status_approval_expired">Approval expired; did not run</string>
+    <string name="action_status_approval_cancelled">Cancelled; did not run</string>
+    <string name="action_status_awaiting_approval">Awaiting approval</string>
+    <string name="action_status_interrupted">Interrupted; no result</string>
+    <string name="action_status_cancelled">Stopped; no result</string>
+    <string name="action_status_no_result">No result recorded</string>
+    <string name="action_status_pending">No result yet</string>
+    <string name="action_field_approval">Approval</string>
+    <string name="action_field_artifact_type">Media type</string>
+    <string name="action_artifact_note">Artifact files belong to this conversation\'s workspace and are not opened from this log.</string>
+    <string name="action_field_capture_note">Capture limit note</string>
+    <string name="action_output_size">%1$d characters stored</string>
+    <string name="action_jump_end">Jump to end</string>
+    <string name="action_jump_top">Back to top</string>
 </resources>

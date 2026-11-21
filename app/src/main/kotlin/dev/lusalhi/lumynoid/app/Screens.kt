@@ -54,6 +54,7 @@ fun ChatScreen(
     onOpenConversations: () -> Unit,
     onNewConversation: () -> Unit,
     onApprovalDecision: (String, ApprovalDecision) -> Unit,
+    onOpenActionLog: () -> Unit,
 ) {
     var draft by key(state.conversationId) { rememberSaveable { mutableStateOf("") } }
     val listState = rememberLazyListState()
@@ -98,6 +99,9 @@ fun ChatScreen(
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onOpenConversations) { Text(stringResource(R.string.chat_conversations)) }
+            TextButton(onClick = onOpenActionLog, enabled = state.conversationId != null) {
+                Text(stringResource(R.string.chat_action_log))
+            }
             TextButton(onClick = onNewConversation) { Text(stringResource(R.string.chat_new)) }
             TextButton(onClick = onOpenProvider) { Text(stringResource(R.string.chat_settings)) }
         }
@@ -202,7 +206,7 @@ private fun Bubble(text: String, fromUser: Boolean) {
     }
 }
 
-private fun FailureReason.messageRes(): Int = when (this) {
+internal fun FailureReason.messageRes(): Int = when (this) {
     FailureReason.AUTH_FAILED -> R.string.error_auth_failed
     FailureReason.RATE_LIMITED -> R.string.error_rate_limited
     FailureReason.QUOTA_EXHAUSTED -> R.string.error_quota_exhausted
