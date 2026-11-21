@@ -3,7 +3,7 @@ title: 'Tool coding menulis file dan menjalankan operasi npm yang ditentukan app
 type: feature
 ticket: 7
 created: '2026-11-21'
-status: built
+status: done
 baseline_revision: ce156ac19fa21ff38ba39e29aab05eac00957012
 route: full
 route_source: auto
@@ -57,7 +57,7 @@ Use the active app-private `ToolContext.workspaceId` and the existing TaskRunner
 ## Implementation Notes
 
 - The runtime provider registers five `shell_` coding tools. The fixture drives the provider through TaskRunner and its existing approval gate; no chat registration changed.
-- Create and formatter output use hard-link publication from a staged file on the same filesystem, which cannot clobber an existing name. Replace compares current content SHA-256 under the host write lock and uses atomic rename only after approval.
+- Create and formatter output stage a file on the same filesystem, check the destination is absent without following links, then rename atomically under the sole workspace write lock. Replace checks the current SHA-256 under the same lock and renames only after approval.
 - The npm guest sees app-owned staging, not the project. Only the verified module is promoted; npm cache and configuration are discarded. The formatter sees the verified module and two fixed data paths.
 
 ## Plan Change Log
@@ -67,6 +67,7 @@ Use the active app-private `ToolContext.workspaceId` and the existing TaskRunner
 | Finding | Verdict / route | Evidence and change |
 | --- | --- | --- |
 | Deeply nested valid JSON under the agreed output cap could fail | Medium / patch | The formatter used an extra `4× input + 1024` budget. Replaced it with the 256 KiB cap, repacked and re-pinned the bundle, and checked nesting below and above the cap. |
+| App can be denied hard-link creation on the handset | High / patch | The fixture failed at hard-link setup; the npm/formatter flow failed at format with `File not found` after create. Removed production's dependency on hard links, kept fixture rejection coverage wherever hard links are permitted, and added a check that create publishes before asserting npm or formatter results. |
 
 ## Verification
 
@@ -75,4 +76,6 @@ Use the active app-private `ToolContext.workspaceId` and the existing TaskRunner
 - `./gradlew :core:test` passed. Node smoke checks passed for lossless number and duplicate-member preservation, malformed JSON rejection, and bounded whitespace expansion. The pinned tarball matched the reviewed sources byte-for-byte.
 - All three APKs built and contained the same pinned npm asset. Gradle's connected runner reported a Redroid Binder disconnect, not a passing test run. After the Android package service recovered, direct ADB instrumentation of the final APK reported `OK (8 tests)` in 19.052 seconds on Redroid arm64 API 34.
 - Lumynoid Test 2.7 installed and launched on the same Redroid device; tapping **Jalankan tes** produced `8/8 tes lulus` on screen.
-- Physical acceptance is pending: run Lumynoid Test 2.7 on an arm64 API 37 handset. Available Redroid results do not replace this check.
+- Handset run of Lumynoid Test 2.7 reported 6/8 passing: workspace fixture setup was denied a hard link, and the formatter had no input after create.
+- The signed debug launcher and instrumentation APKs for the fix built successfully. The 2.7.1 launcher installed over 2.7 on Redroid arm64 API 34 and displayed `8/8 tes lulus`. The separate instrumentation launch hit a Binder disconnect; no pass is claimed for that run.
+- Handset acceptance: the user reran Lumynoid Test 2.7.1 and reported all eight checks passing, including the two that failed on 2.7.

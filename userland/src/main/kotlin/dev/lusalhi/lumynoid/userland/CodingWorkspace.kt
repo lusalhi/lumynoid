@@ -76,34 +76,21 @@ internal class CodingWorkspace(private val root: Path) {
         bytes
     }
 
-    /**
-     * Publishes bytes as a new file through same-directory staging and an atomic hard link, which fails
-     * instead of replacing when the destination exists. [beforeCommit] runs after the stage is written and
-     * immediately before the link, so cancellation before commit leaves no file behind.
-     */
-    fun publishNew(parent: Path, name: String, bytes: ByteArray, beforeCommit: () -> Unit) {
-        val destination = parent.resolve(name)
-        if (Files.exists(destination, NOFOLLOW_LINKS)) throw CodingReject("Destination already exists.")
-        val stage = Files.createTempFile(parent, ".coding-", ".tmp")
-        try {
-            Files.write(stage, bytes)
-            beforeCommit()
-            Files.createLink(destination, stage)
-        } catch (_: FileAlreadyExistsException) {
-            throw CodingReject("Destination already exists.")
-        } finally {
-            Files.deleteIfExists(stage)
-        }
-    }
+    fun publishNew(parent: Path, name: String, bytes: ByteArray, beforeCommit: () -> Unit) =
+        publish(parent.resolve(name), bytes, newOnly = true, beforeCommit)
 
-    /**
-     * Replaces a file the caller just revalidated, through same-directory staging and one atomic rename.
-     * [beforeCommit] runs after the stage is written and immediately before the rename.
-     */
-    fun replaceExisting(path: Path, bytes: ByteArray, beforeCommit: () -> Unit) {
+    fun replaceExisting(path: Path, bytes: ByteArray, beforeCommit: () -> Unit) =
+        publish(path, bytes, newOnly = false, beforeCommit)
+
+    private fun publish(path: Path, bytes: ByteArray, newOnly: Boolean, beforeCommit: () -> Unit) {
         val stage = Files.createTempFile(path.parent, ".coding-", ".tmp")
         try {
             Files.write(stage, bytes)
+            // The caller holds the only workspace write lock through the check and rename.
+            // Android may deny hard links even within an app's own workspace.
+            if (newOnly && !Files.notExists(path, NOFOLLOW_LINKS)) {
+                throw CodingReject("Destination already exists or is inaccessible.")
+            }
             beforeCommit()
             Files.move(stage, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } finally {

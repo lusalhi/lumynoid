@@ -13,8 +13,8 @@ android {
         applicationId = "dev.lusalhi.lumynoid.userland.checks"
         minSdk = 29
         targetSdk = 37
-        versionCode = 2
-        versionName = "2.7"
+        versionCode = 3
+        versionName = "2.7.1"
         ndk { abiFilters += "arm64-v8a" }
     }
 

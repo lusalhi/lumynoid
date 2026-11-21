@@ -48,6 +48,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.security.MessageDigest
@@ -213,19 +214,31 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         val secret = Files.write(peer.resolve("secret.txt"), "other-workspace-secret".toByteArray())
         Files.createSymbolicLink(fixture.workspace.resolve("link.txt"), secret)
         Files.createSymbolicLink(fixture.workspace.resolve("linked-dir"), peer)
-        Files.createLink(fixture.workspace.resolve("hardlink.txt"), secret)
+        val dangling = Files.createSymbolicLink(fixture.workspace.resolve("dangling.txt"), peer.resolve("new.txt"))
+        val hardLink = fixture.workspace.resolve("hardlink.txt")
+        val hardLinkPath = try {
+            Os.link(secret.toString(), hardLink.toString())
+            "hardlink.txt"
+        } catch (e: ErrnoException) {
+            // Some Android policies forbid creating the fixture link. Keep the read-side
+            // rejection check on platforms where the link can be created.
+            if (e.errno !in setOf(OsConstants.EACCES, OsConstants.EPERM, OsConstants.EOPNOTSUPP)) throw e
+            assertTrue(Files.notExists(hardLink, NOFOLLOW_LINKS))
+            null
+        }
         Files.write(fixture.workspace.resolve("invalid.txt"), byteArrayOf(0xff.toByte()))
         Files.write(fixture.workspace.resolve("large.txt"), ByteArray(256 * 1024 + 1))
         Files.createDirectory(fixture.workspace.resolve("src"))
         val text = "Halo, 世界\n"
-        val reads = listOf(
+        val reads = listOfNotNull(
             "../peer/secret.txt", secret.toString(), "link.txt", "linked-dir/secret.txt",
-            "hardlink.txt", "invalid.txt", "large.txt", "src",
+            hardLinkPath, "invalid.txt", "large.txt", "src",
         )
         val runner = fixture.runner(buildMap {
             put("write", listOf(create("src/hello.txt", text), read("src/hello.txt")))
             put("collision", listOf(create("src/hello.txt", "must not replace")))
             put("escape", listOf(create("linked-dir/new.txt", "must not create")))
+            put("dangling", listOf(create("dangling.txt", "must not replace the link")))
             put("unpaired", listOf(Call("shell_create_file", """{"path":"unpaired.txt","content":"\ud800"}""")))
             reads.forEachIndexed { index, path -> put("read-$index", listOf(read(path))) }
         })
@@ -239,7 +252,7 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         assertEquals(sha256(text), reply.getValue("sha256").jsonPrimitive.content)
         assertEquals(text, fixture.workspace.resolve("src/hello.txt").toFile().readText())
 
-        for (scenario in listOf("collision", "escape", "unpaired") + reads.indices.map { "read-$it" }) {
+        for (scenario in listOf("collision", "escape", "dangling", "unpaired") + reads.indices.map { "read-$it" }) {
             val task = fixture.submit(runner, scenario)
             val terminal = fixture.terminal(task)
             val results = fixture.results(task)
@@ -252,6 +265,7 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         assertEquals(text, fixture.workspace.resolve("src/hello.txt").toFile().readText())
         assertEquals("other-workspace-secret", secret.toFile().readText())
         assertTrue(Files.notExists(peer.resolve("new.txt")))
+        assertEquals(peer.resolve("new.txt"), Files.readSymbolicLink(dangling))
         assertTrue(Files.notExists(fixture.workspace.resolve("unpaired.txt")))
     }
 
@@ -337,6 +351,9 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         assertTrue(fixture.terminal(coding) is TaskEvent.TaskFinished)
         val results = fixture.resultEvents(coding)
         assertEquals(3, results.size)
+        val created = results[0].outcome
+        assertEquals(created.output, listOf(ToolArtifact("input.json", "text/plain")), created.artifacts)
+        assertEquals(source, root.resolve("input.json").toFile().readText())
         assertEquals(results[1].outcome.output, 0, results[1].outcome.exitCode)
         val replayed = TaskEventJson.decode(TaskEventJson.encode(results[2])) as TaskEvent.ToolResult
         assertEquals(replayed.outcome.output, 0, replayed.outcome.exitCode)

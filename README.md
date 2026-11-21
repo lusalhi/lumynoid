@@ -44,7 +44,7 @@ adb install -t -r userland/build/outputs/apk/androidTest/debug/userland-debug-an
 adb shell am instrument -w dev.lusalhi.lumynoid.userland.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-For a phone-only check, build `./gradlew :userland-check:assembleDebug`. Install `tools/userland-check/build/outputs/apk/debug/userland-check-debug.apk`, open **Lumynoid Test**, and tap **Jalankan tes**. Version 2.7 runs the same eight checks offline. **Hapus fixture lama** opens Android's uninstall confirmation for the instrumentation APK, not for the main Lumynoid app.
+For a phone-only check, build `./gradlew :userland-check:assembleDebug`. Install `tools/userland-check/build/outputs/apk/debug/userland-check-debug.apk`, open **Lumynoid Test**, and tap **Jalankan tes**. Version 2.7.1 runs the same eight checks offline. **Hapus fixture lama** opens Android's uninstall confirmation for the instrumentation APK, not for the main Lumynoid app.
 
 ## Checks that gate every change
 
