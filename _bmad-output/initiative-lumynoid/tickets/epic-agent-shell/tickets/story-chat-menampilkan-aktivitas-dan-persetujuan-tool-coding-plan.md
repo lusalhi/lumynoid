@@ -3,7 +3,7 @@ title: 'Chat menampilkan aktivitas dan persetujuan tool coding'
 type: feature
 ticket: 8
 created: '2026-11-21'
-status: built
+status: done
 baseline_revision: 7801c9fe3e93e762321c81fec92d26458e52e936
 route: full
 route_source: auto
@@ -89,4 +89,5 @@ Quick review: four medium findings patched, two limitations recorded, and one re
 - The emulator exposed a chat keyboard covering the notification's target. After the fix, the final APK dismissed the keyboard and opened the exact approval from another conversation; a repeat tap refocused the card. Android rejected an external launch of the private activity. The service exited while waiting, an approval followed by immediate backgrounding dispatched once, and process restart showed interrupted with no replay. The app unit test and debug build passed again after the fix.
 - Final Gradle verification passed again after quick-review patches: 162 passed, four skipped, and the debug and instrumentation APKs built. `apksigner verify` accepted the app debug APK.
 - On Redroid API 34 after the review fixes, granting notification permission posted an existing pending approval; opening it did not import a draft from another conversation; the formatter card showed that no output file was published despite process exit code zero.
-- Physical arm64 API 37 acceptance remains pending; all device evidence above is from arm64 Redroid API 34.
+- Handset acceptance: the user reported all Lumynoid Fixture 2.8 scenarios passed on their phone (previously recorded as Samsung SM-S731B, arm64 API 37). The scenarios covered declining and approving first runtime setup, offline npm and formatting, reading within and across conversations, returning to the exact approval from a notification, approve/decline on overwrite, and forged Markdown not creating a card.
+- The handset fixture serves the digest-pinned rootfs from its APK behind the same approval gate. This acceptance does not verify GitHub asset delivery; that remains part of the Epic 2 release check.
