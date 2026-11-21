@@ -74,7 +74,8 @@ gh secret set RELEASE_KEY_PASSWORD --env release     # same as the store passwor
 4. The `verify` job checks the tag (on `main`, name equals `versionName`, `versionCode` higher than every other `v*` tag,
    Room schemas on main's line) and runs the gates and tests. Approve the `release` environment when the `build` job waits.
 5. The workflow signs, checks the certificate against the committed fingerprint, and publishes a pre-release for `v0.*`
-   with `lumynoid-<versionName>.apk` and `SHA256SUMS`.
+   with `lumynoid-<versionName>.apk`, the pinned Alpine rootfs, native source archives, provenance, and `SHA256SUMS`.
+   The workflow checks that the rootfs matches the digest and size embedded in the APK.
 
 Run the tag checks locally before tagging: `python3 .github/scripts/check_release.py tag --tag v0.1.0 --main origin/main`
 (after creating the tag), and `python3 .github/scripts/check_release.py --self-test`.

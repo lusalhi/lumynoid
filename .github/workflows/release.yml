@@ -58,6 +58,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
+      - name: Install runtime build tools
+        run: |
+          sdkmanager --install "ndk;28.2.13676358" "build-tools;37.0.0"
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static
+
       - name: Keep :core free of Android, Ktor and Room (AD-1)
         run: |
           ./gradlew -q :core:dependencies --configuration runtimeClasspath > core-deps.txt
@@ -73,7 +79,16 @@ jobs:
         run: ./gradlew :app:checkDependencyPolicy
 
       - name: JVM tests
-        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest
+        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest
+
+      - name: Build and stage the pinned rootfs
+        run: ./gradlew :userland:buildUserlandRootfs
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: userland-rootfs
+          path: userland/build/userland/rootfs/*
+          if-no-files-found: error
 
   build:
     needs: verify
@@ -92,6 +107,14 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
+      - name: Install native build tools
+        run: sdkmanager --install "ndk;28.2.13676358" "build-tools;37.0.0"
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: userland-rootfs
+          path: runtime-dist
+
       - name: Build the signed release APK
         env:
           KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
@@ -107,9 +130,11 @@ jobs:
       - name: Check the APK against the registered key and the source
         run: |
           set -euo pipefail
-          tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          tools="$ANDROID_HOME/build-tools/37.0.0"
           apk="$(ls app/build/outputs/apk/release/*.apk)"
           test "$(echo "$apk" | wc -l)" = 1
+          "$tools/zipalign" -c -P 16 4 "$apk"
+          python3 tools/userland/verify-apk.py "$apk" runtime-dist
           "$tools/apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/certs.txt"
           "$tools/aapt2" dump badging "$apk" > "$RUNNER_TEMP/badging.txt"
           if grep -q 'application-debuggable' "$RUNNER_TEMP/badging.txt"; then
@@ -119,10 +144,11 @@ jobs:
           python3 .github/scripts/check_release.py apk --certs "$RUNNER_TEMP/certs.txt" --badging "$RUNNER_TEMP/badging.txt"
           mkdir dist
           cp "$apk" "dist/lumynoid-$TAG.apk"
+          cp runtime-dist/* userland/build/userland/native/sources/* dist/
           if [ -f app/build/outputs/mapping/release/mapping.txt ]; then
             cp app/build/outputs/mapping/release/mapping.txt dist/mapping.txt
           fi
-          (cd dist && sha256sum "lumynoid-$TAG.apk" > SHA256SUMS && cat SHA256SUMS)
+          (cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS)
         env:
           TAG: ${{ github.ref_name }}
 

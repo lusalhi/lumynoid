@@ -5,10 +5,12 @@ import android.os.SystemClock
 import dev.lusalhi.lumynoid.core.LlmPort
 import dev.lusalhi.lumynoid.core.ProviderAdminPort
 import dev.lusalhi.lumynoid.core.TaskRunner
+import dev.lusalhi.lumynoid.core.ToolSessionRelease
 import dev.lusalhi.lumynoid.data.LumynoidData
 import dev.lusalhi.lumynoid.llm.LlmRouter
 import dev.lusalhi.lumynoid.llm.ProviderAdapters
 import dev.lusalhi.lumynoid.llm.ProviderAdmin
+import dev.lusalhi.lumynoid.userland.UserlandRuntime
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -33,10 +35,12 @@ class AppGraph(application: Application) {
     val llm: LlmPort = LlmRouter(adapters, data.providerConfigs, data.secrets)
     val providerAdmin: ProviderAdminPort = ProviderAdmin(adapters, data.providerConfigs, data.secrets)
 
+    val userland by lazy { UserlandRuntime.create(application, httpClient) }
     private val agentScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val runner: TaskRunner by lazy {
         TaskRunner(
             llm, data.events, agentScope,
+            toolSessions = userland ?: ToolSessionRelease {},
             elapsedMillis = SystemClock::elapsedRealtime,
             maxLlmCalls = data.taskSettings::maxLlmCalls,
         )

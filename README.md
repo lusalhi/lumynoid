@@ -8,7 +8,7 @@ Lumynoid is an Android app for chatting with an AI model using your own API key.
 
 Lumynoid is distributed only as a signed APK downloaded manually from this repository's [GitHub Releases](../../releases). There is no Play Store or F-Droid listing and the app does not update itself: to update, download the newer APK.
 
-Each release carries one `lumynoid-<version>.apk` and a `SHA256SUMS` file. Release signing-key SHA-256 fingerprint:
+New releases carry the signed `lumynoid-<version>.apk`, a versioned arm64 Linux rootfs, source provenance, and a `SHA256SUMS` file. Release signing-key SHA-256 fingerprint:
 
 ```
 19:39:03:AA:56:2F:76:B0:88:B0:F0:AE:60:5C:7B:21:63:5C:47:59:1D:9E:DC:93:56:A0:B4:ED:28:73:DC:B4
@@ -22,15 +22,29 @@ On Android 13+, Lumynoid asks for notification permission the first time you ope
 
 ## Build
 
-Requirements: JDK 17 and the Android SDK (platform 37).
+Build with JDK 17, Android SDK platform 37, Build Tools 37.0.0, and NDK 28.2.13676358. The native build also uses GNU Make, Python 3, curl, unzip, and patch. On an arm64 Linux host it uses a native Clang and LLD with the pinned NDK sysroot.
+For a macOS app build, install GNU Make as `gmake`.
 
 ```
 ./gradlew :app:assembleDebug          # debug APK, package dev.lusalhi.lumynoid.debug
-./gradlew :core:test :llm:test :data:testDebugUnitTest
+./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest
 ./gradlew :app:assembleRelease        # unsigned arm64-v8a APK unless the release key env vars are set
 ```
 
-The structured-tool loop is exercised only by in-process JVM fixtures. The Android app does not register tools or run shell commands.
+The arm64 instrumentation suite exercises the runtime installer, built-in operations, and TaskRunner process cleanup. Building the fixture archive requires a Linux host with `chroot` access through root or passwordless sudo. On x86-64, install `qemu-aarch64-static` before building it.
+
+The rootfs build is offline: it uses the Alpine inputs bundled in `tools/userland/alpine-inputs.tar` and checks each one against `alpine-inputs.lock` before installation.
+The lock records the upstream URLs; `alpine-source-provenance.tsv` records the exact Alpine recipes and licenses for the installed packages.
+
+Run the same instrumentation APK on a connected arm64 device. Use an API 37 handset for the device check and the arm64 emulator for the separate emulator check.
+
+```sh
+./gradlew :userland:assembleDebugAndroidTest
+adb install -t -r userland/build/outputs/apk/androidTest/debug/userland-debug-androidTest.apk
+adb shell am instrument -w dev.lusalhi.lumynoid.userland.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+For a phone-only check, build `./gradlew :userland-check:assembleDebug`. Install `tools/userland-check/build/outputs/apk/debug/userland-check-debug.apk`, open **Lumynoid Test**, and tap **Jalankan tes**. It runs the same five checks offline. **Hapus fixture lama** opens Android's uninstall confirmation for the instrumentation APK, not for the main Lumynoid app.
 
 ## Checks that gate every change
 

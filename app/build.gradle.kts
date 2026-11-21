@@ -56,6 +56,12 @@ android {
         }
     }
 
+    packaging.jniLibs {
+        // PRoot and its loader run from the installed native library directory.
+        useLegacyPackaging = true
+        keepDebugSymbols += setOf("**/libproot.so", "**/libproot_loader.so", "**/libuserland_supervisor.so")
+    }
+
     dependenciesInfo {
         includeInApk = false
     }
@@ -78,6 +84,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":llm"))
     implementation(project(":data"))
+    implementation(project(":userland"))
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.ktor.client.core)
