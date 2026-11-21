@@ -2,6 +2,7 @@ package dev.lusalhi.lumynoid.app
 
 import android.Manifest.permission.POST_NOTIFICATIONS
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        viewModel.openApprovalNotification()
         setContent {
             LumynoidTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -52,13 +54,35 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        viewModel.openApprovalNotification()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        viewModel.connectAgent()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshNotificationPermission()
+    }
+
+    override fun onStop() {
+        viewModel.disconnectAgent()
+        super.onStop()
+    }
 }
 
 @Composable
 private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.refreshNotificationPermission()
+    }
     LaunchedEffect(state.screen, state.providerConfigured) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             state.screen == Screen.CHAT && state.providerConfigured &&
@@ -125,6 +149,7 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
             onOpenProvider = viewModel::openProvider,
             onOpenConversations = viewModel::openConversations,
             onNewConversation = viewModel::newConversation,
+            onApprovalDecision = viewModel::resolveApproval,
         )
         Screen.CONVERSATIONS -> ConversationListScreen(
             conversations = state.conversations,

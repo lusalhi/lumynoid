@@ -20,6 +20,14 @@ Verify an APK with `apksigner verify --print-certs` and the release's `SHA256SUM
 
 On Android 13+, Lumynoid asks for notification permission the first time you open chat with a provider configured. Allow it to see the in-progress reply notification. Replies still run if you decline; you can enable notifications later in Android's app settings.
 
+## Coding in chat
+
+On arm64, chat can create and read private project files, install the bundled npm package offline, and run the built-in JSON formatter. Each conversation has its own workspace, reused by later messages. Activity cards show the operation and its result.
+
+The configured model must support structured tool calls on arm64; the provider connection test only verifies text chat.
+
+The first Linux runtime download and each file replacement require approval in chat. If you enabled notifications, tapping the approval notification takes you to its card; it cannot approve or decline the action. Leaving chat without killing the process keeps the request available. After process death, unfinished work is marked interrupted and is not replayed.
+
 ## Build
 
 Build with JDK 17, Android SDK platform 37, Build Tools 37.0.0, and NDK 28.2.13676358. The native build also uses GNU Make, Python 3, curl, unzip, and patch. On an arm64 Linux host it uses a native Clang and LLD with the pinned NDK sysroot.
@@ -31,7 +39,7 @@ For a macOS app build, install GNU Make as `gmake`.
 ./gradlew :app:assembleRelease        # unsigned arm64-v8a APK unless the release key env vars are set
 ```
 
-The arm64 instrumentation suite exercises the runtime installer, TaskRunner process cleanup, workspace file operations, overwrite approval, and the bundled offline npm and JSON formatter flow. The coding tools are available through the runtime `ToolProvider`; chat integration is Story 2.8. Building the fixture archive requires a Linux host with `chroot` access through root or passwordless sudo. On x86-64, install `qemu-aarch64-static` before building it.
+The arm64 instrumentation suite exercises the runtime installer, TaskRunner process cleanup, workspace file operations, overwrite approval, and the bundled offline npm and JSON formatter flow. Building the fixture archive requires a Linux host with `chroot` access through root or passwordless sudo. On x86-64, install `qemu-aarch64-static` before building it.
 
 The rootfs build is offline: it uses the Alpine inputs bundled in `tools/userland/alpine-inputs.tar` and checks each one against `alpine-inputs.lock` before installation.
 The lock records the upstream URLs; `alpine-source-provenance.tsv` records the exact Alpine recipes and licenses for the installed packages.

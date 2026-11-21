@@ -15,6 +15,7 @@ class AgentConnection(private val context: Context) {
 
     private val _runner = MutableStateFlow<TaskRunner?>(null)
     val runner: StateFlow<TaskRunner?> = _runner.asStateFlow()
+    private var bound = false
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
@@ -27,11 +28,13 @@ class AgentConnection(private val context: Context) {
     }
 
     fun connect() {
-        val intent = Intent(context, AgentService::class.java)
-        context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        if (bound) return
+        bound = context.bindService(Intent(context, AgentService::class.java), connection, Context.BIND_AUTO_CREATE)
     }
 
     fun disconnect() {
+        if (!bound) return
+        bound = false
         context.unbindService(connection)
         _runner.value = null
     }

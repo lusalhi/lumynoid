@@ -30,7 +30,7 @@ enum class RuntimeOperation(internal val wireName: String, internal val argv: Li
     LIST_WORKSPACE("list_workspace", listOf("/bin/ls", "-1a", "/workspace"), "/workspace"),
 }
 
-internal class UserlandSetupRequired : IOException("Linux runtime setup is required.")
+internal class UserlandSetupRequired : IOException("Linux runtime setup is required. Call shell_runtime_setup, then retry.")
 
 /** App-owned operations for the bundled Linux runtime. Commands and mounts are selected in code. */
 class UserlandRuntime internal constructor(
@@ -54,10 +54,15 @@ class UserlandRuntime internal constructor(
 
     suspend fun operate(operation: RuntimeOperation, context: ToolContext): ToolOutcome = withContext(Dispatchers.IO) {
         currentCoroutineContext().ensureActive()
-        when (val result = startGuest(context, operation.argv, operation.cwd).await(30_000)) {
+        val session = try {
+            startGuest(context, operation.argv, operation.cwd)
+        } catch (e: UserlandSetupRequired) {
+            return@withContext ToolOutcome(e.message.orEmpty(), target = operation.wireName)
+        }
+        when (val result = session.await(30_000)) {
             ProcessResult.Deadline -> ToolOutcome("Runtime operation exceeded its deadline.", target = operation.wireName)
             is ProcessResult.Exited -> ToolOutcome(
-                result.output, target = operation.wireName, exitCode = result.code,
+                redactHostPaths(result.output), target = operation.wireName, exitCode = result.code,
             )
         }
     }
@@ -125,12 +130,16 @@ class UserlandRuntime internal constructor(
 
     private val setupTool = object : Tool {
         override val name = "shell_runtime_setup"
-        override val description = "Install the pinned Linux runtime. A network download requires user approval."
+        override val description = "Install the pinned Linux runtime with user approval. Use only when setup is required."
         override val inputSchema = schema(JsonObject(emptyMap()))
 
         override fun assess(args: JsonObject) = if (args.isEmpty()) RiskAssessment.EGRESS else RiskAssessment.DENIED
         override fun describe(args: JsonObject) = UiText(
-            "runtime_setup", mapOf("version" to JsonPrimitive(rootfs.spec.version), "source" to JsonPrimitive(releaseUrl)),
+            "runtime_setup", mapOf(
+                "version" to JsonPrimitive(rootfs.spec.version),
+                "source" to JsonPrimitive(releaseUrl),
+                "sizeBytes" to JsonPrimitive(rootfs.spec.size),
+            ),
         )
 
         override suspend fun execute(args: JsonObject, context: ToolContext): ToolOutcome {

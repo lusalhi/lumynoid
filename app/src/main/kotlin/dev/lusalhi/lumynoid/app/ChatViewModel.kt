@@ -1,14 +1,17 @@
 package dev.lusalhi.lumynoid.app
 
 import android.app.Application
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.lusalhi.lumynoid.core.ApprovalDecision
+import dev.lusalhi.lumynoid.core.ApprovalPort
 import dev.lusalhi.lumynoid.core.Conversation
 import dev.lusalhi.lumynoid.core.LiveAnswer
 import dev.lusalhi.lumynoid.core.Origin
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskRequest
-import dev.lusalhi.lumynoid.core.UuidV7
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,6 +29,9 @@ import kotlinx.coroutines.sync.withLock
 
 enum class Screen { LOADING, CHAT, PROVIDER, CONVERSATIONS }
 
+/** Each notification tap requests a fresh scroll, even when its target has not changed. */
+class ApprovalFocus(val eventId: String)
+
 data class ChatState(
     val screen: Screen = Screen.LOADING,
     val providerConfigured: Boolean = false,
@@ -39,6 +45,8 @@ data class ChatState(
     val pendingConversationIds: Set<String>? = null,
     /** The runner's active task when it belongs to the open conversation; the chat shows Stop while set. */
     val runningTaskId: String? = null,
+    val approvalDeadlines: Map<String, Long> = emptyMap(),
+    val approvalFocus: ApprovalFocus? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -50,6 +58,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val screen = MutableStateFlow(Screen.LOADING)
     private val providerConfigured = MutableStateFlow(false)
     private val conversationId = MutableStateFlow<String?>(null)
+    private val approvalFocus = MutableStateFlow<ApprovalFocus?>(null)
 
     private val events = conversationId.flatMapLatest { id ->
         // Tagged with its conversation so a stale list is never shown under another conversation.
@@ -60,16 +69,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val pending = agent.runner.flatMapLatest { it?.pendingConversations ?: flowOf(null) }
 
     private val conversations = graph.data.conversations.observeAll()
-    // Serialize deletion with conversation selection and task submission, including their DB writes.
+    // Serialize conversation changes and durable task handoffs with unbinding from the service.
     private val conversationLock = Mutex()
+    private var activityStarted = false
 
-    private val header = combine(screen, providerConfigured, conversationId, conversations) { screen, configured, id, all ->
+    private val selection = combine(conversationId, approvalFocus, ::Pair)
+    private val header = combine(
+        screen, providerConfigured, selection, conversations, graph.runner.pendingApprovals,
+    ) { screen, configured, (id, focus), all, approvals ->
         ChatState(
             screen = screen,
             providerConfigured = configured,
             conversations = all,
             conversationId = id,
             title = all.firstOrNull { it.id == id }?.title.orEmpty(),
+            approvalDeadlines = buildMap {
+                for ((eventId, approval) in approvals) {
+                    if (approval.conversationId == id) put(eventId, approval.elapsedDeadline)
+                }
+            },
+            approvalFocus = focus,
         )
     }
 
@@ -91,11 +110,59 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatState())
 
-    init {
+    private val initialized = viewModelScope.launch {
+        conversationId.value = graph.data.conversations.latest()?.id
+        screen.value = if (refreshConfigured()) Screen.CHAT else Screen.PROVIDER
+    }
+
+    internal fun refreshNotificationPermission() = graph.approvalNotifications.refreshPermission()
+
+    internal fun connectAgent() {
+        activityStarted = true
         agent.connect()
+    }
+
+    internal fun disconnectAgent() {
+        activityStarted = false
         viewModelScope.launch {
-            conversationId.value = graph.data.conversations.latest()?.id
-            screen.value = if (refreshConfigured()) Screen.CHAT else Screen.PROVIDER
+            conversationLock.withLock {
+                if (!activityStarted) agent.disconnect()
+            }
+        }
+    }
+
+    internal fun openApprovalNotification() {
+        val notifications = graph.approvalNotifications
+        val target = notifications.openedTarget ?: return
+        notifications.openedTarget = null
+        viewModelScope.launch {
+            initialized.join()
+            conversationLock.withLock {
+                val approval = graph.runner.pendingApprovals.value[target.eventId] ?: return@withLock
+                if (!target.matches(approval)) return@withLock
+                openConversation(approval.conversationId)
+                approvalFocus.value = ApprovalFocus(target.eventId)
+            }
+        }
+    }
+
+    internal fun resolveApproval(eventId: String, decision: ApprovalDecision) {
+        viewModelScope.launch {
+            conversationLock.withLock {
+                val runner = agent.runner.filterNotNull().first()
+                val approval = runner.pendingApprovals.value[eventId] ?: return@withLock
+                if (screen.value != Screen.CHAT || approval.conversationId != conversationId.value) return@withLock
+                val port: ApprovalPort = runner
+                try {
+                    if (port.resolve(approval.event.approval.id, decision) && approvalFocus.value?.eventId == eventId) {
+                        approvalFocus.value = null
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    Toast.makeText(getApplication<Application>(), R.string.approval_save_failed, Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -126,12 +193,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun closeConversations() { screen.value = Screen.CHAT }
 
     fun openConversation(id: String) {
+        approvalFocus.value = null
         conversationId.value = id
         screen.value = Screen.CHAT
     }
 
     /** The conversation itself is created on the first message, so nothing is written here. */
     fun newConversation() {
+        approvalFocus.value = null
         conversationId.value = null
         screen.value = Screen.CHAT
     }
@@ -165,7 +234,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             conversationLock.withLock {
                 val id = conversationId.value ?: graph.data.conversations.create(input).id.also { conversationId.value = it }
                 val runner = agent.runner.filterNotNull().first()
-                runner.submit(TaskRequest(Origin.User, id, workspaceId = UuidV7.next(), input = input))
+                approvalFocus.value = null
+                runner.submit(TaskRequest(Origin.User, id, workspaceId = id, input = input))
             }
         }
     }

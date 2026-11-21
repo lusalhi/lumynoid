@@ -28,6 +28,14 @@ data class LiveAnswer(val taskId: String, val conversationId: String, val text: 
 /** The task the runner is executing right now, from the moment its job starts until it has ended. */
 data class ActiveTask(val taskId: String, val conversationId: String)
 
+/** A durable request still awaiting a decision in this process. */
+data class PendingApproval(
+    val conversationId: String,
+    val event: TaskEvent.ApprovalRequested,
+    /** Monotonic deadline in the same clock domain as the runner's elapsedMillis. */
+    val elapsedDeadline: Long,
+)
+
 /**
  * The single execution path (AD-2): every LLM turn enters through [submit], runs one at a time in
  * FIFO order with priority for approved continuations (AD-3), and leaves its trace in the event log (AD-4).
@@ -60,6 +68,7 @@ class TaskRunner(
         val continuation: Continuation,
         val elapsedDeadline: Long,
         val resolutionId: String,
+        val requestEventId: String,
     ) {
         var expiryJob: Job? = null
         var resolution: TaskEvent.ApprovalResolved? = null
@@ -81,6 +90,7 @@ class TaskRunner(
     private val _busy = MutableStateFlow(false)
     private val _pendingConversations = MutableStateFlow<Set<String>?>(null)
 
+    private val _pendingApprovals = MutableStateFlow<Map<String, PendingApproval>>(emptyMap())
     /** Completed once crash recovery has closed the tasks of the previous run; submit waits for it. */
     private val recovered = CompletableDeferred<Unit>()
 
@@ -94,6 +104,9 @@ class TaskRunner(
 
     /** Conversations with unfinished tasks, including those waiting for approval; null during recovery. */
     val pendingConversations: StateFlow<Set<String>?> = _pendingConversations.asStateFlow()
+
+    /** Live approvals keyed by request event ID; historical requests are never restored as live. */
+    val pendingApprovals: StateFlow<Map<String, PendingApproval>> = _pendingApprovals.asStateFlow()
 
     init {
         scope.launch {
@@ -265,7 +278,7 @@ class TaskRunner(
             val approval = ToolApproval(ids.next(), paused.call, paused.risk, now + APPROVAL_LIFETIME_MS)
             val event = TaskEvent.ApprovalRequested(ids.next(), task.taskId, now, approval)
             val elapsedDeadline = elapsedMillis() + APPROVAL_LIFETIME_MS
-            val waiting = WaitingApproval(task, approval, paused.continuation, elapsedDeadline, ids.next())
+            val waiting = WaitingApproval(task, approval, paused.continuation, elapsedDeadline, ids.next(), event.id)
             appendOrConfirm(task, event)
             approvals[approval.id] = waiting
             synchronized(stateLock) {
@@ -275,6 +288,7 @@ class TaskRunner(
                 runnable--
                 updatePending()
             }
+            _pendingApprovals.value += event.id to PendingApproval(task.request.conversationId, event, elapsedDeadline)
             waiting.expiryJob = scope.launch { resolveWhenDue(waiting) }
         }
     }
@@ -322,6 +336,7 @@ class TaskRunner(
         }
         appendOrConfirm(task, resolution) { waiting.resolution = null }
         approvals.remove(approval.id)
+        _pendingApprovals.value -= waiting.requestEventId
         waiting.expiryJob?.cancel()
         val decision = resolution.decision
         when (decision) {
@@ -489,6 +504,7 @@ class TaskRunner(
                 if (calls.any { it.tool.assess(it.args) == RiskAssessment.DENIED }) {
                     return SliceResult.Failed(FailureReason.TOOL_DENIED)
                 }
+                _live.value = null
                 val event = TaskEvent.ToolCallRequested(
                     ids.next(), task.taskId, clock.nowMillis(), reply.text, calls.map { it.describe() },
                 )

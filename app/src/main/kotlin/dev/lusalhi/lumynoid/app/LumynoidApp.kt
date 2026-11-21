@@ -5,6 +5,7 @@ import android.os.SystemClock
 import dev.lusalhi.lumynoid.core.LlmPort
 import dev.lusalhi.lumynoid.core.ProviderAdminPort
 import dev.lusalhi.lumynoid.core.TaskRunner
+import dev.lusalhi.lumynoid.core.ToolRegistry
 import dev.lusalhi.lumynoid.core.ToolSessionRelease
 import dev.lusalhi.lumynoid.data.LumynoidData
 import dev.lusalhi.lumynoid.llm.LlmRouter
@@ -37,13 +38,15 @@ class AppGraph(application: Application) {
 
     val userland by lazy { UserlandRuntime.create(application, httpClient) }
     private val agentScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    internal val approvalNotifications = ApprovalNotifications(application)
     val runner: TaskRunner by lazy {
         TaskRunner(
             llm, data.events, agentScope,
+            tools = ToolRegistry(listOfNotNull(userland)),
             toolSessions = userland ?: ToolSessionRelease {},
             elapsedMillis = SystemClock::elapsedRealtime,
             maxLlmCalls = data.taskSettings::maxLlmCalls,
-        )
+        ).also { approvalNotifications.observe(it, agentScope) }
     }
 }
 

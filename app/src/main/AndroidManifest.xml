@@ -25,6 +25,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ApprovalLinkActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoDisplay" />
+
         <provider
             android:name=".LumynoidFileProvider"
             android:authorities="${applicationId}.files"

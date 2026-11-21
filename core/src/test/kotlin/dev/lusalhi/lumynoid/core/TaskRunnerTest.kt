@@ -575,16 +575,23 @@ class TaskRunnerTest {
         runCurrent()
         assertEquals(null, accepted)
         assertTrue(log.state.value.none { it is TaskEvent.ApprovalResolved })
+        assertTrue(runner.pendingApprovals.value.isEmpty())
 
         requestReturn.complete(Unit)
         runCurrent()
         assertEquals(ApprovalResolution.APPROVED, log.state.value.filterIsInstance<TaskEvent.ApprovalResolved>().single().decision)
         assertFalse(dispatched)
+        val waiting = log.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single()
+        val live = runner.pendingApprovals.value.getValue(waiting.id)
+        assertEquals(request.conversationId, live.conversationId)
+        assertEquals(waiting, live.event)
+        assertFalse(runner.busy.value)
         runner.cancel(taskId)
         resolutionReturn.complete(Unit)
         runCurrent()
 
         assertEquals(true, accepted)
+        assertTrue(runner.pendingApprovals.value.isEmpty())
         assertFalse(dispatched)
         assertIs<TaskEvent.TaskCancelled>(log.state.value.last())
         assertEquals(1, log.state.value.filterIsInstance<TaskEvent.ApprovalResolved>().size)
@@ -677,6 +684,8 @@ class TaskRunnerTest {
         val approvals = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().associateBy { it.taskId }
         val deniedId = approvals.getValue(denied).approval.id
         val expiredId = approvals.getValue(expired).approval.id
+        assertEquals(approvals.values.map { it.id }.toSet(), runner.pendingApprovals.value.keys)
+        assertEquals(43_200_000L, runner.pendingApprovals.value.getValue(approvals.getValue(expired).id).elapsedDeadline)
         val cancelledId = approvals.getValue(cancelled).approval.id
 
         wallTime += 43_200_000L
@@ -691,10 +700,12 @@ class TaskRunnerTest {
         assertTrue(events.state.value.last { it.taskId == expired } is TaskEvent.ApprovalRequested)
         wallTime = 1_000L
         advanceTimeBy(1L)
+        assertEquals(setOf(approvals.getValue(expired).id), runner.pendingApprovals.value.keys)
         runCurrent()
         assertFalse(runner.resolve(expiredId, ApprovalDecision.APPROVE))
 
         val decisions = events.state.value.filterIsInstance<TaskEvent.ApprovalResolved>()
+        assertTrue(runner.pendingApprovals.value.isEmpty())
         assertEquals(listOf(ApprovalResolution.DENIED, ApprovalResolution.CANCELLED, ApprovalResolution.EXPIRED), decisions.map { it.decision })
         assertEquals(listOf(deniedId, cancelledId, expiredId), decisions.map { it.approvalId })
         val failures = events.state.value.filterIsInstance<TaskEvent.TaskFailed>()
