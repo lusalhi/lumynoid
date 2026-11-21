@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Streams chat completions from any OpenAI Chat Completions-compatible endpoint (AD-11), written
@@ -81,9 +83,14 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) : WireAdapter {
                     malformed = true
                     continue
                 }
-                val progress = calls.getOrPut(index, ::CallProgress)
                 val name = call.function?.name
-                val arguments = call.function?.arguments
+                val rawArguments = call.function?.arguments
+                val arguments = (rawArguments as? JsonPrimitive)?.takeIf { it.isString }?.content
+                if (rawArguments != null && rawArguments != JsonNull && arguments == null) {
+                    malformed = true
+                    continue
+                }
+                val progress = calls.getOrPut(index, ::CallProgress)
                 if (!name.isNullOrBlank()) progress.hasName = true
                 arguments?.let(progress.arguments::append)
                 if (name != null || arguments != null) emit(LlmChunk.ToolCallDelta(index, name, arguments))
@@ -170,7 +177,7 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) : WireAdapter {
     )
 
     @Serializable
-    private class FunctionDelta(val name: String? = null, val arguments: String? = null)
+    private class FunctionDelta(val name: String? = null, val arguments: JsonElement? = null)
 
     private class CallProgress {
         var hasName = false

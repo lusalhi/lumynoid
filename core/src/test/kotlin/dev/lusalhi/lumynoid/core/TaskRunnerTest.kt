@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -210,6 +211,207 @@ class TaskRunnerTest {
         assertEquals(0, executed)
         assertTrue(events.state.value.none { it is TaskEvent.ToolCallRequested || it is TaskEvent.ToolResult })
         assertEquals(taskIds, events.state.value.filterIsInstance<TaskEvent.TaskFailed>().map { it.taskId })
+    }
+
+    @Test
+    fun aSecondMalformedReplyFailsAfterOneAuditedRepair() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        var executed = 0
+        val tool = FixtureTool { _, _ ->
+            executed++
+            ToolOutcome("unexpected")
+        }
+        val requests = mutableListOf<LlmRequest>()
+        val llm = LlmPort { sent ->
+            requests += sent
+            if (requests.size == 1) {
+                flowOf(LlmChunk.Failed(LlmError.MalformedToolCall))
+            } else {
+                assertIs<TaskEvent.ToolCallRejected>(events.state.value[2])
+                assertIs<TaskEvent.LlmRetry>(events.state.value[3])
+                flowOf(LlmChunk.ToolCallDelta(0, tool.name, "{}"), LlmChunk.ToolCallDelta(1, tool.name, "{"), LlmChunk.Done)
+            }
+        }
+        val runner = runnerFor(llm, events, scope, registryFor(tool))
+        runner.submit(request)
+        advanceUntilIdle()
+
+        val audit = events.state.value.drop(2)
+        assertEquals(4, audit.size)
+        assertEquals(1, assertIs<TaskEvent.ToolCallRejected>(audit[0]).callNumber)
+        assertEquals(2, assertIs<TaskEvent.LlmRetry>(audit[1]).callNumber)
+        assertEquals(2, assertIs<TaskEvent.ToolCallRejected>(audit[2]).callNumber)
+        assertEquals(FailureReason.MALFORMED_TOOL_CALL, assertIs<TaskEvent.TaskFailed>(audit[3]).reason)
+        assertEquals(0, executed)
+        assertEquals(2, requests.size)
+        assertEquals(Role.SYSTEM, requests[1].messages.first().role)
+        assertEquals(requests[0], requests[1].copy(messages = requests[1].messages.drop(1)))
+    }
+
+    @Test
+    fun repairPreservesCompletedToolRoundsAndCorrectedCallsRequireApproval() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val requests = mutableListOf<LlmRequest>()
+        val executed = mutableListOf<String>()
+        val safe = FixtureTool { _, _ ->
+            executed += "safe"
+            ToolOutcome("safe result")
+        }
+        val risky = FixtureTool("web_fixture_egress", RiskAssessment.EGRESS) { _, _ ->
+            executed += "risky"
+            ToolOutcome("approved result")
+        }
+        val registry = ToolRegistry(listOf(ToolProvider { listOf(safe, risky) }))
+        val llm = LlmPort { sent ->
+            requests += sent
+            when (requests.size) {
+                1 -> flowOf(LlmChunk.ToolCallDelta(0, safe.name, "{}"), LlmChunk.Done)
+                2 -> flowOf(
+                    LlmChunk.TextDelta("discard this"),
+                    LlmChunk.ToolCallDelta(0, safe.name, "{}"),
+                    LlmChunk.ToolCallDelta(1, risky.name, "{"),
+                    LlmChunk.Done,
+                )
+                3 -> flowOf(LlmChunk.ToolCallDelta(0, risky.name, "{}"), LlmChunk.Done)
+                else -> flowOf(LlmChunk.TextDelta("finished"), LlmChunk.Done)
+            }
+        }
+        val runner = runnerFor(llm, events, scope, registry)
+        val id = runner.submit(request)
+        runCurrent()
+
+        assertEquals(listOf("safe"), executed)
+        assertEquals(3, requests.size)
+        assertEquals(listOf(Role.USER, Role.ASSISTANT, Role.TOOL), requests[1].messages.map { it.role })
+        assertEquals(Role.SYSTEM, requests[2].messages.first().role)
+        assertEquals(requests[1], requests[2].copy(messages = requests[2].messages.drop(1)))
+        val approval = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval
+        assertEquals(risky.name, approval.call.call.name)
+        assertTrue(runner.resolve(approval.id, ApprovalDecision.APPROVE))
+        advanceUntilIdle()
+
+        assertEquals(listOf("safe", "risky"), executed)
+        val transcript = requests[3].messages
+        assertEquals(requests[1].messages, transcript.dropLast(2))
+        assertEquals(approval.call.call, transcript[3].toolCalls.single())
+        assertEquals(approval.call.call.id, transcript[4].toolCallId)
+        assertEquals("approved result", transcript[4].content)
+        assertEquals(transcript, ContextAssembler.assemble(events.state.value, id).messages)
+        assertIs<TaskEvent.TaskFinished>(events.state.value.last())
+    }
+
+    @Test
+    fun repeatedToolsStopAtTheDefaultLimit() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        var invocations = 0
+        val tool = FixtureTool { _, _ -> ToolOutcome("result") }
+        val llm = LlmPort {
+            invocations++
+            flowOf(LlmChunk.ToolCallDelta(0, tool.name, "{}"), LlmChunk.Done)
+        }
+        val runner = runnerFor(llm, events, scope, registryFor(tool))
+        runner.submit(request)
+        advanceUntilIdle()
+
+        assertEquals(20, invocations)
+        assertEquals(20, events.state.value.filterIsInstance<TaskEvent.ToolResult>().size)
+        assertEquals(FailureReason.BUDGET_EXHAUSTED, assertIs<TaskEvent.TaskFailed>(events.state.value.last()).reason)
+    }
+
+    @Test
+    fun repairConsumesBudgetAndCanReturnTextOnTheLastInvocation() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        var limit = 1
+        val requests = mutableListOf<LlmRequest>()
+        val llm = LlmPort { sent ->
+            requests += sent
+            if (sent.messages.first().role == Role.SYSTEM) {
+                flowOf(LlmChunk.TextDelta("repaired answer"), LlmChunk.Done)
+            } else {
+                flowOf(LlmChunk.Failed(LlmError.MalformedToolCall))
+            }
+        }
+        val runner = TaskRunner(llm, events, scope, maxLlmCalls = { limit })
+        val first = runner.submit(request)
+        limit = 2
+        val second = runner.submit(request.copy(input = "second"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("hello", "second", "second"), requests.map { it.messages.last().content })
+        val firstLog = events.state.value.filter { it.taskId == first }
+        assertEquals(1, firstLog.filterIsInstance<TaskEvent.ToolCallRejected>().single().callNumber)
+        assertTrue(firstLog.none { it is TaskEvent.LlmRetry })
+        assertEquals(FailureReason.BUDGET_EXHAUSTED, assertIs<TaskEvent.TaskFailed>(firstLog.last()).reason)
+        val secondLog = events.state.value.filter { it.taskId == second }
+        assertEquals(2, secondLog.filterIsInstance<TaskEvent.LlmRetry>().single().callNumber)
+        assertEquals("repaired answer", secondLog.filterIsInstance<TaskEvent.AssistantMessage>().single().text)
+        assertIs<TaskEvent.TaskFinished>(secondLog.last())
+    }
+
+    @Test
+    fun approvalContinuationRetainsTheSubmittedLimitAndRepairAllowance() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        var limit = 2
+        val invocations = mutableMapOf<String, Int>()
+        val tool = FixtureTool(risk = RiskAssessment.EGRESS) { _, _ -> ToolOutcome("approved") }
+        val llm = LlmPort { sent ->
+            val input = sent.messages.last { it.role == Role.USER }.content
+            val callNumber = invocations.getOrDefault(input, 0) + 1
+            invocations[input] = callNumber
+            if (callNumber == 2) {
+                flowOf(LlmChunk.ToolCallDelta(0, tool.name, "{}"), LlmChunk.Done)
+            } else {
+                flowOf(LlmChunk.Failed(LlmError.MalformedToolCall))
+            }
+        }
+        val runner = TaskRunner(llm, events, scope, tools = registryFor(tool), maxLlmCalls = { limit })
+        val capped = runner.submit(request.copy(input = "capped"))
+        runCurrent()
+        limit = 4
+        val repeated = runner.submit(request.copy(input = "repeated"))
+        runCurrent()
+
+        val approvals = events.state.value.filterIsInstance<TaskEvent.ApprovalRequested>()
+        assertEquals(listOf(capped, repeated), approvals.map { it.taskId })
+        assertEquals(mapOf("capped" to 2, "repeated" to 2), invocations)
+        for (approval in approvals) assertTrue(runner.resolve(approval.approval.id, ApprovalDecision.APPROVE))
+        advanceUntilIdle()
+
+        assertEquals(mapOf("capped" to 2, "repeated" to 3), invocations)
+        assertEquals(listOf(capped, repeated), events.state.value.filterIsInstance<TaskEvent.ToolResult>().map { it.taskId })
+        val failures = events.state.value.filterIsInstance<TaskEvent.TaskFailed>().associate { it.taskId to it.reason }
+        assertEquals(mapOf(capped to FailureReason.BUDGET_EXHAUSTED, repeated to FailureReason.MALFORMED_TOOL_CALL), failures)
+        assertEquals(listOf(capped, repeated), events.state.value.filterIsInstance<TaskEvent.LlmRetry>().map { it.taskId })
+    }
+
+    @Test
+    fun theRepairIsNeverSentWhenAnAuditWriteFails() = runnerTest { scope ->
+        val events = InMemoryEvents()
+        val unreliable = object : EventRepository by events {
+            override suspend fun append(conversationId: String, event: TaskEvent) {
+                if (event is TaskEvent.LlmRetry || (event is TaskEvent.ToolCallRejected &&
+                        events.state.value.filterIsInstance<TaskEvent.UserMessage>().last().text == "reject-write-fails")
+                ) error("audit storage unavailable")
+                events.append(conversationId, event)
+            }
+        }
+        var invocations = 0
+        val llm = LlmPort {
+            invocations++
+            flowOf(LlmChunk.Failed(LlmError.MalformedToolCall))
+        }
+        val runner = TaskRunner(llm, unreliable, scope)
+        val rejected = runner.submit(request.copy(input = "reject-write-fails"))
+        advanceUntilIdle()
+        val retried = runner.submit(request.copy(input = "retry-write-fails"))
+        advanceUntilIdle()
+
+        assertEquals(2, invocations)
+        assertTrue(events.state.value.none { it is TaskEvent.LlmRetry })
+        assertEquals(retried, events.state.value.filterIsInstance<TaskEvent.ToolCallRejected>().single().taskId)
+        val failures = events.state.value.filterIsInstance<TaskEvent.TaskFailed>()
+        assertEquals(listOf(rejected, retried), failures.map { it.taskId })
+        assertTrue(failures.all { it.reason == FailureReason.SERVER })
     }
 
     @Test

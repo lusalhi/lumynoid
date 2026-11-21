@@ -38,6 +38,8 @@
     <string name="error_approval_denied">You declined the tool action.</string>
     <string name="error_approval_expired">Approval for the tool action expired.</string>
     <string name="error_approval_changed">The tool action changed after approval and was blocked.</string>
+    <string name="error_malformed_tool_call">The AI provider returned an invalid tool call after a retry.</string>
+    <string name="error_budget_exhausted">This task reached its limit for AI calls. You can change the limit in AI provider settings.</string>
     <string name="task_cancelled">Stopped.</string>
 
     <string name="notification_channel_task_running">Answer in progress</string>
@@ -53,6 +55,11 @@
 
     <string name="provider_title">AI providers</string>
     <string name="provider_intro">Use an OpenAI-compatible service or Anthropic with your own API key. Your key stays on this phone.</string>
+    <string name="provider_call_limit">Maximum AI calls per task</string>
+    <string name="provider_call_limit_help">Applies to new tasks.</string>
+    <string name="provider_call_limit_invalid">Enter a positive whole number.</string>
+    <string name="provider_call_limit_save_failed">Could not save the limit. Try again.</string>
+    <string name="provider_save_call_limit">Save call limit</string>
     <string name="provider_active">Used for chat · %1$s</string>
     <string name="provider_use">Use for chat</string>
     <string name="provider_edit">Edit</string>

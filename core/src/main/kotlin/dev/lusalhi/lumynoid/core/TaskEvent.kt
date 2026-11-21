@@ -27,6 +27,8 @@ enum class FailureReason {
     @SerialName("approval_denied") APPROVAL_DENIED,
     @SerialName("approval_expired") APPROVAL_EXPIRED,
     @SerialName("approval_changed") APPROVAL_CHANGED,
+    @SerialName("malformed_tool_call") MALFORMED_TOOL_CALL,
+    @SerialName("budget_exhausted") BUDGET_EXHAUSTED,
 }
 
 @Serializable
@@ -58,7 +60,7 @@ sealed class TaskEvent {
     val needsRecovery: Boolean
         get() = when (this) {
             is TaskQueued, is UserMessage, is AssistantMessage, is ToolCallRequested, is ToolResult,
-            is ApprovalRequested, is ApprovalResolved -> true
+            is ApprovalRequested, is ApprovalResolved, is ToolCallRejected, is LlmRetry -> true
             is TaskFinished, is TaskFailed, is TaskCancelled, is Unknown -> false
         }
 
@@ -111,6 +113,26 @@ sealed class TaskEvent {
         override val at: Long,
         val callId: String,
         val outcome: ToolOutcome,
+    ) : TaskEvent()
+
+    /** A malformed assistant reply was discarded. [callNumber] is its one-based LLM invocation number. */
+    @Serializable
+    @SerialName("tool_call_rejected")
+    data class ToolCallRejected(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val callNumber: Int,
+    ) : TaskEvent()
+
+    /** A repair request is about to be sent as invocation [callNumber]. */
+    @Serializable
+    @SerialName("llm_retry")
+    data class LlmRetry(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val callNumber: Int,
     ) : TaskEvent()
 
     @Serializable

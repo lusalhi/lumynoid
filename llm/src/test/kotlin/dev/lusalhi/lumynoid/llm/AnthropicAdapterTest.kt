@@ -1,5 +1,6 @@
 package dev.lusalhi.lumynoid.llm
 
+import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.LlmChunk
 import dev.lusalhi.lumynoid.core.LlmError
 import dev.lusalhi.lumynoid.core.LlmMessage
@@ -233,13 +234,14 @@ class AnthropicAdapterTest {
 
     @Test
     fun malformedArgumentsPreventDispatchOfTheWholeRound() = runTest {
+        val malformed = """{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":{"limit":2}}}"""
         val engine = MockEngine {
             respond(
                 events(
                     toolStart(0, "web_lookup", """{"key":"one"}"""),
                     blockStop(0),
                     toolStart(1, "web_read"),
-                    toolDelta(1, """{"limit":"""),
+                    malformed,
                     blockStop(1),
                     stopReason("tool_use"),
                     stop,
@@ -250,9 +252,15 @@ class AnthropicAdapterTest {
         val log = ToolRunnerFixture(backgroundScope, LlmPort { adapter.stream(BASE, MODEL, KEY, it) })
             .run("Find fixtures")
 
-        assertIs<TaskEvent.TaskFailed>(log.last())
+        assertEquals(FailureReason.MALFORMED_TOOL_CALL, assertIs<TaskEvent.TaskFailed>(log.last()).reason)
+        assertEquals(listOf(1, 2), log.filterIsInstance<TaskEvent.ToolCallRejected>().map { it.callNumber })
+        assertEquals(2, log.filterIsInstance<TaskEvent.LlmRetry>().single().callNumber)
         assertTrue(log.none { it is TaskEvent.ToolCallRequested || it is TaskEvent.ToolResult })
-        assertEquals(1, engine.requestHistory.size)
+        assertEquals(2, engine.requestHistory.size)
+        val original = engine.requestJson(0)
+        val retry = engine.requestJson(1)
+        assertTrue(retry.getValue("system").jsonPrimitive.content.isNotBlank())
+        assertEquals(original.getValue("messages"), retry.getValue("messages"))
     }
 
     @Test

@@ -41,9 +41,12 @@ class TaskRunner(
     private val tools: ToolRegistry = ToolRegistry(),
     private val toolSessions: ToolSessionRelease = ToolSessionRelease {},
     private val elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val maxLlmCalls: suspend () -> Int = { DEFAULT_MAX_LLM_CALLS },
 ) : ApprovalPort {
-    private class Task(val taskId: String, val request: TaskRequest) {
+    private class Task(val taskId: String, val request: TaskRequest, val maxLlmCalls: Int) {
         val context = ToolContext(taskId, request.conversationId, request.workspaceId)
+        var llmCalls = 0
+        var repaired = false
         var cancelled = false
         var job: Job? = null
         var waiting: WaitingApproval? = null
@@ -144,8 +147,10 @@ class TaskRunner(
 
     /** Records the task and its user message, queues it, and returns the task id. */
     suspend fun submit(request: TaskRequest): String {
+        val limit = maxLlmCalls()
+        require(limit > 0) { "The LLM call limit must be positive" }
         recovered.await()
-        val task = Task(ids.next(), request)
+        val task = Task(ids.next(), request, limit)
         val now = clock.nowMillis()
         synchronized(stateLock) {
             tasks[task.taskId] = task
@@ -451,21 +456,36 @@ class TaskRunner(
             it.calls.subList(it.nextCall + 1, it.calls.size).any { call -> call.tool.assess(call.args) == RiskAssessment.DENIED }
         } ?: false
         var toolTurn = round != null
+        var repairNext = false
         while (true) {
             if (round == null) {
                 ensureRunnable(task)
-                val reply = readReply(task, request)
-                if (reply.terminal is LlmChunk.Failed) return SliceResult.Failed(reply.terminal.error.toReason())
+                if (task.llmCalls >= task.maxLlmCalls) return SliceResult.Failed(FailureReason.BUDGET_EXHAUSTED)
+                val sent = if (repairNext) request.copy(messages = listOf(REPAIR_INSTRUCTION) + request.messages) else request
+                repairNext = false
+                task.llmCalls++
+                val reply = readReply(task, sent)
+                val failure = (reply.terminal as? LlmChunk.Failed)?.error
+                if (failure != null && failure != LlmError.MalformedToolCall) return SliceResult.Failed(failure.toReason())
                 val fragments = reply.fragments
-                if (fragments == null) {
+                val calls = if (fragments != null && reply.terminal == LlmChunk.Done) prepareCalls(fragments, registry) else null
+                if (failure == LlmError.MalformedToolCall || (fragments != null && calls == null)) {
+                    _live.value = null
+                    appendOrConfirm(task, TaskEvent.ToolCallRejected(ids.next(), task.taskId, clock.nowMillis(), task.llmCalls))
+                    if (task.repaired) return SliceResult.Failed(FailureReason.MALFORMED_TOOL_CALL)
+                    if (task.llmCalls >= task.maxLlmCalls) return SliceResult.Failed(FailureReason.BUDGET_EXHAUSTED)
+                    appendOrConfirm(task, TaskEvent.LlmRetry(ids.next(), task.taskId, clock.nowMillis(), task.llmCalls + 1))
+                    task.repaired = true
+                    repairNext = true
+                    continue
+                }
+                if (calls == null) {
                     return if (reply.text.isEmpty() || (toolTurn && reply.terminal != LlmChunk.Done)) {
                         SliceResult.Failed(FailureReason.SERVER)
                     } else {
                         SliceResult.Finished(reply.text)
                     }
                 }
-                val calls = if (reply.terminal == LlmChunk.Done) prepareCalls(fragments, registry) else null
-                if (calls == null) return SliceResult.Failed(LlmError.MalformedToolCall.toReason())
                 if (calls.any { it.tool.assess(it.args) == RiskAssessment.DENIED }) {
                     return SliceResult.Failed(FailureReason.TOOL_DENIED)
                 }
@@ -539,11 +559,17 @@ class TaskRunner(
         is LlmError.RateLimited -> FailureReason.RATE_LIMITED
         is LlmError.QuotaExhausted -> FailureReason.QUOTA_EXHAUSTED
         is LlmError.Network -> FailureReason.NETWORK
-        is LlmError.ToolsUnsupported, is LlmError.MalformedToolCall, is LlmError.Server -> FailureReason.SERVER
+        is LlmError.ToolsUnsupported, is LlmError.Server -> FailureReason.SERVER
+        is LlmError.MalformedToolCall -> FailureReason.MALFORMED_TOOL_CALL
     }
 
     private companion object {
         const val APPROVAL_LIFETIME_MS = 12 * 60 * 60 * 1_000L
         const val APPROVAL_WRITE_RETRY_MS = 1_000L
+        val REPAIR_INSTRUCTION = LlmMessage(
+            Role.SYSTEM,
+            "Your previous tool call reply was malformed. Reply with complete calls to the available tools " +
+                "using valid JSON objects for every call's arguments, or answer in plain text.",
+        )
     }
 }

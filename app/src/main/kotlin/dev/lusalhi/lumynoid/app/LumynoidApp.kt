@@ -34,7 +34,13 @@ class AppGraph(application: Application) {
     val providerAdmin: ProviderAdminPort = ProviderAdmin(adapters, data.providerConfigs, data.secrets)
 
     private val agentScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    val runner: TaskRunner by lazy { TaskRunner(llm, data.events, agentScope, elapsedMillis = SystemClock::elapsedRealtime) }
+    val runner: TaskRunner by lazy {
+        TaskRunner(
+            llm, data.events, agentScope,
+            elapsedMillis = SystemClock::elapsedRealtime,
+            maxLlmCalls = data.taskSettings::maxLlmCalls,
+        )
+    }
 }
 
 class LumynoidApp : Application() {

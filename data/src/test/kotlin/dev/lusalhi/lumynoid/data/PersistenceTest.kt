@@ -194,6 +194,50 @@ class PersistenceTest {
     }
 
     @Test
+    fun recoveryClosesTasksEndingInRejectionOrRetryWithoutReplaying() = runTest {
+        val file = folder.newFile("lumynoid.db")
+        val first = open(file)
+        val conversation = RoomConversationPort(first.dao(), UuidV7, Clock { 1L }).create("retries")
+        val events = repository(first.dao())
+        val rejected = TaskEvent.ToolCallRejected("reject-only", "rejected", 2L, 1)
+        val retryRejection = TaskEvent.ToolCallRejected("reject-before-retry", "retrying", 3L, 1)
+        val retry = TaskEvent.LlmRetry("retry", retryRejection.taskId, 4L, 2)
+        val audit = listOf(rejected, retryRejection, retry)
+        val taskIds = setOf(rejected.taskId, retry.taskId)
+        for (taskId in taskIds) {
+            events.createTask(taskId, TaskRequest(Origin.User, conversation.id, "ws", "x"), 1L)
+        }
+        for (event in audit) events.append(conversation.id, event)
+        val rows = first.dao().events(conversation.id)
+        assertTrue(rows.first().payload.startsWith("""{"type":"tool_call_rejected""""))
+        assertTrue(rows.last().payload.startsWith("""{"type":"llm_retry""""))
+        first.close()
+
+        val second = open(file)
+        try {
+            val reopened = repository(second.dao())
+            assertEquals(audit, reopened.history(conversation.id))
+            assertEquals(taskIds, reopened.unfinishedTasks().map { it.taskId }.toSet())
+            var modelCalls = 0
+            var registrySnapshots = 0
+            val runner = TaskRunner(
+                LlmPort { modelCalls++; emptyFlow() }, reopened, backgroundScope,
+                tools = ToolRegistry(listOf(ToolProvider { registrySnapshots++; emptyList() })),
+            )
+            runner.pendingConversations.first { it != null }
+
+            val interrupted = reopened.history(conversation.id).drop(audit.size).map { assertIs<TaskEvent.TaskFailed>(it) }
+            assertEquals(taskIds, interrupted.map { it.taskId }.toSet())
+            assertTrue(interrupted.all { it.reason == FailureReason.INTERRUPTED })
+            assertTrue(reopened.unfinishedTasks().isEmpty())
+            assertEquals(0, modelCalls)
+            assertEquals(0, registrySnapshots)
+        } finally {
+            second.close()
+        }
+    }
+
+    @Test
     fun providerConfigKeepsOnlyASecretReferenceNotTheKey() = runTest {
         val db = open(folder.newFile("lumynoid.db"))
         val store = RoomProviderConfigStore(db.dao())
@@ -308,6 +352,12 @@ class PersistenceTest {
         }
         assertFailsWith<IllegalStateException> {
             events.append(c.id, TaskEvent.ApprovalResolved("e5", "t1", 4L, approval.id, call.call.id, ApprovalResolution.APPROVED))
+        }
+        assertFailsWith<IllegalStateException> {
+            events.append(c.id, TaskEvent.ToolCallRejected("e6", "t1", 5L, 1))
+        }
+        assertFailsWith<IllegalStateException> {
+            events.append(c.id, TaskEvent.LlmRetry("e7", "t1", 5L, 2))
         }
 
         assertEquals(0, db.dao().taskCount())

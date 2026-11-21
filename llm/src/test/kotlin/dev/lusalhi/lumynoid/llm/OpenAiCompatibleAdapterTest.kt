@@ -1,5 +1,6 @@
 package dev.lusalhi.lumynoid.llm
 
+import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.LlmChunk
 import dev.lusalhi.lumynoid.core.LlmError
 import dev.lusalhi.lumynoid.core.LlmPort
@@ -182,16 +183,33 @@ class OpenAiCompatibleAdapterTest {
     }
 
     @Test
+    fun missingAndNullArgumentsCanPrecedeTheArgumentFragment() = runTest {
+        val nullArguments = """data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"name":"web_read","arguments":null}}]}}]}"""
+        val arguments = """data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{}"}}]}}]}"""
+
+        for (nameOnly in listOf(partialCall, nullArguments)) {
+            val chunks = readFrames(firstCall, nameOnly, arguments, chatFinish("tool_calls"))
+            assertEquals(listOf(LlmChunk.ToolCallDelta(1, "web_read"), LlmChunk.ToolCallDelta(1, argumentsFragment = "{}"), LlmChunk.Done), chunks.drop(1))
+        }
+    }
+
+    @Test
     fun malformedArgumentsPreventDispatchOfTheWholeRound() = runTest {
-        val malformed = toolFrame(1, "web_read", """{"limit":""")
+        val malformed = """data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"name":"web_read","arguments":{"limit":2}}}]}}]}"""
         val engine = MockEngine { respond(sse(firstCall, malformed, chatFinish("tool_calls"))) }
         val adapter = adapterFor(engine)
         val log = ToolRunnerFixture(backgroundScope, LlmPort { adapter.stream(TEST_URL, TEST_MODEL, SECRET, it) })
             .run("Find fixtures")
 
-        assertIs<TaskEvent.TaskFailed>(log.last())
+        assertEquals(FailureReason.MALFORMED_TOOL_CALL, assertIs<TaskEvent.TaskFailed>(log.last()).reason)
+        assertEquals(listOf(1, 2), log.filterIsInstance<TaskEvent.ToolCallRejected>().map { it.callNumber })
+        assertEquals(2, log.filterIsInstance<TaskEvent.LlmRetry>().single().callNumber)
         assertTrue(log.none { it is TaskEvent.ToolCallRequested || it is TaskEvent.ToolResult })
-        assertEquals(1, engine.requestHistory.size)
+        assertEquals(2, engine.requestHistory.size)
+        val original = engine.requestJson(0).getValue("messages").jsonArray
+        val retry = engine.requestJson(1).getValue("messages").jsonArray
+        assertEquals("system", retry.first().jsonObject.getValue("role").jsonPrimitive.content)
+        assertEquals(original.toList(), retry.drop(1))
     }
 
     @Test

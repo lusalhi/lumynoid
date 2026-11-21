@@ -57,9 +57,10 @@ internal class RoomEventRepository(
             payload = payload,
         )
         if (event is TaskEvent.ToolCallRequested || event is TaskEvent.ToolResult ||
-            event is TaskEvent.ApprovalRequested || event is TaskEvent.ApprovalResolved
+            event is TaskEvent.ApprovalRequested || event is TaskEvent.ApprovalResolved ||
+            event is TaskEvent.ToolCallRejected || event is TaskEvent.LlmRetry
         ) {
-            check(rowId != -1L) { "Cannot append tool or approval event to missing conversation: $conversationId" }
+            check(rowId != -1L) { "Cannot append required event to missing conversation: $conversationId" }
         }
     }
 

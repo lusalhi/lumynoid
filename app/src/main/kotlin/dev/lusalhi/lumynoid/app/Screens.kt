@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,7 +53,8 @@ fun ChatScreen(
     var draft by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
     val liveText = state.live?.text.orEmpty()
-    val itemCount = state.events.size + if (state.live != null) 1 else 0
+    val visibleEvents = remember(state.events) { state.events.filter { it.isVisible() } }
+    val itemCount = visibleEvents.size + if (state.live != null) 1 else 0
 
     LaunchedEffect(itemCount, liveText.length) {
         if (itemCount > 0) listState.scrollToItem(itemCount - 1)
@@ -102,7 +104,7 @@ fun ChatScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(state.events.filter { it.isVisible() }, key = { it.id }) { event -> EventRow(event) }
+                    items(visibleEvents, key = { it.id }) { event -> EventRow(event) }
                     state.live?.let { item(key = "live") { Bubble(it.text, fromUser = false) } }
                 }
             }
@@ -190,6 +192,8 @@ private fun FailureReason.messageRes(): Int = when (this) {
     FailureReason.APPROVAL_DENIED -> R.string.error_approval_denied
     FailureReason.APPROVAL_EXPIRED -> R.string.error_approval_expired
     FailureReason.APPROVAL_CHANGED -> R.string.error_approval_changed
+    FailureReason.MALFORMED_TOOL_CALL -> R.string.error_malformed_tool_call
+    FailureReason.BUDGET_EXHAUSTED -> R.string.error_budget_exhausted
 }
 
 /** Offers the saved crash report. Shown above every screen, so a crash during first-run setup can be shared too. */
