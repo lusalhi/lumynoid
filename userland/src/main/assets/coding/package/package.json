@@ -1,0 +1,11 @@
+{
+  "name": "@lumynoid/json-tools",
+  "version": "1.0.0",
+  "description": "Dependency-free lossless JSON whitespace formatter for the Lumynoid coding runtime.",
+  "private": true,
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ]
+}

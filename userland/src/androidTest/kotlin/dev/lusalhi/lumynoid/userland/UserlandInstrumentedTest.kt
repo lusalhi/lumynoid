@@ -27,6 +27,18 @@ class UserlandInstrumentedTest {
     fun releaseStopsOtherProcessesWhenOneCleanupFails() =
         runCheck(UserlandChecks::releaseStopsOtherProcessesWhenOneCleanupFails)
 
+    @Test
+    fun codingFilesStayInTheActiveWorkspace() =
+        runCheck(UserlandChecks::codingFilesStayInTheActiveWorkspace)
+
+    @Test
+    fun codingReplaceRequiresCurrentApproval() =
+        runCheck(UserlandChecks::codingReplaceRequiresCurrentApproval)
+
+    @Test
+    fun codingNpmAndFormatterUseOnlyBundledAssets() =
+        runCheck(UserlandChecks::codingNpmAndFormatterUseOnlyBundledAssets)
+
     private fun runCheck(check: suspend (UserlandChecks) -> Unit) = runBlocking {
         assumeTrue("arm64 runtime", "arm64-v8a" in Build.SUPPORTED_64_BIT_ABIS)
         val instrumentation = InstrumentationRegistry.getInstrumentation()

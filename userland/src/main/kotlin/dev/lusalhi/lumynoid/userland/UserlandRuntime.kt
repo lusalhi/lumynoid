@@ -1,6 +1,7 @@
 package dev.lusalhi.lumynoid.userland
 
 import android.content.Context
+import android.content.res.AssetManager
 import android.os.Build
 import dev.lusalhi.lumynoid.core.RiskAssessment
 import dev.lusalhi.lumynoid.core.Tool
@@ -20,9 +21,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.IOException
-import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
-import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.nio.file.Paths
 
@@ -30,6 +29,8 @@ enum class RuntimeOperation(internal val wireName: String, internal val argv: Li
     VERSIONS("versions", listOf("/bin/sh", "-c", "/usr/bin/node --version && /usr/bin/npm --version"), "/"),
     LIST_WORKSPACE("list_workspace", listOf("/bin/ls", "-1a", "/workspace"), "/workspace"),
 }
+
+internal class UserlandSetupRequired : IOException("Linux runtime setup is required.")
 
 /** App-owned operations for the bundled Linux runtime. Commands and mounts are selected in code. */
 class UserlandRuntime internal constructor(
@@ -39,8 +40,15 @@ class UserlandRuntime internal constructor(
     private val rootfs: RootfsInstaller,
     private val processes: UserlandProcesses,
     private val releaseUrl: String,
+    private val assets: AssetManager,
 ) : ToolProvider, ToolSessionRelease {
-    override fun tools(): List<Tool> = listOf(setupTool, probeTool)
+    private val codingWorkspace = CodingWorkspace(workspaceRoot)
+    private val codingRuntime = CodingRuntime(
+        this, codingWorkspace, assets, workspaceRoot.resolveSibling("coding-installs"), scratchRoot,
+    )
+    private val codingTools = CodingTools(codingWorkspace, codingRuntime)
+
+    override fun tools(): List<Tool> = listOf(setupTool, probeTool) + codingTools.tools()
 
     override suspend fun release(context: ToolContext) = processes.release(context.taskId)
 
@@ -54,9 +62,31 @@ class UserlandRuntime internal constructor(
         }
     }
 
-    internal fun startGuest(context: ToolContext, argv: List<String>, cwd: String = "/workspace"): UserlandProcesses.Session {
-        val workspace = workspace(context.workspaceId)
-        val installed = rootfs.locate() ?: throw IOException("Linux runtime setup is required")
+    internal fun startGuest(context: ToolContext, argv: List<String>, cwd: String = "/workspace"): UserlandProcesses.Session =
+        launchGuest(
+            context, argv, cwd,
+            mapOf(codingWorkspace.directory(context.workspaceId).toString() to "/workspace"),
+            emptyMap(),
+        )
+
+    /** Coding guest: explicit app-owned binds only; the project workspace is not mounted unless listed. */
+    internal fun startGuest(
+        context: ToolContext,
+        argv: List<String>,
+        cwd: String,
+        binds: Map<String, String>,
+        environment: Map<String, String>,
+    ): UserlandProcesses.Session = launchGuest(context, argv, cwd, binds, environment)
+
+    private fun launchGuest(
+        context: ToolContext,
+        argv: List<String>,
+        cwd: String,
+        binds: Map<String, String>,
+        environment: Map<String, String>,
+    ): UserlandProcesses.Session {
+        require(binds.keys.none { ':' in it }) { "Invalid guest bind path" }
+        val installed = rootfs.locate() ?: throw UserlandSetupRequired()
         val scratch = Files.createTempDirectory(Files.createDirectories(scratchRoot), "proot-")
         try {
             return processes.start(
@@ -64,8 +94,8 @@ class UserlandRuntime internal constructor(
                 listOf(
                     nativeLibraries.resolve("libproot.so").toString(),
                     "--kill-on-exit", "-r", installed.toString(),
-                    "-b", "$workspace:/workspace", "-b", "/dev/null:/dev/null", "-w", cwd,
-                ) + argv,
+                ) + binds.flatMap { (host, guest) -> listOf("-b", "$host:$guest") } +
+                    listOf("-b", "/dev/null:/dev/null", "-w", cwd) + argv,
                 scratch,
                 mapOf(
                     "PATH" to "/usr/bin:/bin",
@@ -75,7 +105,7 @@ class UserlandRuntime internal constructor(
                     "NPM_CONFIG_GLOBALCONFIG" to "/etc/npmrc",
                     "PROOT_LOADER" to nativeLibraries.resolve("libproot_loader.so").toString(),
                     "PROOT_TMP_DIR" to scratch.toString(),
-                ),
+                ) + environment,
                 afterExit = { deleteTree(scratch) },
             )
         } catch (e: Exception) {
@@ -84,18 +114,13 @@ class UserlandRuntime internal constructor(
         }
     }
 
-    private fun workspace(id: String): Path {
-        require(WORKSPACE_ID.matches(id)) { "Invalid workspace ID" }
-        Files.createDirectories(workspaceRoot)
-        require(Files.isDirectory(workspaceRoot, NOFOLLOW_LINKS)) { "Invalid workspace root" }
-        val workspace = workspaceRoot.toRealPath().resolve(id)
-        try {
-            Files.createDirectory(workspace)
-        } catch (_: FileAlreadyExistsException) {
-            require(Files.isDirectory(workspace, NOFOLLOW_LINKS)) { "Invalid workspace directory" }
+    /** Keep recorded guest output data-only: proot diagnostics may echo host mount paths. */
+    internal fun redactHostPaths(text: String): String {
+        var result = text
+        for (root in listOfNotNull(nativeLibraries, workspaceRoot, scratchRoot, rootfs.locate())) {
+            result = result.replace(root.toString(), "<host-path>")
         }
-        require(':' !in workspace.toString()) { "Invalid workspace mount path" }
-        return workspace
+        return result
     }
 
     private val setupTool = object : Tool {
@@ -143,7 +168,6 @@ class UserlandRuntime internal constructor(
     }
 
     companion object {
-        private val WORKSPACE_ID = Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
         private val RELEASE_TAG = Regex("v[0-9]+\\.[0-9]+\\.[0-9]+(?:[-.][A-Za-z0-9.-]+)?")
 
         fun create(context: Context, http: HttpClient): UserlandRuntime? {
@@ -165,6 +189,7 @@ class UserlandRuntime internal constructor(
                 RootfsInstaller(files.resolve("userland"), spec, ReleaseRootfsSource(http, url), processes),
                 processes,
                 url,
+                context.assets,
             )
         }
 

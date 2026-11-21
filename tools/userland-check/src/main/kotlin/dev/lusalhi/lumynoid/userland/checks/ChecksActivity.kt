@@ -141,4 +141,7 @@ private val CASES: List<Pair<Int, suspend (UserlandChecks) -> Unit>> = listOf(
     R.string.check_exit to UserlandChecks::normalExitFailureAndDeadlineReapDescendantsBeforeNextTask,
     R.string.check_cancel to UserlandChecks::cancellationAndApprovalReleaseAnActiveTreeBeforeNextTask,
     R.string.check_cleanup to UserlandChecks::releaseStopsOtherProcessesWhenOneCleanupFails,
+    R.string.check_workspace to UserlandChecks::codingFilesStayInTheActiveWorkspace,
+    R.string.check_replace to UserlandChecks::codingReplaceRequiresCurrentApproval,
+    R.string.check_coding to UserlandChecks::codingNpmAndFormatterUseOnlyBundledAssets,
 )

@@ -57,12 +57,16 @@ fun interface ToolSessionRelease {
     suspend fun release(context: ToolContext)
 }
 
+/** A file published in the tool call's workspace, never a host path. */
+@Serializable
+data class ToolArtifact(val path: String, val mediaType: String)
+
 @Serializable
 data class ToolOutcome(
     val output: String,
     val target: String? = null,
     val exitCode: Int? = null,
-    val artifactPaths: List<String> = emptyList(),
+    val artifacts: List<ToolArtifact> = emptyList(),
     val sourceUrls: List<String> = emptyList(),
     val truncationHint: String? = null,
 )
