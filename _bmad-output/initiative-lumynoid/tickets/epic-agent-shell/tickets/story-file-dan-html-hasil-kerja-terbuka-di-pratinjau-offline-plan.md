@@ -3,7 +3,7 @@ title: 'File dan HTML hasil kerja terbuka di pratinjau offline'
 type: feature
 ticket: 10
 created: '2026-11-21'
-status: built
+status: done
 baseline_revision: ef4d43dfdee1be77580b575c7a9b8529fa7ced32
 route: full
 route_source: auto
@@ -81,5 +81,6 @@ Quick review: four medium and one low finding, all patched.
 - On a connected Android device, run the preview-specific instrumentation and exercise chat → preview → back and log → preview → back after force-stop. Record the WebView version and distinguish emulator results from API 37 handset acceptance.
 - Debug and both instrumentation APKs built. App unit run: 53 passed, four existing Markdown host-assumption tests skipped. Dependency policy passed for 182 modules; debug APK signature verified.
 - Redroid arm64 Android 14/API 34, WebView 125.0.6422.113: two userland tests and three app instrumentation tests passed. Verified bounded reads, path/link rejection, local CSS and script, unavailable file errors, no external navigation, no loopback connection from the preview (including preconnect), and opt-in reset.
-- After `am force-stop`, drove the installed app via Android UI: native text opened from chat; offline HTML opened from Log; JavaScript ran only on opt-in and was off again after closing and reopening. API 37 handset acceptance was not run.
+- After `am force-stop`, drove the installed app via Android UI: native text opened from chat; offline HTML opened from Log; JavaScript ran only on opt-in and was off again after closing and reopening.
 - Post-review: 74 JVM tests passed across app and data, four existing skips; dependency policy and final debug APK signature passed. The Android WebView tests and navigation fixture passed with the fixes, including exact whole-file copy across text chunks and return to Log details. Repeated the force-stop scenario against the final APK.
+- Handset acceptance: the user reported that all checks passed with Lumynoid Fixture 2.10 (arm64). The checklist covered offline text and JSON, denial of a symlink into another workspace, local HTML and CSS, JavaScript opt-in, blocked external navigation and images with connectivity restored, and reopening the persisted preview with JavaScript off after force-stop. This verifies the fixture APK, not a public release.
