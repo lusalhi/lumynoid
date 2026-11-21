@@ -11,8 +11,8 @@ covers = ["R1", "R2", "R3"]
 [[epic]]
 id = 2
 slug = "epic-agent-shell"
-title = "Agent mengerjakan tugas lewat shell tersembunyi dengan aman"
-description = "Loop tool call, registry tool, dan gerbang konfirmasi dipasang ke kerangka TaskRunner + AgentService epic 1, sehingga tugas agent berjalan di FGS terlepas dari layar chat (dipakai epic 3); agent menjalankan perintah dan coding (termasuk npm install) di userland proot yang hanya menyala saat dipakai; registry tool menjadi kontrak untuk epic 5 dan 6; setiap tool call tampil sebagai kartu aktivitas buatan app, aksi berisiko menunggu kartu konfirmasi, semuanya tercatat di log aksi, tool call kosong atau rusak dari model gratis tidak menghentikan tugas diam-diam, dan file/HTML hasilnya bisa dipratinjau. Bagian R10 di sini: output tool apa pun tidak bisa melewati kartu konfirmasi."
+title = "Agent mengerjakan tugas coding di HP"
+description = "Agent memakai tool coding untuk menulis file proyek, memasang paket npm lokal terverifikasi, dan menjalankan skrip bawaan aplikasi. PRoot berjalan sesuai kebutuhan dalam satu APK. TaskRunner dan AgentService menjalankan tugas lewat FGS, membuat event kartu dan log, serta menunggu persetujuan untuk aksi berisiko. Pengguna bisa mempratinjau file/HTML. Registry dan gerbang tool menjadi kontrak untuk epic berikutnya. Output tool tidak dapat melewati kartu konfirmasi."
 covers = ["R4", "R8", "R9", "R10", "R11"]
 after = [{ epic = 1, needs = "kerangka TaskRunner + AgentService dengan event log, adapter provider, dan layar chat streaming tempat kartu tampil" }]
 
@@ -47,10 +47,10 @@ after = [
 id = 6
 slug = "epic-skill-pihak-ketiga"
 title = "Pengguna memasang skill pihak ketiga"
-description = "Pengguna memasang skill berformat SKILL.md dan agent memakainya; instruksi skill dimuat lewat titik sambung konteks epic 4; Binance Agentic Wallet (baw) terpasang lewat npm di userland epic 2, login lewat kode pairing, dan transaksi berhenti di preview sampai pengguna mengonfirmasi execute."
+description = "Pengguna memasang dan memakai skill berformat SKILL.md. Instruksi skill dimuat lewat titik sambung konteks epic 4. Epic ini membuktikan batas eksekusi CLI skill sebelum Binance Agentic Wallet (baw) dapat dipasang lewat npm dan dipakai. Login lewat kode pairing, lalu transaksi berhenti di preview sampai pengguna mengonfirmasi execute."
 covers = ["R7"]
 after = [
-  { epic = 2, needs = "userland dengan npm, registry tool, kartu konfirmasi untuk aksi keuangan" },
+  { epic = 2, needs = "siklus hidup userland PRoot, registry tool, dan kartu konfirmasi untuk aksi keuangan" },
   { epic = 4, needs = "titik sambung konteks untuk memuat instruksi skill tanpa terpangkas" },
 ]
 
@@ -58,7 +58,7 @@ after = [
 id = 7
 slug = "epic-rilis-publik"
 title = "Lumynoid v1 terbit untuk umum"
-description = "Penguji awam menyelesaikan chat, coding lewat shell, jawaban dari web, dan tugas terjadwal tanpa terminal dan tanpa dokumentasi; rilis v1 sebagai APK bertanda tangan di GitHub Releases. Bagian R1 di sini: penguji awam memastikan seluruh app, bukan hanya chat pertama, bisa dipakai tanpa terminal dan tanpa dokumentasi."
+description = "Penguji awam menyelesaikan chat, tugas lewat tool coding, jawaban dari web, dan tugas terjadwal tanpa terminal dan tanpa dokumentasi. Rilis v1 sebagai APK bertanda tangan di GitHub Releases. Bagian R1 di sini mencakup seluruh alur pengguna."
 covers = ["R1"]
 after = [
   { epic = 3, needs = "tugas terjadwal yang lulus uji 7 hari, untuk sesi penguji awam" },

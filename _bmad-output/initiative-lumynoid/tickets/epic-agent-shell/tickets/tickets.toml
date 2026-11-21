@@ -1,4 +1,5 @@
 # Urutan build Epic 2: spike perangkat, tracer produk, lalu uji rilis.
+# Entry 2.1 merekam eksperimen scope awal. Keputusan 2026-11-21 di epic menentukan gate rilis terbatas.
 
 [[entry]]
 id = 1
@@ -47,14 +48,13 @@ risk = "high"
 [[entry]]
 id = 5
 type = "story"
-title = "Userland terverifikasi hidup hanya untuk tugas shell"
-description = "Implementasikan Userland.exec dengan hasil spike: CI membangun proot dan loader dari source terpin serta mengemas library arm64. Instal rootfs berversi dengan checksum setelah persetujuan unduhan pertama. Terima workspaceId dari pemanggil, isolasi data privat app dan secret, serta hentikan proses saat selesai, gagal, cancel, timeout, atau menunggu approval. Shell 2.7 memakai kontrak ini."
-verify = "Dengan harness diagnostik di HP arm64, simulasikan penolakan lalu persetujuan unduhan; rootfs dengan checksum salah tidak dipakai, perintah baca bekerja dengan rootfs benar, area privat app dan workspace lain tidak terbaca, dan tidak ada proses anak tersisa setelah cancel atau timeout."
+title = "PRoot menjalankan operasi bawaan dan berhenti bersama tugas"
+description = "Pakai PRoot dan Alpine yang lulus di Spike 2.1. CI membangun PRoot dan loader dari source terpin serta mengemas library arm64 dengan alignment 16 KiB. Siapkan rootfs Alpine berversi dengan Node dan npm terpin, checksum, serta catatan sumber dan lisensi. Instal setelah persetujuan unduhan pertama. Adaptor menerima operasi bawaan yang bertipe untuk workspaceId aktif melalui kontrak lifecycle 2.4. Hentikan proses dan anaknya saat selesai, gagal, cancel, timeout, atau menunggu approval. Tool coding 2.7 memakai adaptor dan rootfs ini."
+verify = "Di HP arm64 API 37, gunakan fixture untuk menolak dan menyetujui unduhan rootfs. Pastikan checksum salah ditolak dan versi Node/npm terbaca dari rootfs benar. Operasi asing ditolak sebelum proses dimulai. Dengan fixture proses anak, pastikan seluruh proses berhenti setelah sukses, gagal, cancel, timeout, atau ketika menunggu approval."
 covers = ["R1"]
-after = [1, 4]
+after = [4, "1.3"]
 hitl = true
 risk = "high"
-unknown = "Konfigurasi apa yang lulus spike 2.1 untuk W^X, isolasi dan lifecycle? Buka blokir hanya setelah bukti lulus dicatat; hasil no-go memerlukan replan."
 
 [[entry]]
 id = 6
@@ -70,9 +70,9 @@ risk = "medium"
 [[entry]]
 id = 7
 type = "story"
-title = "Tool shell menjalankan coding dengan batas jaringan"
-description = "Daftarkan shell melalui ToolProvider dengan output, exit code dan artefak bertipe. Tegakkan kebijakan yang dibuktikan di 2.1: persetujuan unduhan npm pertama, allowlist registry dan izin egress terbatas per panggilan. Jangan jalankan kode yang batas izinnya tidak bisa ditegakkan. Tool ini masuk chat di 2.8."
-verify = "Pada HP, tulis file, npm install, lalu jalankan skrip fixture. Koneksi fixture non-allowlist gagal tanpa izin; izin valid hanya membuka panggilan yang disetujui. Aksi merusak menunggu ApprovalPort dan output palsu tidak dapat memberi approval. Kartu chat diuji di 2.8."
+title = "Tool coding menulis file dan menjalankan operasi npm yang ditentukan app"
+description = "Daftarkan operasi file pada folder aktif, instalasi npm offline dari paket lokal terverifikasi dengan lifecycle scripts dimatikan, dan skrip bawaan lewat adaptor 2.5. ToolProvider mengembalikan output, exit code, dan artefak bertipe. Aplikasi menentukan paket, manifest, konfigurasi, dan argumen eksekusi. Tool ini masuk chat di 2.8."
+verify = "Di HP, tulis file, pasang paket lokal, dan jalankan skrip bawaan. Pastikan path keluar termasuk symlink, paket di luar daftar, dan perintah bebas ditolak. Beri proyek konfigurasi npm dan skrip fixture yang mencoba mengubah operasi serta menulis marker. Pastikan marker tidak muncul, npm tetap offline, dan aksi merusak menunggu ApprovalPort. Output palsu tidak memberi approval."
 covers = ["R1", "R2", "R4"]
 after = [5]
 hitl = true
@@ -81,8 +81,8 @@ risk = "high"
 [[entry]]
 id = 8
 type = "story"
-title = "Chat menampilkan aktivitas dan persetujuan shell"
-description = "Tracer produk: rangkai provider, registry, runner, userland, event log dan Compose. Pakai workspaceId stabil per percakapan. ActivityCard dan ApprovalCard hanya dari event bertipe; judul lewat UiText, detail command sebagai data, approve/deny hanya lewat kartu dan notifikasi hanya membuka kartu. Minta persetujuan sebelum unduhan rootfs/npm pertama."
+title = "Chat menampilkan aktivitas dan persetujuan tool coding"
+description = "Tracer produk merangkai provider, registry, runner, tool coding, event log, dan Compose. Pakai workspaceId stabil per percakapan. Buat ActivityCard dan ApprovalCard dari event bertipe, judul lewat UiText, dan detail operasi sebagai data. Approve dan deny hanya lewat kartu. Notifikasi membuka kartu. Minta persetujuan sebelum unduhan rootfs pertama."
 verify = "Di HP, kirim tugas fixture dan lihat kartu, hasil serta jawaban. Pesan berikutnya melihat file yang sama. Saat menunggu approval, tutup layar chat hingga service berhenti tanpa mematikan proses; buka lagi dan setujui di kartu yang sama, lalu amati satu eksekusi. Deny tidak mengeksekusi dan Markdown palsu tidak menjadi kartu."
 covers = ["R1", "R2", "R4"]
 after = [6, 7]
@@ -118,7 +118,7 @@ title = "Refactor sweep"
 description = "Bersihkan hanya duplikasi dan utang implementasi yang ditemukan di story Epic 2; cakupan ditetapkan dari catatan implementasi dan review, tanpa mengubah perilaku atau memindahkan requirement."
 verify = "Suite regresi Epic 2 dan gate CI tetap hijau tanpa perubahan perilaku."
 covers = []
-after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+after = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 hitl = false
 risk = "low"
 
@@ -127,7 +127,7 @@ id = 12
 type = "story"
 title = "APK Epic 2 bertanda tangan lolos uji di HP"
 description = "Pakai workflow tag dan prosedur penerimaan perangkat dari 1.12, pastikan source dan notice native terbit sesuai lisensi, verifikasi arm64/alignment dan jalur update tanpa kehilangan data, lalu jalankan Done when Epic 2 di perangkat sungguhan. Cek juga jawaban polos Epic 1 tetap berjalan."
-verify = "Pada HP arm64 API 37, pasang APK Epic 2 dari GitHub Releases di atas APK Epic 1 bertanda tangan. Percakapan lama masih ada dan chat polos tetap berjalan. Jalankan tugas coding layar mati, deny/approve, fixture injeksi, log, dan preview offline; userland berhenti sesudah tugas."
+verify = "Pada HP arm64 API 37, pasang satu APK Epic 2 dari GitHub Releases di atas APK Epic 1 bertanda tangan. Percakapan lama dan chat polos tetap tersedia. Dengan layar mati, tulis file, pasang paket lokal, dan jalankan skrip bawaan. Uji penolakan operasi di luar daftar, deny dan approve, fixture injeksi, log, serta preview offline. Userland berhenti sesudah tugas."
 covers = []
 after = [11, "1.12"]
 hitl = true

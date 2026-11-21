@@ -14,7 +14,7 @@ risk: high
 
 ## Description
 
-Lumynoid v1 adalah app Android open source dan gratis. Pengguna memasangnya, mengisi endpoint AI miliknya, lalu langsung punya asisten pribadi yang bisa chat, mengerjakan tugas lewat shell tersembunyi (termasuk coding), mencari dan membaca web, menjalankan tugas terjadwal, dan memakai skill pihak ketiga, tanpa langganan bot, tanpa VPS, dan tanpa terminal. Riset menyimpulkan ide ini layak dengan syarat [riset, Ringkasan eksekutif]. Catatan keputusan 2026-11-14 menetapkan bentuk v1 (K1–K12). Di mana keduanya berbeda, catatan keputusan yang berlaku.
+Lumynoid v1 adalah app Android open source dan gratis. Pengguna memasangnya, mengisi endpoint AI miliknya, lalu punya asisten pribadi yang bisa chat, mengerjakan tugas coding, mencari dan membaca web, menjalankan tugas terjadwal, dan memakai skill pihak ketiga, tanpa langganan bot, VPS, atau terminal. Riset menyimpulkan ide ini layak dengan syarat [riset, Ringkasan eksekutif]. Catatan 2026-11-14 menetapkan bentuk awal v1 (K1–K12). Replan 2026-11-21 menetapkan cakupan tool coding.
 
 ## Outcome
 
@@ -25,7 +25,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - R1 (Visi, K1, K7): Orang awam memasang app, mengisi endpoint/API key AI miliknya, lalu mendapat jawaban chat pertama hanya lewat layar app, tanpa terminal, akun Lumynoid, VPS, atau langkah teknis lain.
 - R2 (K7): Pengguna menambah provider OpenAI-compatible (preset populer atau URL custom) dan Anthropic dengan API key sendiri, mengetes koneksinya dari app, dan memakai provider mana pun yang lolos tes di chat.
 - R3 (K2, K9): Chat di dalam app menampilkan jawaban streaming dengan markdown dan blok kode; percakapan tersimpan di daftar dan bisa dilanjutkan.
-- R4 (K2, K4): Agent menjalankan perintah shell di Linux userland tersembunyi, termasuk coding (menulis file, `npm install`, menjalankan skrip); pengguna melihat tiap perintah dan hasilnya sebagai kartu aktivitas, dan userland hanya menyala saat tool shell dipakai.
+- R4 (K2, K4; keputusan replan 2026-11-21): Agent menyelesaikan tugas coding dengan tool terstruktur untuk menulis file, memasang paket npm lokal yang disediakan aplikasi, dan menjalankan skrip bawaan. Pengguna melihat aksi dan hasil di kartu aktivitas. Runtime Linux aktif hanya saat dibutuhkan.
 - R5 (K2): Agent mencari di web dan membaca isi halaman untuk menjawab, dan pengguna bisa membuka halaman sumbernya; tanpa mengendalikan Chrome.
 - R6 (K2, K6, riset Rek 2): Pengguna membuat tugas terjadwal sekali atau berulang lewat chat atau layar tugas terjadwal; tugas berjalan tepat waktu saat app tertutup dan layar mati, hasilnya muncul sebagai notifikasi dan di percakapan; app memandu pengecualian optimasi baterai dan pengaturan autostart per merek HP.
 - R7 (K5): Pengguna memasang skill pihak ketiga berformat Agent Skills (`SKILL.md`) dan agent memakainya. Acuan: Binance Agentic Wallet (CLI npm `baw` + `SKILL.md`; login lewat kode pairing + konfirmasi di Binance App; transaksi lewat `contract-call preview/execute`).
@@ -42,9 +42,9 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - C3 (K3; riset D2 [18][19][20]): Tidak mengendalikan app lain dan tidak memakai Accessibility API.
 - C4 (K4; riset D3 [13][15]): Harness agent native Kotlin buatan sendiri; tidak bergantung pada CLI OpenCode/Claude Code atau harness yang butuh proses terus hidup.
 - C5 (K4, K6; riset D1 [1][2][7][8]): Berbasis kejadian, tanpa proses always-on: exact alarm + notifikasi + FGS hanya selama ada tugas. FGS `dataSync` dibatasi 6 jam per 24 jam (Android 15+), dan job dari FGS ikut kuota normal (Android 16).
-- C6 (K4; riset D1 [3][10]): Userland proot hanya hidup saat tool shell dipakai. Phantom process killer (maks 32 child process lintas app, Android 12+) dan batas memori berbasis RAM (Android 17) membatasi shell, node, dan git.
+- C6 (K4; riset D1 [3][10]): PRoot hanya hidup selama operasi yang memerlukannya. Batas proses dan memori Android berlaku.
 - C7 (riset D3 [11][4]): Eksekusi binary patuh W^X untuk targetSdk 29+ (tidak mengeksekusi file dari direktori yang bisa ditulis app).
-- C8 (K10): Shell disandbox di folder app; konten web diperlakukan sebagai data.
+- C8 (K10; keputusan replan 2026-11-21): Aplikasi membatasi operasi coding ke aksi bawaan serta file ke folder proyek yang dipilih. Shell bebas menunggu bukti sandbox dan kebijakan egress. Konten web diperlakukan sebagai data.
 - C9 (K9): Kartu konfirmasi dan kartu aktivitas tool dibuat oleh app dari data tool call, bukan dari teks LLM.
 - C10 (K7; [Anthropic legal](https://code.claude.com/docs/en/legal-and-compliance); riset [37]): MVP hanya API key milik pengguna. Login memakai langganan Claude dilarang untuk app pihak ketiga. Tidak menjanjikan model gratis OpenCode Zen (hanya bisa dipakai lewat OpenCode).
 - C11 (K11; riset D4 [34][35][36][44]): Dirancang untuk kuota gratis: OpenRouter tanpa kredit 50 request/hari, sedangkan satu tugas butuh sekitar 10–20 panggilan LLM. Tool calling model gratis tidak andal (tool call kosong, "no endpoints support tool use") dan harus ditangani.
@@ -54,7 +54,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 
 ## Done when
 
-- Penguji awam yang belum pernah melihat Lumynoid memasang APK dari GitHub Releases di HP sungguhan, mengisi API key-nya sendiri, lalu menyelesaikan satu chat, satu tugas coding lewat shell, satu jawaban dari pencarian web, dan satu tugas terjadwal, tanpa melihat terminal dan tanpa membaca dokumentasi.
+- Penguji awam yang belum pernah melihat Lumynoid memasang APK dari GitHub Releases di HP sungguhan, mengisi API key-nya sendiri, lalu menyelesaikan satu chat, satu tugas lewat tool coding, satu jawaban dari pencarian web, dan satu tugas terjadwal, tanpa melihat terminal dan tanpa membaca dokumentasi.
 - Tugas terjadwal harian berjalan tepat waktu dengan app tertutup dan layar mati, setiap hari selama 7 hari, di satu HP Xiaomi dan satu HP Samsung yang disiapkan lewat panduan di app.
 - Pada skenario uji, setiap aksi merusak, keuangan, atau pengiriman data keluar menunggu kartu konfirmasi dan tercatat di log aksi; halaman web uji berisi prompt injection tidak bisa memicu aksi tanpa konfirmasi.
 - Skill pihak ketiga berformat `SKILL.md` (acuan: Binance Agentic Wallet) terpasang dan dipakai agent sampai langkah transaksi `preview`, dan `execute` hanya jalan setelah konfirmasi.
@@ -72,12 +72,12 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Di luar v1: distribusi lewat Google Play dan F-Droid (C14).
 - Touch point: API provider LLM (OpenAI-compatible, Anthropic, OpenRouter) — dipakai lewat API key pengguna; owner: epic-chat-dan-provider.
 - Touch point: endpoint sisa kuota provider (mis. OpenRouter) — dibaca untuk penghitung kuota; owner: epic-hemat-kuota.
-- Touch point: npm registry dan sumber unduhan rootfs userland — dipakai shell dan coding; owner: epic-agent-shell.
+- Touch point unduhan rootfs dikelola epic-agent-shell. Paket npm untuk tool coding disediakan aplikasi. Akses registry npm untuk skill pihak ketiga dibuktikan di epic-skill-pihak-ketiga.
 - Touch point: layanan pencarian web — dipakai oleh tool cari; owner: epic-browsing-web.
 - Touch point: Binance Agentic Wallet (`baw` + `SKILL.md`) — skill acuan untuk R7; owner: epic-skill-pihak-ketiga.
 - Touch point: GitHub Releases — kanal rilis setiap epic; owner: epic-chat-dan-provider.
 - Touch point: verifikasi developer Android (akun developer Google milik pemilik proyek) — pendaftaran nama package dan kunci tanda tangan; owner: epic-chat-dan-provider.
-- Tracer path: pengguna mengisi API key → mengirim chat → harness memanggil provider → agent menjalankan satu perintah di userland → kartu aktivitas dan, bila perlu, kartu konfirmasi tampil → jawaban mengalir ke chat.
+- Tracer path: pengguna mengisi API key → mengirim chat → harness memanggil provider → agent memakai tool coding → kartu aktivitas dan, bila perlu, kartu konfirmasi tampil → jawaban mengalir ke chat.
 
 ## References
 
@@ -93,7 +93,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Assumption: Model lokal untuk routing intent (riset Rek 5) tidak masuk v1; catatan keputusan tidak menyebutnya.
 - Assumption: Uji daya tahan tugas terjadwal 7 hari berturut-turut; riset hanya menyatakan daya tahan di Xiaomi/Samsung harus diuji sendiri, angka 7 hari usulan PO.
 - Assumption: minSdk 29, targetSdk 37, ABI rilis arm64-v8a (architecture, Stack); dikonfirmasi di story 1.3 (rilis bertanda tangan) sebelum rilis pertama.
-- Open question: Ukuran userland, strategi unduhnya, dan batas `npm install` di HP sungguhan (phantom process killer, memori Android 17) [3][10]. Menunggu: spike pembuka epic-agent-shell.
+- Open question: Ukuran rootfs rilis, sumber unduhan, dan siklus hidup PRoot produksi di HP target. Menunggu Story 2.5. Spike 2.1 sudah membuktikan instalasi paket npm lokal di Samsung API 37.
 - Open question: Model gratis mana yang andal untuk tool calling? Belum ada benchmark; perlu uji sendiri. Angka free tier Groq/Gemini hanya terlihat di console [38][61]. Menunggu: R12 dan preset provider di R2.
 - Open question: Apakah app BYOK gratis wajib terdaftar sebagai PSE Komdigi?
 - Open question: Lisensi open source Lumynoid belum dipilih; harus kompatibel dengan proot GPL-2.0 yang dibundel (architecture, Deferred). Menunggu: story 1.2, sebelum repo dibuat publik.
@@ -115,3 +115,4 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Decision: 2026-11-14 — Bahasa UI v1 adalah Inggris; semua string di `strings.xml`, jadi terjemahan bisa menyusul.
 - Decision: 2026-11-14 — Story epic-chat-dan-provider: story 1 tracer bullet, lisensi di story 1.2, kunci rilis dan verifikasi developer di story 1.3; menggantikan "story fondasi" dan "story hitl pertama" di Decision di atas. ContextAssembler versi naif dibangun story 1.7 (riwayat chat saja); AD-13 menunggu pembaruan lewat `bmad-architecture`.
 - Decision: 2026-11-14 — Penanganan tool call kosong/rusak (AD-26) milik runner di epic-agent-shell; epic-hemat-kuota memegang retry karena limit lewat router.
+- Decision: 2026-11-21 — Replan Epic 2 setelah PRoot lulus di Samsung API 37. Tahap awal R4 memakai satu APK dengan folder proyek biasa dan tool coding yang ditentukan aplikasi. Eksekusi kode pihak ketiga menunggu bukti perlindungan data privat dan egress. Epic skill memakai lifecycle userland dan gerbang tool dari Epic 2, lalu membuktikan perlindungan CLI skill sebelum mengaktifkannya. [Epic 2](tickets/epic-agent-shell/epic-agent-shell.md)
