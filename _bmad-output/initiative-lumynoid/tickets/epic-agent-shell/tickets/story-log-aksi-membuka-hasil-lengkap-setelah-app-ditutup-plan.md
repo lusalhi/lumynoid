@@ -3,7 +3,7 @@ title: 'Log aksi membuka hasil lengkap setelah app ditutup'
 type: feature
 ticket: 9
 created: '2026-11-21'
-status: built
+status: done
 baseline_revision: 68e3c0a2bdb85dea564105ac31c83057397d5e69
 route: full
 route_source: auto
@@ -83,4 +83,5 @@ Quick review: three medium and two low findings patched.
 - Final Gradle check: 130 JVM tests passed, four existing Markdown host-assumption tests skipped. Debug app and instrumentation APKs assembled; `apksigner verify` accepted the debug app APK.
 - On arm64 Redroid (Android 14/API 34), nine userland instrumentation checks passed. The workspace-deletion check initially used a fixture ID with an invalid dot; with a valid ID it passed on rerun, verifying isolated workspace and bundled-package removal, symlink safety, and retention of the peer workspace and global rootfs.
 - The arm64 emulator UI used a scripted OpenAI-compatible provider over loopback, in a temporary fixture APK that allowed cleartext. The production debug APK has no fixture override. The provider received the exact short and 271,904-character tool outputs. The UI hid Delete during a pending overwrite, accepted Decline, and marked an invalid path blocked. After force-stop, the action log displayed succeeded and failed results; a draft survived navigation into and out of the log.
-- After force-stop, the short output and the tail of the blob-backed output were visible through **Log** → **Jump to end**; declined and policy-blocked actions retained distinct statuses. While Alpha ran and Beta was queued, neither conversation offered Delete. After both finished, deleting Alpha removed its workspace and blob directory, and Beta retained its file and readable log. No physical API 37 handset was used in this story check.
+- After force-stop on Redroid, the short output and the tail of the blob-backed output were visible through **Log** → **Jump to end**; declined and policy-blocked actions retained distinct statuses. While Alpha ran and Beta was queued, neither conversation offered Delete. After both finished, deleting Alpha removed its workspace and blob directory, and Beta retained its file and readable log.
+- Handset acceptance: the user reported that all provided checks passed with the offline Lumynoid Fixture 2.9 APK on their phone. The checklist covered short and large results, blocked deletion while awaiting approval, declining the action, the stored output tail after force-stop, and deleting one conversation without affecting the second conversation's file. This verifies the offline fixture, not public APK or rootfs delivery.
