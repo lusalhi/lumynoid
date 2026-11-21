@@ -72,6 +72,9 @@ internal interface LumynoidDao {
     @Query("SELECT * FROM task_event WHERE conversation_id = :conversationId ORDER BY seq")
     suspend fun events(conversationId: String): List<TaskEventEntity>
 
+    @Query("SELECT * FROM task_event WHERE id = :eventId AND conversation_id = :conversationId")
+    suspend fun event(conversationId: String, eventId: String): TaskEventEntity?
+
     @Query("SELECT * FROM task_event WHERE conversation_id = :conversationId ORDER BY seq")
     fun observeEvents(conversationId: String): Flow<List<TaskEventEntity>>
 

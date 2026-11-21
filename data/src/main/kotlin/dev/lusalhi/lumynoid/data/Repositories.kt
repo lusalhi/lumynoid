@@ -97,6 +97,9 @@ internal class RoomEventRepository(
     override suspend fun history(conversationId: String): List<TaskEvent> =
         dao.events(conversationId).map { it.toEvent() }
 
+    suspend fun event(conversationId: String, eventId: String): TaskEvent? =
+        dao.event(conversationId, eventId)?.toEvent()
+
     override suspend fun unfinishedTasks(): List<UnfinishedTask> =
         dao.taskLastEvents().filter { row ->
             val payload = row.lastPayload ?: return@filter true

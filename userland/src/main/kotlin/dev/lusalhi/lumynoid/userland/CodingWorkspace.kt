@@ -40,6 +40,16 @@ internal class CodingWorkspace(private val root: Path) {
         return workspace
     }
 
+    /** The same workspace checks as [directory] without creating anything; null when the workspace is absent or invalid. */
+    fun existingDirectory(id: String): Path? {
+        if (!isValidId(id)) return null
+        if (!Files.isDirectory(root, NOFOLLOW_LINKS)) return null
+        val workspace = root.toRealPath().resolve(id)
+        if (!Files.isDirectory(workspace, NOFOLLOW_LINKS)) return null
+        if (':' in workspace.toString()) return null
+        return workspace
+    }
+
     /** Resolves the parent directories of a file path; existing ones must be real directories, missing ones are created only when [create]. */
     fun parentDirectory(workspace: Path, components: List<String>, create: Boolean): Path {
         var current = workspace

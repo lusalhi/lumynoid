@@ -40,6 +40,10 @@ class UserlandInstrumentedTest {
         runCheck(UserlandChecks::codingNpmAndFormatterUseOnlyBundledAssets)
 
     @Test
+    fun codingPublishesHtmlMediaTypes() =
+        runCheck(UserlandChecks::codingPublishesHtmlMediaTypes)
+
+    @Test
     fun workspaceDeletionIsScopedAndNeverFollowsLinks() =
         runCheck(UserlandChecks::workspaceDeletionIsScopedAndNeverFollowsLinks)
 
@@ -49,6 +53,14 @@ class UserlandInstrumentedTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         UserlandChecks(instrumentation.targetContext, instrumentation.context.assets)
             .companionDeleteWorkspaceUsesProductionRootsOffline()
+    }
+
+    @Test
+    fun previewReadsAreExistingOnlyBoundedAndWorkspaceScoped() = runBlocking {
+        // Offline preview must also work where the arm64 runtime is unavailable.
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        UserlandChecks(instrumentation.targetContext, instrumentation.context.assets)
+            .previewReadsAreExistingOnlyBoundedAndWorkspaceScoped()
     }
 
     private fun runCheck(check: suspend (UserlandChecks) -> Unit) = runBlocking {

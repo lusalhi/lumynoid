@@ -21,6 +21,7 @@ android {
         targetSdk = 37
         versionCode = 3
         versionName = "v0.2.1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -94,6 +95,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.webkit)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
@@ -102,6 +104,7 @@ dependencies {
     implementation(libs.markdown.renderer.m3)
 
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 // AD-17: the release classpath gate.

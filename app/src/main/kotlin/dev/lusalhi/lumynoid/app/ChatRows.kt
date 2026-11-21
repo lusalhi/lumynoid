@@ -18,7 +18,11 @@ internal sealed interface ChatRow {
         override val key: String,
         val call: TaskEvent.RequestedToolCall,
         val outcome: ToolOutcome? = null,
-    ) : ChatRow
+        val resultEventId: String? = null,
+    ) : ChatRow {
+        fun artifactIdentities(conversationId: String) =
+            publishedArtifacts(conversationId, resultEventId, outcome)
+    }
 
     data class Approval(
         val event: TaskEvent.ApprovalRequested,
@@ -56,7 +60,7 @@ internal fun chatRows(events: List<TaskEvent>): List<ChatRow> = buildList {
             }
             is TaskEvent.ToolResult -> {
                 val index = callRows.remove(event.taskId to event.callId) ?: continue
-                set(index, (get(index) as ChatRow.Activity).copy(outcome = event.outcome))
+                set(index, (get(index) as ChatRow.Activity).copy(outcome = event.outcome, resultEventId = event.id))
             }
             is TaskEvent.ApprovalRequested -> {
                 approvalRows[event.taskId] = size
@@ -122,17 +126,34 @@ internal sealed interface ActionLogRow {
         }
 
         /** Stable identities of published files: the stored result record plus conversation-relative paths. */
-        fun artifactIdentities(conversationId: String): List<ArtifactIdentity> {
-            val resultId = resultEventId ?: return emptyList()
-            return outcome?.artifacts?.map { ArtifactIdentity(conversationId, resultId, it.path, it.mediaType) }.orEmpty()
-        }
+        fun artifactIdentities(conversationId: String) =
+            publishedArtifacts(conversationId, resultEventId, outcome)
     }
 
     data class Notice(val event: TaskEvent, override val key: String) : ActionLogRow
 }
 
-/** A published file's stable identity, kept typed for later stories; the log itself shows path and media type. */
+/** A published file in its originating workspace, identified by the persisted result that named it. */
 internal data class ArtifactIdentity(val conversationId: String, val resultEventId: String, val path: String, val mediaType: String)
+
+private fun publishedArtifacts(conversationId: String, resultId: String?, outcome: ToolOutcome?): List<ArtifactIdentity> {
+    if (resultId == null) return emptyList()
+    return outcome?.artifacts?.map { ArtifactIdentity(conversationId, resultId, it.path, it.mediaType) }.orEmpty()
+}
+
+internal fun ArtifactIdentity.belongsTo(conversationId: String?, events: List<TaskEvent>): Boolean =
+    publishedIndex(conversationId, events) != null
+
+internal fun ArtifactIdentity.publishedIndex(conversationId: String?, events: List<TaskEvent>): Int? {
+    if (this.conversationId != conversationId) return null
+    val result = events.firstOrNull { it is TaskEvent.ToolResult && it.id == resultEventId } as? TaskEvent.ToolResult
+    return result?.outcome?.artifacts?.indexOfFirst { it.path == path && it.mediaType == mediaType }?.takeIf { it >= 0 }
+}
+
+// Before preview support, the coding writer recorded HTML artifacts as text/plain.
+internal fun ArtifactIdentity.isHtml(): Boolean =
+    mediaType == "text/html" ||
+        (mediaType == "text/plain" && (path.endsWith(".html", ignoreCase = true) || path.endsWith(".htm", ignoreCase = true)))
 
 /** The entry summary's target: the recorded result target, else the request's own subject. */
 internal fun actionTarget(call: TaskEvent.RequestedToolCall, outcome: ToolOutcome?): String? =

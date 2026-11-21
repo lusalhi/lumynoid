@@ -135,7 +135,7 @@ internal class CodingTools(
                 "Replaced"
             }
         }
-        return ToolOutcome("$status $path.", target = path, artifacts = listOf(ToolArtifact(path, "text/plain")), succeeded = true)
+        return ToolOutcome("$status $path.", target = path, artifacts = listOf(ToolArtifact(path, mediaType(path))), succeeded = true)
     }
 
     private suspend fun format(context: ToolContext, input: String, output: String): ToolOutcome {
@@ -179,6 +179,10 @@ internal class CodingTools(
 
         fun JsonObject.text(key: String) = getValue(key).jsonPrimitive.content
         fun components(path: String) = checkNotNull(CodingWorkspace.pathComponents(path))
+
+        /** New coding artifacts are labeled by extension only; file bytes are never sniffed. */
+        fun mediaType(path: String): String =
+            if (path.endsWith(".html", ignoreCase = true) || path.endsWith(".htm", ignoreCase = true)) "text/html" else "text/plain"
 
         fun fixedValue(key: String): String? = when (key) {
             "package" -> CodingRuntime.PACKAGE_ID

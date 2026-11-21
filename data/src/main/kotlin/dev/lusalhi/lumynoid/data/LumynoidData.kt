@@ -12,6 +12,7 @@ import dev.lusalhi.lumynoid.core.IdGenerator
 import dev.lusalhi.lumynoid.core.ProviderConfigStore
 import dev.lusalhi.lumynoid.core.SecretPort
 import dev.lusalhi.lumynoid.core.SystemClock
+import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskSettings
 import dev.lusalhi.lumynoid.core.UuidV7
 import kotlinx.coroutines.Dispatchers
@@ -43,12 +44,16 @@ class LumynoidData(
             .build()
     private val blobs = EventBlobStore(File(appContext.filesDir, "event-blobs"))
 
-    val events: EventRepository = RoomEventRepository(database.dao(), blobs)
+    private val eventRepository = RoomEventRepository(database.dao(), blobs)
+    val events: EventRepository = eventRepository
     val conversations: ConversationPort =
         RoomConversationPort(database.dao(), ids, clock, blobs, deleteWhenIdle, deleteWorkspace)
     val providerConfigs: ProviderConfigStore = RoomProviderConfigStore(database.dao())
     val secrets: SecretPort = KeystoreSecretStore(appContext)
     val taskSettings: TaskSettings = PreferenceTaskSettings(appContext.getSharedPreferences("task_settings", Context.MODE_PRIVATE))
+
+    /** Opens a single persisted event without reading unrelated conversation blobs. */
+    suspend fun event(conversationId: String, eventId: String): TaskEvent? = eventRepository.event(conversationId, eventId)
 }
 
 private class PreferenceTaskSettings(private val preferences: SharedPreferences) : TaskSettings {

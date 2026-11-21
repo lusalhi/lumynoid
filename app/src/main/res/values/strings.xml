@@ -182,8 +182,14 @@
     <string name="action_status_no_result">No result recorded</string>
     <string name="action_status_pending">No result yet</string>
     <string name="action_field_approval">Approval</string>
-    <string name="action_field_artifact_type">Media type</string>
-    <string name="action_artifact_note">Artifact files belong to this conversation\'s workspace and are not opened from this log.</string>
+    <string name="preview_open">Offline preview</string>
+    <string name="preview_close">Close</string>
+    <string name="preview_copy_file">Copy file</string>
+    <string name="preview_enable_js">Enable JavaScript</string>
+    <string name="preview_disable_js">Disable JavaScript</string>
+    <string name="preview_sandbox_unavailable">Offline HTML preview is unavailable on this Android version.</string>
+    <string name="preview_unavailable">This workspace file is no longer available or cannot be previewed.</string>
+    <string name="preview_empty">This file is empty.</string>
     <string name="action_field_capture_note">Capture limit note</string>
     <string name="action_output_size">%1$d characters stored</string>
     <string name="action_jump_end">Jump to end</string>

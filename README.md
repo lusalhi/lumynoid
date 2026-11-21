@@ -30,6 +30,8 @@ The first Linux runtime download and each file replacement require approval in c
 
 Open **Log** in chat to see tool targets, approvals and the full stored output, including after relaunch. A tool's own capture limit still applies. Deleting a conversation removes its log and private workspace, including its bundled package install. You can delete it once its queued, running or approval-waiting tasks have ended.
 
+Tap **Offline preview** on a published artifact in chat or in an action's **Log** details. Text and JSON are selectable; **Copy file** copies the entire file unchanged. HTML opens in a separate Android process without Internet permission. JavaScript is off each time you open a page. **Enable JavaScript** reloads that page with scripting enabled but does not allow network or external navigation. Preview shows the current workspace file, not a copy retained in the log. If Android cannot deny network access to the preview process (including Android 10), HTML preview is unavailable; text preview still works.
+
 ## Build
 
 Build with JDK 17, Android SDK platform 37, Build Tools 37.0.0, and NDK 28.2.13676358. The native build also uses GNU Make, Python 3, curl, unzip, and patch. On an arm64 Linux host it uses a native Clang and LLD with the pinned NDK sysroot.

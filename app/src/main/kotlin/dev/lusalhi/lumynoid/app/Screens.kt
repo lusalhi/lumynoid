@@ -46,7 +46,7 @@ import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.TaskEvent
 
 @Composable
-fun ChatScreen(
+internal fun ChatScreen(
     state: ChatState,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
@@ -55,6 +55,7 @@ fun ChatScreen(
     onNewConversation: () -> Unit,
     onApprovalDecision: (String, ApprovalDecision) -> Unit,
     onOpenActionLog: () -> Unit,
+    onOpenArtifact: (ArtifactIdentity) -> Unit,
 ) {
     var draft by key(state.conversationId) { rememberSaveable { mutableStateOf("") } }
     val listState = rememberLazyListState()
@@ -127,7 +128,7 @@ fun ChatScreen(
                     items(rows, key = { it.key }) { row ->
                         when (row) {
                             is ChatRow.Event -> EventRow(row.event)
-                            is ChatRow.Activity -> ActivityCard(row)
+                            is ChatRow.Activity -> ActivityCard(row, state.conversationId, onOpenArtifact)
                             is ChatRow.Approval -> ApprovalCard(row, state.approvalDeadlines[row.event.id]) {
                                 onApprovalDecision(row.event.id, it)
                             }

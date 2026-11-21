@@ -1,7 +1,9 @@
 package dev.lusalhi.lumynoid.app
 
 import android.app.Application
+import android.os.Build
 import android.os.SystemClock
+import android.webkit.WebView
 import dev.lusalhi.lumynoid.core.LlmPort
 import dev.lusalhi.lumynoid.core.ProviderAdminPort
 import dev.lusalhi.lumynoid.core.TaskRunner
@@ -57,6 +59,9 @@ class AppGraph(application: Application) {
 class LumynoidApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        if (Build.VERSION.SDK_INT >= 30 && getProcessName() == "$packageName:preview") {
+            WebView.setDataDirectorySuffix("preview")
+        }
         // First, before the lazy graph: a crash while the graph builds must still be recorded (AD-25).
         CrashHandler.install(this)
     }

@@ -130,6 +130,7 @@ private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
 
 @Composable
 private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: ProvidersViewModel) {
+    val context = LocalContext.current
     when (state.screen) {
         Screen.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -146,6 +147,18 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
         Screen.CHAT, Screen.ACTION_LOG -> {
             // The chat's saveable state (its unsent draft) survives a trip to the action log and back.
             val chatSaveable = rememberSaveableStateHolder()
+            var selected by remember(state.conversationId, state.screen, state.approvalFocus) {
+                mutableStateOf<ArtifactIdentity?>(null)
+            }
+            val openArtifact: (ArtifactIdentity) -> Unit = { artifact ->
+                if (artifact.isHtml()) {
+                    artifact.publishedIndex(state.conversationId, state.events)?.let { index ->
+                        context.startActivity(ArtifactHtmlActivity.intent(context, artifact, index))
+                    }
+                } else if (artifact.belongsTo(state.conversationId, state.events)) {
+                    selected = artifact
+                }
+            }
             if (state.screen == Screen.CHAT) {
                 chatSaveable.SaveableStateProvider("chat") {
                     ChatScreen(
@@ -157,6 +170,7 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
                         onNewConversation = viewModel::newConversation,
                         onApprovalDecision = viewModel::resolveApproval,
                         onOpenActionLog = viewModel::openActionLog,
+                        onOpenArtifact = openArtifact,
                     )
                 }
             } else {
@@ -166,8 +180,16 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
                         events = state.events,
                         title = state.title,
                         onBack = viewModel::closeActionLog,
+                        onOpenArtifact = openArtifact,
                     )
                 }
+            }
+            val artifact = selected
+            val stillPublished = remember(artifact, state.conversationId, state.events) {
+                artifact?.belongsTo(state.conversationId, state.events) == true
+            }
+            if (artifact != null && stillPublished) {
+                ArtifactTextDialog(artifact, onClose = { selected = null })
             }
         }
         Screen.CONVERSATIONS -> ConversationListScreen(
@@ -186,7 +208,7 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
 }
 
 @Composable
-private fun LumynoidTheme(content: @Composable () -> Unit) {
+internal fun LumynoidTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
     val colors = when {

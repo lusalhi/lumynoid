@@ -42,8 +42,8 @@ import kotlinx.coroutines.launch
 
 /**
  * The conversation's read-only action log, opened from chat. Entries show what was attempted and its
- * factual status; tapping one opens the full stored result as plain text. Nothing here acts on history:
- * no approval buttons, no links, no artifact opening.
+ * factual status; tapping one opens the full stored result as plain text and any published previews.
+ * Historical actions themselves cannot be approved or run from here.
  */
 @Composable
 internal fun ActionLogScreen(
@@ -51,6 +51,7 @@ internal fun ActionLogScreen(
     events: List<TaskEvent>,
     title: String,
     onBack: () -> Unit,
+    onOpenArtifact: (ArtifactIdentity) -> Unit,
 ) {
     val rows = remember(events) { actionLogRows(events) }
     var selectedKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -61,7 +62,7 @@ internal fun ActionLogScreen(
     BackHandler { if (selectedKey != null) selectedKey = null else onBack() }
 
     if (selected != null) {
-        ActionDetail(selected, conversationId, onBack = { selectedKey = null })
+        ActionDetail(selected, conversationId, onBack = { selectedKey = null }, onOpenArtifact = onOpenArtifact)
         return
     }
 
@@ -149,10 +150,16 @@ private fun NoticeRow(event: TaskEvent) {
 
 /** One stored result in full: fields first, then the exact output in bounded lazy chunks. */
 @Composable
-private fun ActionDetail(row: ActionLogRow.Action, conversationId: String, onBack: () -> Unit) {
+private fun ActionDetail(
+    row: ActionLogRow.Action,
+    conversationId: String,
+    onBack: () -> Unit,
+    onOpenArtifact: (ArtifactIdentity) -> Unit,
+) {
     val outcome = row.outcome
     val status = row.status()
     val chunks = remember(outcome?.output) { outputChunks(outcome?.output.orEmpty()) }
+    val artifacts = remember(row, conversationId) { row.artifactIdentities(conversationId) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
@@ -200,7 +207,8 @@ private fun ActionDetail(row: ActionLogRow.Action, conversationId: String, onBac
                         if (outcome == null) {
                             Text(stringResource(R.string.tool_no_result), style = MaterialTheme.typography.bodySmall)
                         } else {
-                            OutcomeFields(outcome, row.artifactIdentities(conversationId))
+                            OutcomeFields(outcome)
+                            for (artifact in artifacts) PreviewCard(artifact, onOpenArtifact)
                         }
                     }
                 }
@@ -233,16 +241,9 @@ private fun ActionDetail(row: ActionLogRow.Action, conversationId: String, onBac
 }
 
 @Composable
-private fun OutcomeFields(outcome: ToolOutcome, artifacts: List<ArtifactIdentity>) {
+private fun OutcomeFields(outcome: ToolOutcome) {
     outcome.target?.let { ToolField(R.string.tool_field_target, it) }
     outcome.exitCode?.let { ToolField(R.string.tool_field_exit_code, it.toString()) }
-    if (artifacts.isNotEmpty()) {
-        for (artifact in artifacts) {
-            ToolField(R.string.tool_field_artifact, artifact.path)
-            ToolField(R.string.action_field_artifact_type, artifact.mediaType)
-        }
-        Text(stringResource(R.string.action_artifact_note), style = MaterialTheme.typography.bodySmall)
-    }
     for (source in outcome.sourceUrls) ToolField(R.string.tool_field_source, source)
     outcome.truncationHint?.let { ToolField(R.string.action_field_capture_note, it) }
 }

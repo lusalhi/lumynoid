@@ -406,6 +406,37 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         fixture.assertScratchEmpty()
     }
 
+    suspend fun codingPublishesHtmlMediaTypes() = withFixture { fixture ->
+        val runner = fixture.runner(
+            mapOf(
+                "create" to listOf(
+                    create("page.html", "<title>halo</title>"),
+                    create("PAGE.HTM", "<title>halo</title>"),
+                    create("notes.txt", "plain"),
+                ),
+                "replace" to listOf(replace("page.html", "<title>baru</title>", sha256("<title>halo</title>"))),
+            ),
+        )
+        val created = fixture.submit(runner, "create")
+        assertTrue(fixture.terminal(created) is TaskEvent.TaskFinished)
+        val outcomes = fixture.results(created)
+        assertEquals(3, outcomes.size)
+        assertTrue(outcomes.all { it.succeeded == true })
+        assertEquals(
+            listOf(
+                ToolArtifact("page.html", "text/html"),
+                ToolArtifact("PAGE.HTM", "text/html"),
+                ToolArtifact("notes.txt", "text/plain"),
+            ),
+            outcomes.flatMap { it.artifacts },
+        )
+        val replaced = fixture.submit(runner, "replace")
+        fixture.approve(runner, replaced)
+        assertTrue(fixture.terminal(replaced) is TaskEvent.TaskFinished)
+        assertEquals(listOf(ToolArtifact("page.html", "text/html")), fixture.results(replaced).single().artifacts)
+        assertEquals("<title>baru</title>", fixture.workspace.resolve("page.html").toFile().readText())
+    }
+
     suspend fun workspaceDeletionIsScopedAndNeverFollowsLinks() = withFixture { fixture ->
         val runner = fixture.runner(
             mapOf(
@@ -546,6 +577,106 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
             deleteWorkspaceTree(installs, id)
             deleteWorkspaceTree(workspaces, "peer-offline")
             absentRoots.forEach { runCatching { Files.delete(it) } }
+        }
+    }
+
+    suspend fun previewReadsAreExistingOnlyBoundedAndWorkspaceScoped() {
+        val files = target.filesDir.toPath()
+        val workspaces = files.resolve("workspaces")
+        val id = "preview-offline-check"
+        val peerId = "preview-offline-peer"
+        val linkedId = "preview-offline-linked"
+        val rootAbsent = Files.notExists(workspaces, NOFOLLOW_LINKS)
+        try {
+            // Missing workspaces are never created, and invalid IDs are refused up front.
+            assertNull(WorkspacePreview(target, id).read("data.txt"))
+            if (rootAbsent) assertTrue(Files.notExists(workspaces, NOFOLLOW_LINKS))
+            for (bad in listOf("", "../escape", "a/b", ".hidden", "-lead", "bad:id", "two words", "x".repeat(129))) {
+                try {
+                    WorkspacePreview(target, bad)
+                    throw AssertionError("Accepted invalid workspace ID: $bad")
+                } catch (_: IllegalArgumentException) {
+                }
+            }
+
+            val workspace = Files.createDirectories(workspaces.resolve(id))
+            val peer = Files.createDirectories(workspaces.resolve(peerId))
+            val secret = Files.write(peer.resolve("secret.txt"), "peer-preview-secret".toByteArray())
+            val text = "Halo, 世界\n"
+            Files.write(workspace.resolve("data.txt"), text.toByteArray())
+            val nested = Files.createDirectory(workspace.resolve("src"))
+            Files.write(nested.resolve("page.html"), "<title>preview</title>".toByteArray())
+            Files.write(workspace.resolve("limit.txt"), ByteArray(256 * 1024))
+            Files.write(workspace.resolve("large.txt"), ByteArray(256 * 1024 + 1))
+            Files.createSymbolicLink(workspace.resolve("file-link"), secret)
+            Files.createSymbolicLink(workspace.resolve("dir-link"), peer)
+            Files.createSymbolicLink(workspace.resolve("dangling"), peer.resolve("absent.txt"))
+            val hardLinkPath = try {
+                Os.link(secret.toString(), workspace.resolve("hardlink.txt").toString())
+                "hardlink.txt"
+            } catch (e: ErrnoException) {
+                // Some Android policies forbid creating the fixture link. Keep the read-side
+                // rejection check on platforms where the link can be created.
+                if (e.errno !in setOf(OsConstants.EACCES, OsConstants.EPERM, OsConstants.EOPNOTSUPP)) throw e
+                assertTrue(Files.notExists(workspace.resolve("hardlink.txt"), NOFOLLOW_LINKS))
+                null
+            }
+
+            val preview = WorkspacePreview(target, id)
+            assertEquals(text, preview.read("data.txt")!!.decodeToString())
+            assertEquals("<title>preview</title>", preview.read("src/page.html")!!.decodeToString())
+            assertEquals(256 * 1024, preview.read("limit.txt")!!.size)
+            // A fresh instance reads the same current file, so previews survive app restart.
+            assertEquals(text, WorkspacePreview(target, id).read("data.txt")!!.decodeToString())
+
+            val rejected = listOf(
+                "../$peerId/secret.txt", secret.toString(), "/data.txt", "", ".", "..", "src/", "src//page.html",
+                "src/./page.html", "src/../data.txt", "data\u0000.txt", "absent.txt", "src", "file-link",
+                "dir-link/secret.txt", "dangling", "large.txt", "missing-dir/file.txt",
+            ) + listOfNotNull(hardLinkPath)
+            for (path in rejected) {
+                assertNull("Preview read accepted: $path", preview.read(path))
+            }
+            if (hardLinkPath != null) Files.delete(workspace.resolve(hardLinkPath))
+            // Rejected reads never create directories or follow links.
+            assertTrue(Files.notExists(workspace.resolve("missing-dir"), NOFOLLOW_LINKS))
+            assertEquals("peer-preview-secret", secret.toFile().readText())
+            // Peer workspaces stay isolated in both directions.
+            assertNull(preview.read("secret.txt"))
+            assertEquals("peer-preview-secret", WorkspacePreview(target, peerId).read("secret.txt")!!.decodeToString())
+            assertNull(WorkspacePreview(target, peerId).read("data.txt"))
+
+            // A symlinked workspace entry is unavailable and its target is untouched.
+            Files.createSymbolicLink(workspaces.resolve(linkedId), peer)
+            assertNull(WorkspacePreview(target, linkedId).read("secret.txt"))
+            assertEquals("peer-preview-secret", secret.toFile().readText())
+
+            // Root-level checks shared with directory(): symlinked, non-directory, colon-bearing and absent roots.
+            val base = Files.createTempDirectory(files, "preview-root-check-")
+            try {
+                val realRoot = Files.createDirectory(base.resolve("real"))
+                Files.createDirectory(realRoot.resolve(id))
+                val rootLink = base.resolve("link")
+                Files.createSymbolicLink(rootLink, realRoot)
+                assertNull(CodingWorkspace(rootLink).existingDirectory(id))
+                val flat = Files.write(base.resolve("flat"), "keep".toByteArray())
+                assertNull(CodingWorkspace(flat).existingDirectory(id))
+                val colonRoot = Files.createDirectory(base.resolve("colon:root"))
+                Files.createDirectory(colonRoot.resolve(id))
+                assertNull(CodingWorkspace(colonRoot).existingDirectory(id))
+                assertNull(CodingWorkspace(base.resolve("absent")).existingDirectory(id))
+                assertTrue(Files.notExists(base.resolve("absent"), NOFOLLOW_LINKS))
+                assertNull(CodingWorkspace(realRoot).existingDirectory("absent-id"))
+                assertTrue(Files.notExists(realRoot.resolve("absent-id"), NOFOLLOW_LINKS))
+                assertEquals(realRoot.toRealPath().resolve(id), CodingWorkspace(realRoot).existingDirectory(id))
+            } finally {
+                deleteTree(base)
+            }
+        } finally {
+            deleteWorkspaceTree(workspaces, id)
+            deleteWorkspaceTree(workspaces, peerId)
+            Files.deleteIfExists(workspaces.resolve(linkedId))
+            if (rootAbsent) runCatching { Files.delete(workspaces) }
         }
     }
 

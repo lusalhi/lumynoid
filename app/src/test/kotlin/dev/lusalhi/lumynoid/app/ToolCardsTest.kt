@@ -4,6 +4,7 @@ import dev.lusalhi.lumynoid.core.ApprovalResolution
 import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.RiskAssessment
 import dev.lusalhi.lumynoid.core.TaskEvent
+import dev.lusalhi.lumynoid.core.TaskEventJson
 import dev.lusalhi.lumynoid.core.ToolApproval
 import dev.lusalhi.lumynoid.core.ToolArtifact
 import dev.lusalhi.lumynoid.core.ToolCall
@@ -32,6 +33,32 @@ class ToolCardsTest {
         assertEquals(assistant, (rows[2] as ChatRow.Event).event)
         assertEquals(result, (rows[1] as ChatRow.Activity).outcome)
         assertNull((rows[3] as ChatRow.Activity).outcome)
+    }
+
+    @Test
+    fun previewUsesTheSamePersistedIdentityInChatAndLog() {
+        val requested = TaskEvent.ToolCallRequested("request", "task", 1L, "", listOf(call))
+        val messages = listOf(
+            requested,
+            TaskEvent.ToolResult("result", "task", 2L, "call", ToolOutcome(
+                "Preview /unpublished.html",
+                artifacts = listOf(ToolArtifact("site/INDEX.HTM", "text/plain")),
+            )),
+        )
+        val events = messages.map { TaskEventJson.decode(TaskEventJson.encode(it)) }
+        val chat = chatRows(events).filterIsInstance<ChatRow.Activity>().single()
+        val log = actionLogRows(events).filterIsInstance<ActionLogRow.Action>().single()
+        val artifact = chat.artifactIdentities("conversation").single()
+
+        assertEquals(ArtifactIdentity("conversation", "result", "site/INDEX.HTM", "text/plain"), artifact)
+        assertEquals(artifact, log.artifactIdentities("conversation").single())
+        assertTrue(artifact.isHtml())
+        assertFalse(artifact.copy(mediaType = "application/json").isHtml())
+        assertTrue(artifact.belongsTo("conversation", events))
+        assertFalse(artifact.belongsTo("another-conversation", events))
+        assertFalse(artifact.copy(resultEventId = "request").belongsTo("conversation", events))
+        assertFalse(artifact.copy(path = "unpublished.html").belongsTo("conversation", events))
+        assertTrue(chat.copy(resultEventId = null).artifactIdentities("conversation").isEmpty())
     }
 
     @Test

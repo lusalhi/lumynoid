@@ -205,7 +205,7 @@ class UserlandRuntime internal constructor(
             )
         }
 
-        private fun workspaceRoot(context: Context): Path = context.filesDir.toPath().resolve("workspaces")
+        internal fun workspaceRoot(context: Context): Path = context.filesDir.toPath().resolve("workspaces")
 
         private fun installRoot(workspaceRoot: Path): Path = workspaceRoot.resolveSibling("coding-installs")
 

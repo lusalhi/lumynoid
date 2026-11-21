@@ -15,6 +15,18 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.Lumynoid">
 
+        <processes>
+            <process android:process="${applicationId}" />
+            <process android:process=":preview">
+                <deny-permission android:name="android.permission.INTERNET" />
+            </process>
+        </processes>
+
+        <activity
+            android:name=".ArtifactHtmlActivity"
+            android:exported="false"
+            android:process=":preview" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -52,7 +52,7 @@ internal fun toolTitle(description: UiText): Int = when (description.key) {
 }
 
 @Composable
-internal fun ActivityCard(row: ChatRow.Activity) {
+internal fun ActivityCard(row: ChatRow.Activity, conversationId: String?, onOpenArtifact: (ArtifactIdentity) -> Unit) {
     val outcome = row.outcome
     val description = row.call.description
     Card(Modifier.fillMaxWidth()) {
@@ -63,7 +63,10 @@ internal fun ActivityCard(row: ChatRow.Activity) {
             } else {
                 outcome.target?.let { ToolField(R.string.tool_field_target, it) }
                 outcome.exitCode?.let { ToolField(R.string.tool_field_exit_code, it.toString()) }
-                for (artifact in outcome.artifacts) ToolField(R.string.tool_field_artifact, artifact.path)
+                if (conversationId != null) {
+                    val artifacts = remember(row, conversationId) { row.artifactIdentities(conversationId) }
+                    for (artifact in artifacts) PreviewCard(artifact, onOpenArtifact)
+                }
                 if (row.call.call.name == "shell_run_script" && outcome.artifacts.isEmpty()) {
                     Text(stringResource(R.string.tool_no_artifact), style = MaterialTheme.typography.bodySmall)
                 }
