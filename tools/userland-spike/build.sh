@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -gt 1 ]]; then
+    printf 'Usage: bash %s [npm-rootfs.tar.gz]\n' "$0" >&2
+    exit 2
+fi
+rootfs=()
+if [[ $# == 1 ]]; then
+    rootfs=("$(realpath -e -- "$1")")
+fi
+
 here=$(cd -- "$(dirname -- "$0")" && pwd)
 export ANDROID_HOME=${ANDROID_HOME:-${ANDROID_SDK_ROOT:?Set ANDROID_HOME to the Android SDK directory}}
 ndk=${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/28.2.13676358}
@@ -38,4 +47,4 @@ flags=(HAS_LOADER_32BIT= PROOT_UNBUNDLE_LOADER=/nonexistent "LD=$CC $LDFLAGS"
 # Upstream's ashmem compatibility extension uses strcmp/memset without including string.h.
 make "${flags[@]}" "CPPFLAGS=$cpp -include string.h" extension/ashmem_memfd/ashmem_memfd.o
 make -j"${JOBS:-4}" "${flags[@]}" "CPPFLAGS=$cpp"
-bash "$here/package.sh" "$PWD/proot" "$PWD/loader/loader"
+bash "$here/package.sh" "$PWD/proot" "$PWD/loader/loader" "${rootfs[@]}"
