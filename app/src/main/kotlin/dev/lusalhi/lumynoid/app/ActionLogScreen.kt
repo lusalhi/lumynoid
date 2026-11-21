@@ -35,7 +35,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.lusalhi.lumynoid.core.ApprovalResolution
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.ToolOutcome
 import kotlinx.coroutines.launch
@@ -202,7 +201,9 @@ private fun ActionDetail(
                         Text(stringResource(status.labelRes()), style = MaterialTheme.typography.labelLarge, color = status.color())
                         CallFields(row.call.description)
                         if (row.approvalId != null) {
-                            ToolField(R.string.action_field_approval, stringResource(row.approvalLabelRes()))
+                            val label = row.approvalResolution?.approvalLabelRes()
+                                ?: if (row.taskEnd != null) R.string.approval_inactive else R.string.approval_required
+                            ToolField(R.string.action_field_approval, stringResource(label))
                         }
                         if (outcome == null) {
                             Text(stringResource(R.string.tool_no_result), style = MaterialTheme.typography.bodySmall)
@@ -275,13 +276,4 @@ private fun ActionStatus.color() = when (this) {
     ActionStatus.NO_RESULT,
     -> MaterialTheme.colorScheme.error
     else -> MaterialTheme.colorScheme.onSurfaceVariant
-}
-
-@StringRes
-private fun ActionLogRow.Action.approvalLabelRes(): Int = when (approvalResolution) {
-    ApprovalResolution.APPROVED -> R.string.approval_approved
-    ApprovalResolution.DENIED -> R.string.approval_denied
-    ApprovalResolution.EXPIRED -> R.string.approval_expired
-    ApprovalResolution.CANCELLED -> R.string.approval_cancelled
-    null -> if (taskEnd != null) R.string.approval_inactive else R.string.approval_required
 }

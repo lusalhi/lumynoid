@@ -18,7 +18,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Streams chat completions from any OpenAI Chat Completions-compatible endpoint (AD-11), written
@@ -85,7 +84,7 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) : WireAdapter {
                 }
                 val name = call.function?.name
                 val rawArguments = call.function?.arguments
-                val arguments = (rawArguments as? JsonPrimitive)?.takeIf { it.isString }?.content
+                val arguments = rawArguments.wireStringOrNull()
                 if (rawArguments != null && rawArguments != JsonNull && arguments == null) {
                     malformed = true
                     continue

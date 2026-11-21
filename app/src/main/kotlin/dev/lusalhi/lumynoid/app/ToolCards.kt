@@ -105,23 +105,18 @@ internal fun ApprovalCard(row: ChatRow.Approval, elapsedDeadline: Long?, onDecis
     val pending = row.canDecide(elapsedDeadline, now)
     val approval = row.event.approval
     val description = approval.call.description
+    val label = row.resolution?.approvalLabelRes() ?: when {
+        pending -> R.string.approval_required
+        !row.closed && elapsedDeadline != null -> R.string.approval_expired
+        else -> R.string.approval_inactive
+    }
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(toolTitle(description)), style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(when (row.resolution) {
-                ApprovalResolution.APPROVED -> R.string.approval_approved
-                ApprovalResolution.DENIED -> R.string.approval_denied
-                ApprovalResolution.EXPIRED -> R.string.approval_expired
-                ApprovalResolution.CANCELLED -> R.string.approval_cancelled
-                null -> when {
-                    pending -> R.string.approval_required
-                    !row.closed && elapsedDeadline != null -> R.string.approval_expired
-                    else -> R.string.approval_inactive
-                }
-            }), style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(label), style = MaterialTheme.typography.labelLarge)
             for (key in APPROVAL_SUMMARY_FIELDS) {
                 description.args[key]?.let { ToolField(fieldLabel(key), it.content) }
             }
@@ -184,6 +179,14 @@ private fun ToolText(@StringRes label: Int, value: String) {
     SelectionContainer(Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(rememberScrollState())) {
         Text(value, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
     }
+}
+
+@StringRes
+internal fun ApprovalResolution.approvalLabelRes(): Int = when (this) {
+    ApprovalResolution.APPROVED -> R.string.approval_approved
+    ApprovalResolution.DENIED -> R.string.approval_denied
+    ApprovalResolution.EXPIRED -> R.string.approval_expired
+    ApprovalResolution.CANCELLED -> R.string.approval_cancelled
 }
 
 @StringRes

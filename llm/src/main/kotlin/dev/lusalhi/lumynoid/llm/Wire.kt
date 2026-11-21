@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.Base64
@@ -52,6 +54,10 @@ internal val wireJson = Json {
     ignoreUnknownKeys = true
     explicitNulls = false
 }
+
+/** A JSON string literal; numbers, booleans, null, arrays and objects are not coerced. */
+internal fun JsonElement?.wireStringOrNull(): String? =
+    (this as? JsonPrimitive)?.takeIf { it.isString }?.content
 
 /** HTTP statuses both wire formats report the same way. */
 internal fun HttpResponse.toLlmError(): LlmError = when (status) {

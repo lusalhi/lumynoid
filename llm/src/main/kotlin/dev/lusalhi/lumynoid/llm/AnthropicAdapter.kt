@@ -144,7 +144,7 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
                     val delta = event.delta
                     val block = index?.let(toolBlocks::get)
                     if (delta?.type == "input_json_delta") {
-                        val fragment = (delta.partialJson as? JsonPrimitive)?.takeIf { it.isString }?.content
+                        val fragment = delta.partialJson.wireStringOrNull()
                         if (index == null || block == null || block.stopped || fragment == null ||
                             block.initialInput?.isNotEmpty() == true
                         ) {
