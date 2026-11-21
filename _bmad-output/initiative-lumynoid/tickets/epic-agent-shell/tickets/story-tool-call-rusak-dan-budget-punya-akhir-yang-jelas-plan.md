@@ -3,7 +3,7 @@ title: 'Tool call rusak dan budget punya akhir yang jelas'
 type: feature
 ticket: 6
 created: '2026-11-21'
-status: built
+status: done
 baseline_revision: 'd3a2edf4380c8a6993a4d54710d392ebe015aad4'
 route: full
 route_source: auto
