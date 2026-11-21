@@ -235,6 +235,16 @@ class CrashReportTest {
         )
     }
 
+    @Test fun debugBuildHasOnlyTheMainLauncher() {
+        val launchers = listOf("src/main/AndroidManifest.xml", "src/debug/AndroidManifest.xml").flatMap { path ->
+            val categories = parse(path).getElementsByTagName("category")
+            (0 until categories.length).map { categories.item(it) as Element }
+                .filter { it.getAttribute("android:name") == "android.intent.category.LAUNCHER" }
+                .map { (it.parentNode.parentNode as Element).getAttribute("android:name") }
+        }
+        assertEquals(listOf(".MainActivity"), launchers)
+    }
+
     private fun parse(path: String) =
         DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(File(path))
 }
