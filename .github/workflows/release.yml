@@ -18,7 +18,7 @@ concurrency:
 jobs:
   verify:
     # No secrets here: tag rules, the CI gates and the tests.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # The rootfs build uses Noble's qemu-aarch64-static.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -58,9 +58,13 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      - name: Install runtime build tools
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;28.2.13676358'
+
+      - name: Install rootfs build tools
         run: |
-          sdkmanager --install "ndk;28.2.13676358" "build-tools;37.0.0"
           sudo apt-get update
           sudo apt-get install -y qemu-user-static
 
@@ -92,7 +96,7 @@ jobs:
 
   build:
     needs: verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
     permissions:
@@ -107,8 +111,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      - name: Install native build tools
-        run: sdkmanager --install "ndk;28.2.13676358" "build-tools;37.0.0"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: 'platforms;android-37.0 build-tools;37.0.0 ndk;28.2.13676358'
 
       - uses: actions/download-artifact@v7
         with:
