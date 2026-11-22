@@ -63,11 +63,28 @@ data class ProviderFormState(
     fun toDraft() = ProviderDraft(id, presetId, name, baseUrl, apiKey, model, makeActive, kind)
 }
 
+data class CallLimitState(
+    val savedLimit: Int,
+    val input: String = savedLimit.toString(),
+    val saving: Boolean = false,
+    val saveFailed: Boolean = false,
+) {
+    val limit get() = input.trim().toIntOrNull()?.takeIf { it > 0 }
+    val canSave get() = limit != null && limit != savedLimit && !saving
+
+    internal fun withSavedLimit(latest: Int): CallLimitState = when {
+        saving || latest == savedLimit -> this
+        input == savedLimit.toString() -> CallLimitState(latest)
+        else -> copy(savedLimit = latest, saveFailed = saveFailed && limit != latest)
+    }
+}
+
 data class ProvidersState(
     val loaded: Boolean = false,
     val providers: List<ProviderSummary> = emptyList(),
     val active: ActiveModel? = null,
     val form: ProviderFormState? = null,
+    val callLimit: CallLimitState? = null,
 ) {
     /** The form of the very first provider: nothing is saved yet, so setup is guided. */
     val isFirstRun get() = form != null && form.id == null && providers.isEmpty()
@@ -87,16 +104,41 @@ internal fun firstRunForm(): ProviderFormState {
 
 class ProvidersViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val admin = (application as LumynoidApp).graph.providerAdmin
+    private val graph = (application as LumynoidApp).graph
+    private val admin = graph.providerAdmin
+    private val taskSettings = graph.data.taskSettings
 
     private val _state = MutableStateFlow(ProvidersState())
     val state: StateFlow<ProvidersState> = _state
 
     init { refresh() }
 
-    /** Re-reads the saved providers; with none saved, goes straight to the form for the first one. */
+    fun editCallLimit(input: String) = _state.update { current ->
+        val limit = current.callLimit ?: return@update current
+        if (limit.saving) return@update current
+        current.copy(callLimit = limit.copy(input = input, saveFailed = false))
+    }
+
+    fun saveCallLimit() {
+        val current = _state.value.callLimit ?: return
+        val limit = current.limit ?: return
+        if (!current.canSave) return
+        _state.update { it.copy(callLimit = current.copy(saving = true, saveFailed = false)) }
+        viewModelScope.launch {
+            val saved = taskSettings.saveMaxLlmCalls(limit)
+            val latest = taskSettings.maxLlmCalls()
+            val updated = if (saved) CallLimitState(latest) else current.copy(saveFailed = true).withSavedLimit(latest)
+            _state.update { it.copy(callLimit = updated) }
+        }
+    }
+
+    /** Re-reads settings when opened. With no saved providers, opens the form for the first one. */
     fun refresh() {
-        viewModelScope.launch { reloadOverview(closeForm = false) }
+        viewModelScope.launch {
+            val limit = taskSettings.maxLlmCalls()
+            _state.update { it.copy(callLimit = it.callLimit?.withSavedLimit(limit) ?: CallLimitState(limit)) }
+            reloadOverview(closeForm = false)
+        }
     }
 
     /** Re-reads the saved providers into the state; [closeForm] also drops the form that was just saved. */

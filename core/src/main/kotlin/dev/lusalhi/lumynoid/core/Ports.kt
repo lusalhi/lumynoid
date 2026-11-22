@@ -126,8 +126,8 @@ interface ConversationPort {
     /** Returns false and keeps the old title when [title] is blank. */
     suspend fun rename(id: String, title: String): Boolean
 
-    /** Removes the conversation, its tasks and all its events in one transaction. */
-    suspend fun delete(id: String)
+    /** Removes the conversation and its owned data. Returns false while it has an unfinished task. */
+    suspend fun delete(id: String): Boolean
 }
 
 data class TaskRequest(
@@ -137,12 +137,30 @@ data class TaskRequest(
     val input: String,
 )
 
+const val DEFAULT_MAX_LLM_CALLS = 20
+
+/** App-wide limits applied when a task is submitted. */
+interface TaskSettings {
+    suspend fun maxLlmCalls(): Int
+
+    /** Saves a positive limit and returns whether the write succeeded. */
+    suspend fun saveMaxLlmCalls(limit: Int): Boolean
+}
+
+enum class ApprovalDecision { APPROVE, DENY }
+
+interface ApprovalPort {
+    /** Returns true when this decision was recorded for a still-pending, unexpired request. */
+    suspend fun resolve(approvalId: String, decision: ApprovalDecision): Boolean
+}
+
 /** A task that has no terminal event yet: a crash or kill cut it off, or it never started. */
 data class UnfinishedTask(val taskId: String, val conversationId: String)
 
 /** Event log storage. Only [TaskRunner] may call the write functions (AD-4, AD-5). */
 interface EventRepository {
     suspend fun createTask(taskId: String, request: TaskRequest, at: Long)
+    /** Tool, approval and retry audit events must be stored before returning; throw if the conversation is gone. */
     suspend fun append(conversationId: String, event: TaskEvent)
     fun observe(conversationId: String): Flow<List<TaskEvent>>
 
@@ -150,9 +168,8 @@ interface EventRepository {
     suspend fun history(conversationId: String): List<TaskEvent>
 
     /**
-     * Tasks whose last event is not terminal: no events at all, or a last event that is
-     * [TaskEvent.TaskQueued], [TaskEvent.UserMessage] or [TaskEvent.AssistantMessage]. Finished,
-     * failed, cancelled and [TaskEvent.Unknown]-ending tasks are not listed.
+     * Tasks with no events or whose last event is nonterminal ([TaskEvent.needsRecovery]). Finished, failed,
+     * cancelled and [TaskEvent.Unknown]-ending tasks are not listed.
      */
     suspend fun unfinishedTasks(): List<UnfinishedTask>
 }

@@ -1,22 +1,40 @@
 package dev.lusalhi.lumynoid.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.room3.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
 import dev.lusalhi.lumynoid.core.Clock
 import dev.lusalhi.lumynoid.core.ConversationPort
+import dev.lusalhi.lumynoid.core.DEFAULT_MAX_LLM_CALLS
 import dev.lusalhi.lumynoid.core.EventRepository
 import dev.lusalhi.lumynoid.core.IdGenerator
 import dev.lusalhi.lumynoid.core.ProviderConfigStore
 import dev.lusalhi.lumynoid.core.SecretPort
 import dev.lusalhi.lumynoid.core.SystemClock
+import dev.lusalhi.lumynoid.core.TaskEvent
+import dev.lusalhi.lumynoid.core.TaskSettings
 import dev.lusalhi.lumynoid.core.UuidV7
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
 
-/** Entry point of `:data`: opens the single database and exposes its ports. */
+/**
+ * Entry point of `:data`: opens the single database and exposes its ports.
+ *
+ * [deleteWhenIdle] gates conversation deletion against unfinished work and keeps the gate through
+ * cleanup; production passes `TaskRunner::deleteWhenIdle`. The default deletes immediately.
+ * [deleteWorkspace] reclaims the conversation's scoped workspace and bundled-package install;
+ * production passes the userland cleanup. The default owns no files.
+ */
 class LumynoidData(
     context: Context,
     ids: IdGenerator = UuidV7,
     clock: Clock = SystemClock,
+    deleteWhenIdle: suspend (String, suspend () -> Unit) -> Boolean = { _, delete -> delete(); true },
+    deleteWorkspace: suspend (String) -> Unit = {},
 ) {
     private val appContext = context.applicationContext
     private val database: LumynoidDatabase =
@@ -24,9 +42,46 @@ class LumynoidData(
             .setDriver(AndroidSQLiteDriver())
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4) // no destructive fallback (AD-19)
             .build()
+    private val blobs = EventBlobStore(File(appContext.filesDir, "event-blobs"))
 
-    val events: EventRepository = RoomEventRepository(database.dao())
-    val conversations: ConversationPort = RoomConversationPort(database.dao(), ids, clock)
+    private val eventRepository = RoomEventRepository(database.dao(), blobs)
+    val events: EventRepository = eventRepository
+    val conversations: ConversationPort =
+        RoomConversationPort(database.dao(), ids, clock, blobs, deleteWhenIdle, deleteWorkspace)
     val providerConfigs: ProviderConfigStore = RoomProviderConfigStore(database.dao())
     val secrets: SecretPort = KeystoreSecretStore(appContext)
+    val taskSettings: TaskSettings = PreferenceTaskSettings(appContext.getSharedPreferences("task_settings", Context.MODE_PRIVATE))
+
+    /** Opens a single persisted event without reading unrelated conversation blobs. */
+    suspend fun event(conversationId: String, eventId: String): TaskEvent? = eventRepository.event(conversationId, eventId)
+}
+
+private class PreferenceTaskSettings(private val preferences: SharedPreferences) : TaskSettings {
+    private val lock = Mutex()
+    @Volatile
+    private var savedLimit: Int? = null
+
+    override suspend fun maxLlmCalls(): Int = savedLimit ?: withContext(Dispatchers.IO) {
+        lock.withLock { savedLimit ?: readLimit().also { savedLimit = it } }
+    }
+
+    override suspend fun saveMaxLlmCalls(limit: Int): Boolean {
+        require(limit > 0) { "The LLM call limit must be positive" }
+        return withContext(Dispatchers.IO) {
+            lock.withLock {
+                // SharedPreferences changes its in-memory value even if commit fails to write to disk.
+                if (savedLimit == null) savedLimit = readLimit()
+                val committed = preferences.edit().putInt(MAX_LLM_CALLS, limit).commit()
+                if (committed) savedLimit = limit
+                committed
+            }
+        }
+    }
+
+    private fun readLimit(): Int =
+        preferences.getInt(MAX_LLM_CALLS, DEFAULT_MAX_LLM_CALLS).takeIf { it > 0 } ?: DEFAULT_MAX_LLM_CALLS
+
+    private companion object {
+        const val MAX_LLM_CALLS = "max_llm_calls"
+    }
 }

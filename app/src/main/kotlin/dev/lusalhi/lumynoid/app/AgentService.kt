@@ -14,6 +14,7 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import dev.lusalhi.lumynoid.core.ApprovalPort
 import dev.lusalhi.lumynoid.core.TaskRunner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
- * Hosts the [TaskRunner] so that answers keep streaming when the screen goes away (AD-2).
+ * Exposes the process-scoped [TaskRunner] and keeps active answers streaming when the screen goes away (AD-2).
  *
  * The service is a bound service while idle. Only while the runner is busy (a task queued or
  * running) it also starts itself, goes foreground with the `task_running` notification and holds a
@@ -31,7 +32,6 @@ import kotlinx.coroutines.launch
  */
 class AgentService : Service() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var runner: TaskRunner
     private var wakeLock: PowerManager.WakeLock? = null
@@ -39,12 +39,13 @@ class AgentService : Service() {
 
     inner class LocalBinder : Binder() {
         val runner: TaskRunner get() = this@AgentService.runner
+        val approvals: ApprovalPort get() = runner
     }
 
     override fun onCreate() {
         super.onCreate()
         val graph = (application as LumynoidApp).graph
-        runner = TaskRunner(graph.llm, graph.data.events, scope)
+        runner = graph.runner
         createChannel()
         mainScope.launch {
             runner.busy.collect { busy -> if (busy) enterForeground() else leaveForeground() }
@@ -57,7 +58,6 @@ class AgentService : Service() {
 
     override fun onDestroy() {
         mainScope.cancel()
-        scope.cancel()
         releaseWakeLock()
         super.onDestroy()
     }

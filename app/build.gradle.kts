@@ -19,8 +19,9 @@ android {
         applicationId = "dev.lusalhi.lumynoid"
         minSdk = 29
         targetSdk = 37
-        versionCode = 3
-        versionName = "v0.2.1"
+        versionCode = 4
+        versionName = "v0.3.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -56,6 +57,12 @@ android {
         }
     }
 
+    packaging.jniLibs {
+        // PRoot and its loader run from the installed native library directory.
+        useLegacyPackaging = true
+        keepDebugSymbols += setOf("**/libproot.so", "**/libproot_loader.so", "**/libuserland_supervisor.so")
+    }
+
     dependenciesInfo {
         includeInApk = false
     }
@@ -78,6 +85,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":llm"))
     implementation(project(":data"))
+    implementation(project(":userland"))
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.ktor.client.core)
@@ -87,6 +95,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.webkit)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
@@ -95,6 +104,7 @@ dependencies {
     implementation(libs.markdown.renderer.m3)
 
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
 
 // AD-17: the release classpath gate.

@@ -39,7 +39,7 @@ import dev.lusalhi.lumynoid.core.Conversation
 fun ConversationListScreen(
     conversations: List<Conversation>,
     openId: String?,
-    streamingId: String?,
+    pendingIds: Set<String>?,
     providerConfigured: Boolean,
     onOpenProvider: () -> Unit,
     onOpen: (String) -> Unit,
@@ -79,7 +79,7 @@ fun ConversationListScreen(
                     ConversationRow(
                         conversation = c,
                         isOpen = c.id == openId,
-                        canDelete = c.id != streamingId,
+                        canDelete = pendingIds != null && c.id !in pendingIds,
                         onOpen = { onOpen(c.id) },
                         onRename = { renaming = c },
                         onDelete = { deleting = c },
@@ -103,7 +103,10 @@ fun ConversationListScreen(
             title = { Text(stringResource(R.string.conversation_delete_title)) },
             text = { Text(stringResource(R.string.conversation_delete_body)) },
             confirmButton = {
-                Button(onClick = { onDelete(c.id); deleting = null }) { Text(stringResource(R.string.conversation_delete)) }
+                Button(
+                    onClick = { onDelete(c.id); deleting = null },
+                    enabled = pendingIds != null && c.id !in pendingIds,
+                ) { Text(stringResource(R.string.conversation_delete)) }
             },
             dismissButton = {
                 TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.conversation_cancel)) }

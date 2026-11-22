@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Lumynoid Test</string>
+    <string name="title">Tes PRoot dan tool coding</string>
+    <string name="device">%1$s · Android API %2$d · %3$s</string>
+    <string name="description">Uji PRoot dan tool coding langsung di HP. Tes berjalan offline dan tidak memakai data aplikasi Lumynoid.</string>
+    <string name="run_checks">Jalankan tes</string>
+    <string name="ready">Siap menjalankan %1$d tes</string>
+    <string name="running">Sedang tes… %1$d/%2$d selesai</string>
+    <string name="finished">%1$d/%2$d tes lulus</string>
+    <string name="passed">LULUS · %1$s</string>
+    <string name="failed">GAGAL · %1$s\n%2$s</string>
+    <string name="check_install">Persetujuan, instalasi, dan versi Node/npm</string>
+    <string name="check_corruption">Checksum salah dan unduhan yang dibatalkan</string>
+    <string name="check_exit">Proses anak berhenti saat selesai, gagal, atau timeout</string>
+    <string name="check_cancel">Proses anak berhenti saat dibatalkan atau menunggu persetujuan</string>
+    <string name="check_cleanup">Sesi lain tetap ditutup jika cleanup gagal</string>
+    <string name="check_workspace">Operasi file tetap di workspace aktif</string>
+    <string name="check_replace">Penimpaan file butuh persetujuan yang masih berlaku</string>
+    <string name="check_coding">Paket npm offline dan formatter JSON bawaan</string>
+    <string name="remove_fixture">Hapus fixture lama</string>
+    <string name="no_fixture">Fixture lama tidak terpasang</string>
+    <string name="no_uninstaller">Android tidak bisa membuka konfirmasi hapus aplikasi.</string>
+</resources>

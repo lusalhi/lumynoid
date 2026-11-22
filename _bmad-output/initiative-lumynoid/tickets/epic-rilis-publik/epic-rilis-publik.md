@@ -23,7 +23,8 @@ Orang awam bisa menemukan, memasang, dan memakai Lumynoid v1 dari GitHub Release
 
 ## Done when
 
-- Penguji awam yang belum pernah melihat Lumynoid menyelesaikan satu chat, satu tugas coding lewat shell, satu jawaban dari web, dan satu tugas terjadwal tanpa terminal dan tanpa dokumentasi.
+- Penguji awam yang belum pernah melihat Lumynoid menyelesaikan satu chat biasa, satu tugas coding di proyek, satu jawaban dari web, dan satu tugas terjadwal tanpa terminal dan tanpa dokumentasi.
+- Uji rilis mengulang upgrade yang mempertahankan data Epic 2 dan alur dua chat di proyek yang sama: file dapat digunakan ulang tanpa membawa riwayat chat lain atau memberi akses ke proyek lain.
 - Rilis v1 tersedia sebagai APK bertanda tangan di GitHub Releases.
 
 ## Boundaries
@@ -41,3 +42,4 @@ Orang awam bisa menemukan, memasang, dan memakai Lumynoid v1 dari GitHub Release
 
 - Decision: 2026-11-14 — Aturan inklusi F-Droid (tanpa library non-free) dicek saat architecture memilih dependensi, bukan di epic ini.
 - Decision: 2026-11-14 — Pengajuan F-Droid dan keputusan Play keluar dari epic ini: v1 hanya di GitHub Releases (C14); verifikasi developer pindah ke epic-chat-dan-provider.
+- Decision: 2026-11-22 — Rilis Publik menunggu Epic 8 untuk uji integrasi Projects; implementasi dan uji penerimaan fitur tetap milik Epic 8.

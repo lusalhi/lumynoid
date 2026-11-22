@@ -1,0 +1,134 @@
+# Urutan build Epic 2: spike perangkat, tracer produk, lalu uji rilis.
+# Entry 2.1 merekam eksperimen scope awal. Keputusan 2026-11-21 di epic menentukan gate rilis terbatas.
+
+[[entry]]
+id = 1
+type = "spike"
+title = "Buktikan userland Android dan batas isolasinya"
+description = "Dengan APK diagnostik terpisah dan fixture proyek, buktikan jalur APK → loader native → satu perintah baca → hasil di layar. Bandingkan rootfs kandidat (ukuran unduh/ekstrak dan waktu mulai), catat commit proot/loader serta kewajiban lisensi, uji W^X dan alignment, npm install, batas proses/memori dan pembersihan anak, serta penolakan akses ke data privat app, workspace lain, data skill dan jaringan tanpa izin. Hasilnya menetapkan desain atau alasan no-go untuk 2.5 dan 2.7."
+verify = "Pemilik menjalankan suite fixture pada HP arm64 API 37 dengan APK target SDK 37; laporan mencatat perangkat, build, ukuran dan durasi, hasil tiap cek serta keputusan lanjut atau ubah desain. Tidak adanya bukti isolasi bukan hasil lulus."
+covers = []
+after = ["1.3"]
+hitl = true
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "TaskRunner menuntaskan giliran dengan tool terstruktur"
+description = "Tambahkan kontrak tool, snapshot registry, delta dan identitas tool call, serta event request/result. ContextAssembler naif memasangkan assistant/tool dari taskId yang sama, termasuk setelah pesan awal. Simpan payload besar lewat blob store AD-19 sejak penulisan pertama dan ikutkan event nonterminal di pemulihan crash tanpa replay. Kontrak ini dipakai adapter 2.3 dan gerbang 2.4; hanya fixture in-process menjalankan tool di story ini."
+verify = "Suite TaskRunner dan repositori membuktikan giliran tool memakai hasil di jawaban, event di atas 256 KB dibaca utuh tanpa payload penuh di Room, restart menutup panggilan terputus tanpa replay, dan chat polos tetap mengalir."
+covers = ["R1", "R3"]
+after = ["1.8"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Kedua provider bertukar tool call dan hasil"
+description = "Petakan kontrak 2.2 ke OpenAI-compatible dan Anthropic, termasuk argumen streaming terfragmentasi, ID korelasi, beberapa panggilan per giliran, hasil balik, dan terminasi/error tanpa mengubah jalur chat polos. Keduanya memasok siklus tool buat 2.8."
+verify = "Jalankan fixture HTTP tiap provider: dua panggilan dalam satu giliran dengan delta terfragmentasi dikorelasikan ke hasil yang tepat, dan request serta stream tanpa tool tetap kompatibel."
+covers = ["R1"]
+after = [2, "1.5"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Aksi berisiko menunggu persetujuan tanpa menahan antrean"
+description = "Runner menegakkan default-deny lewat ApprovalPort per panggilan dengan TTL 12 jam. Menunggu menyimpan event, melepas slot dan mematikan userland; FGS berhenti bila tanpa kerja lain. Pertahankan approval saat AgentService berhenti biasa di proses yang sama; proses mati memulihkan sebagai INTERRUPTED tanpa replay. Gunakan handoff lifecycle untuk 2.5 dan event/port untuk kartu 2.8."
+verify = "Fixture menguji semua kelas risiko. Di satu percakapan, A menunggu tanpa eksekusi atau FGS, B selesai, lalu A melanjutkan dengan pasangan tool miliknya tanpa pesan B. Approval basi/ganda, deny, expiry, cancel dan proses mati tidak menjalankan aksi."
+covers = ["R2", "R4"]
+after = [2]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 5
+type = "story"
+title = "PRoot menjalankan operasi bawaan dan berhenti bersama tugas"
+description = "Pakai PRoot dan Alpine yang lulus di Spike 2.1. CI membangun PRoot dan loader dari source terpin serta mengemas library arm64 dengan alignment 16 KiB. Siapkan rootfs Alpine berversi dengan Node dan npm terpin, checksum, serta catatan sumber dan lisensi. Instal setelah persetujuan unduhan pertama. Adaptor menerima operasi bawaan yang bertipe untuk workspaceId aktif melalui kontrak lifecycle 2.4. Hentikan proses dan anaknya saat selesai, gagal, cancel, timeout, atau menunggu approval. Tool coding 2.7 memakai adaptor dan rootfs ini."
+verify = "Di HP arm64 API 37, gunakan fixture untuk menolak dan menyetujui unduhan rootfs. Pastikan checksum salah ditolak dan versi Node/npm terbaca dari rootfs benar. Operasi asing ditolak sebelum proses dimulai. Dengan fixture proses anak, pastikan seluruh proses berhenti setelah sukses, gagal, cancel, timeout, atau ketika menunggu approval."
+covers = ["R1"]
+after = [4, "1.3"]
+hitl = true
+risk = "high"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Tool call rusak dan budget punya akhir yang jelas"
+description = "Catat ToolCallRejected dan LlmRetry, tangani pemulihan crash dari event retry, dan coba tepat satu pesan perbaikan sebelum MALFORMED_TOOL_CALL. Terapkan MAX_LLM_CALLS default 20 yang bisa diatur pengguna dan akhir BUDGET_EXHAUSTED. Retry kuota tetap di luar scope; event audit masuk log 2.9."
+verify = "Suite fixture membuktikan tool call kosong disusul args rusak memicu satu perbaikan, tidak mengeksekusi tool, dan gagal dengan alasan serta event yang benar. Pemulihan dari event retry tidak mengulang tugas; batas terkonfigurasi menghentikan model yang terus meminta tool."
+covers = ["R3", "R4"]
+after = [3, 4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Tool coding menulis file dan menjalankan operasi npm yang ditentukan app"
+description = "Daftarkan operasi file pada folder aktif, instalasi npm offline dari paket lokal terverifikasi dengan lifecycle scripts dimatikan, dan skrip bawaan lewat adaptor 2.5. ToolProvider mengembalikan output, exit code, dan artefak bertipe. Aplikasi menentukan paket, manifest, konfigurasi, dan argumen eksekusi. Tool ini masuk chat di 2.8."
+verify = "Di HP, tulis file, pasang paket lokal, dan jalankan skrip bawaan. Pastikan path keluar termasuk symlink, paket di luar daftar, dan perintah bebas ditolak. Beri proyek konfigurasi npm dan skrip fixture yang mencoba mengubah operasi serta menulis marker. Pastikan marker tidak muncul, npm tetap offline, dan aksi merusak menunggu ApprovalPort. Output palsu tidak memberi approval."
+covers = ["R1", "R2", "R4"]
+after = [5]
+hitl = true
+risk = "high"
+
+[[entry]]
+id = 8
+type = "story"
+title = "Chat menampilkan aktivitas dan persetujuan tool coding"
+description = "Tracer produk merangkai provider, registry, runner, tool coding, event log, dan Compose. Pakai workspaceId stabil per percakapan. Buat ActivityCard dan ApprovalCard dari event bertipe, judul lewat UiText, dan detail operasi sebagai data. Approve dan deny hanya lewat kartu. Notifikasi membuka kartu. Minta persetujuan sebelum unduhan rootfs pertama."
+verify = "Di HP, kirim tugas fixture dan lihat kartu, hasil serta jawaban. Pesan berikutnya melihat file yang sama. Saat menunggu approval, tutup layar chat hingga service berhenti tanpa mematikan proses; buka lagi dan setujui di kartu yang sama, lalu amati satu eksekusi. Deny tidak mengeksekusi dan Markdown palsu tidak menjadi kartu."
+covers = ["R1", "R2", "R4"]
+after = [6, 7]
+hitl = true
+risk = "high"
+
+[[entry]]
+id = 9
+type = "story"
+title = "Log aksi membuka hasil lengkap setelah app ditutup"
+description = "Proyeksikan semua panggilan dan statusnya, termasuk ditolak/gagal, dari event log dan blob store 2.2. Ikat pembersihan blob/workspace ke ConversationPort.delete, termasuk perlindungan saat queued, running, atau menunggu approval. Berikan referensi artefak persisten untuk 2.10."
+verify = "Setelah tugas dengan hasil pendek, besar, dan ditolak, buka ulang app; status dan hasil tersedia, hapus ditahan selama tugas belum selesai, lalu hapus percakapan hanya menghilangkan blob/workspace miliknya."
+covers = ["R3"]
+after = [8]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 10
+type = "story"
+title = "File dan HTML hasil kerja terbuka di pratinjau offline"
+description = "Tampilkan PreviewCard dari event artefak persisten 2.9. Preview dalam app hanya membaca workspace yang berhak; tolak path/symlink keluar, jaringan, navigasi eksternal dan akses file/content. JavaScript mati secara default dan opt-in per preview, tanpa membuka jaringan (AD-18)."
+verify = "Dari kartu, buka file dan HTML yang dihasilkan fixture. Preview berhasil offline, sedangkan fixture dengan link luar, resource remote, atau symlink keluar workspace tidak bisa mengaksesnya."
+covers = ["R5"]
+after = [9]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 11
+type = "story"
+title = "Refactor sweep"
+description = "Bersihkan hanya duplikasi dan utang implementasi yang ditemukan di story Epic 2; cakupan ditetapkan dari catatan implementasi dan review, tanpa mengubah perilaku atau memindahkan requirement."
+verify = "Suite regresi Epic 2 dan gate CI tetap hijau tanpa perubahan perilaku."
+covers = []
+after = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 12
+type = "story"
+title = "APK Epic 2 bertanda tangan lolos uji di HP"
+description = "Pakai workflow tag dan prosedur penerimaan perangkat dari 1.12, pastikan source dan notice native terbit sesuai lisensi, verifikasi arm64/alignment dan jalur update tanpa kehilangan data, lalu jalankan Done when Epic 2 di perangkat sungguhan. Cek juga jawaban polos Epic 1 tetap berjalan."
+verify = "Pada HP arm64 API 37, pasang satu APK Epic 2 dari GitHub Releases di atas APK Epic 1 bertanda tangan. Percakapan lama dan chat polos tetap tersedia. Dengan layar mati, tulis file, pasang paket lokal, dan jalankan skrip bawaan. Uji penolakan operasi di luar daftar, deny dan approve, fixture injeksi, log, serta preview offline. Userland berhenti sesudah tugas."
+covers = []
+after = [11, "1.12"]
+hitl = true
+risk = "high"

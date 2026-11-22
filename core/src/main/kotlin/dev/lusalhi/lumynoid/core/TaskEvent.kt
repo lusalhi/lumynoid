@@ -23,6 +23,28 @@ enum class FailureReason {
     @SerialName("network") NETWORK,
     @SerialName("server") SERVER,
     @SerialName("interrupted") INTERRUPTED,
+    @SerialName("tool_denied") TOOL_DENIED,
+    @SerialName("approval_denied") APPROVAL_DENIED,
+    @SerialName("approval_expired") APPROVAL_EXPIRED,
+    @SerialName("approval_changed") APPROVAL_CHANGED,
+    @SerialName("malformed_tool_call") MALFORMED_TOOL_CALL,
+    @SerialName("budget_exhausted") BUDGET_EXHAUSTED,
+}
+
+@Serializable
+data class ToolApproval(
+    val id: String,
+    val call: TaskEvent.RequestedToolCall,
+    val risk: RiskAssessment,
+    val expiresAt: Long,
+)
+
+@Serializable
+enum class ApprovalResolution {
+    @SerialName("approved") APPROVED,
+    @SerialName("denied") DENIED,
+    @SerialName("expired") EXPIRED,
+    @SerialName("cancelled") CANCELLED,
 }
 
 /**
@@ -34,6 +56,13 @@ sealed class TaskEvent {
     abstract val id: String
     abstract val taskId: String
     abstract val at: Long
+
+    val needsRecovery: Boolean
+        get() = when (this) {
+            is TaskQueued, is UserMessage, is AssistantMessage, is ToolCallRequested, is ToolResult,
+            is ApprovalRequested, is ApprovalResolved, is ToolCallRejected, is ToolExecutionDenied, is LlmRetry -> true
+            is TaskFinished, is TaskFailed, is TaskCancelled, is Unknown -> false
+        }
 
     @Serializable
     @SerialName("task_queued")
@@ -60,6 +89,82 @@ sealed class TaskEvent {
         override val taskId: String,
         override val at: Long,
         val text: String,
+    ) : TaskEvent()
+
+    @Serializable
+    data class RequestedToolCall(val call: ToolCall, val description: UiText)
+
+    /** One assistant reply can request several calls; each result carries its own call ID. */
+    @Serializable
+    @SerialName("tool_call_requested")
+    data class ToolCallRequested(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val assistantText: String,
+        val calls: List<RequestedToolCall>,
+        /** The first denied assessment stopped this whole batch before any tool ran. */
+        val deniedCallIds: List<String> = emptyList(),
+    ) : TaskEvent()
+
+    @Serializable
+    @SerialName("tool_result")
+    data class ToolResult(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val callId: String,
+        val outcome: ToolOutcome,
+    ) : TaskEvent()
+
+    /** A previously requested call was denied when its risk was checked again. */
+    @Serializable
+    @SerialName("tool_execution_denied")
+    data class ToolExecutionDenied(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val callId: String,
+    ) : TaskEvent()
+
+    /** A malformed assistant reply was discarded. [callNumber] is its one-based LLM invocation number. */
+    @Serializable
+    @SerialName("tool_call_rejected")
+    data class ToolCallRejected(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val callNumber: Int,
+    ) : TaskEvent()
+
+    /** A repair request is about to be sent as invocation [callNumber]. */
+    @Serializable
+    @SerialName("llm_retry")
+    data class LlmRetry(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val callNumber: Int,
+    ) : TaskEvent()
+
+    @Serializable
+    @SerialName("approval_requested")
+    data class ApprovalRequested(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val approval: ToolApproval,
+    ) : TaskEvent()
+
+    @Serializable
+    @SerialName("approval_resolved")
+    data class ApprovalResolved(
+        override val id: String,
+        override val taskId: String,
+        override val at: Long,
+        val approvalId: String,
+        val callId: String,
+        val decision: ApprovalResolution,
     ) : TaskEvent()
 
     @Serializable

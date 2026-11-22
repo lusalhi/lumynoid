@@ -27,6 +27,9 @@ internal interface LumynoidDao {
     @Query("UPDATE conversation SET title = :title WHERE id = :id")
     suspend fun setTitle(id: String, title: String): Int
 
+    @Query("SELECT EXISTS(SELECT 1 FROM conversation WHERE id = :id)")
+    suspend fun conversationExists(id: String): Boolean
+
     @Query("DELETE FROM task_event WHERE conversation_id = :id")
     suspend fun deleteEvents(id: String)
 
@@ -47,13 +50,13 @@ internal interface LumynoidDao {
     @Query("SELECT COUNT(*) FROM task")
     suspend fun taskCount(): Int
 
-    /** Writes only while the conversation row exists, atomically against [deleteConversation]. */
+    /** Writes only while the conversation row exists, atomically against [deleteConversation]; -1 when it is gone. */
     @Query(
         "INSERT INTO task (id, conversation_id, workspace_id, origin, created_at) " +
             "SELECT :id, :conversationId, :workspaceId, :origin, :createdAt " +
             "WHERE EXISTS (SELECT 1 FROM conversation WHERE id = :conversationId)",
     )
-    suspend fun insertTaskIfConversationExists(id: String, conversationId: String, workspaceId: String, origin: String, createdAt: Long)
+    suspend fun insertTaskIfConversationExists(id: String, conversationId: String, workspaceId: String, origin: String, createdAt: Long): Long
 
     /** Writes only while the conversation row exists, atomically against [deleteConversation]. */
     @Query(
@@ -61,13 +64,16 @@ internal interface LumynoidDao {
             "SELECT :id, :taskId, :conversationId, :at, :payload " +
             "WHERE EXISTS (SELECT 1 FROM conversation WHERE id = :conversationId)",
     )
-    suspend fun insertEventIfConversationExists(id: String, taskId: String, conversationId: String, at: Long, payload: String)
+    suspend fun insertEventIfConversationExists(id: String, taskId: String, conversationId: String, at: Long, payload: String): Long
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertEvent(event: TaskEventEntity)
 
     @Query("SELECT * FROM task_event WHERE conversation_id = :conversationId ORDER BY seq")
     suspend fun events(conversationId: String): List<TaskEventEntity>
+
+    @Query("SELECT * FROM task_event WHERE id = :eventId AND conversation_id = :conversationId")
+    suspend fun event(conversationId: String, eventId: String): TaskEventEntity?
 
     @Query("SELECT * FROM task_event WHERE conversation_id = :conversationId ORDER BY seq")
     fun observeEvents(conversationId: String): Flow<List<TaskEventEntity>>

@@ -15,7 +15,7 @@ risk: high
 
 ## Description
 
-Dukungan format Agent Skills (`SKILL.md`): pengguna memasang skill, instruksinya dimuat lewat titik sambung konteks epic-hemat-kuota, dan CLI-nya berjalan di userland epic-agent-shell. Acuan: Binance Agentic Wallet (`baw`), dengan transaksi yang berhenti di preview sampai pengguna mengonfirmasi.
+Pengguna memasang skill berformat Agent Skills (`SKILL.md`). Instruksinya dimuat lewat titik sambung konteks epic-hemat-kuota. Epic ini memakai siklus hidup userland dari epic-agent-shell dan membuktikan perlindungan data serta jaringan sebelum menjalankan CLI skill. Acuannya Binance Agentic Wallet (`baw`), dengan transaksi yang berhenti di preview sampai pengguna mengonfirmasi.
 
 ## Outcome
 
@@ -32,9 +32,14 @@ Pengguna menambah kemampuan baru ke asistennya dengan memasang skill pihak ketig
 
 - Bukan di sini: skill yang mengendalikan app lain (di luar v1).
 - Touch point milik epic ini: Binance Agentic Wallet (`baw` + `SKILL.md`).
+- Sebelum membuka eksekusi CLI pihak ketiga, buktikan batas akses ke data privat, kredensial skill lain, workspace, dan jaringan di HP sesuai AD-15, AD-20, dan AD-21.
 
 ## References
 
 - parent — `_bmad-output/initiative-lumynoid/initiative-lumynoid.md`, Requirements R7; Constraints; Notes
 - breakdown — `_bmad-output/initiative-lumynoid/tickets/tickets.toml`, epic `epic-skill-pihak-ketiga`
 - architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-14, AD-15, AD-20, AD-21; Deferred (SkillPolicy baw)
+
+## Notes
+
+- Decision: 2026-11-21 — Epic 2 menyediakan PRoot untuk operasi coding yang ditentukan aplikasi. Pembuktian batas eksekusi CLI pihak ketiga menjadi prasyarat di epic ini sebelum memasang dan menjalankan skill.

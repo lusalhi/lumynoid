@@ -26,7 +26,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.IOException
+import java.security.MessageDigest
+import java.util.Base64
 
 /** One wire format (AD-11): how to stream an answer and how to list models. Failures are typed, never thrown. */
 interface WireAdapter {
@@ -51,6 +55,10 @@ internal val wireJson = Json {
     explicitNulls = false
 }
 
+/** A JSON string literal; numbers, booleans, null, arrays and objects are not coerced. */
+internal fun JsonElement?.wireStringOrNull(): String? =
+    (this as? JsonPrimitive)?.takeIf { it.isString }?.content
+
 /** HTTP statuses both wire formats report the same way. */
 internal fun HttpResponse.toLlmError(): LlmError = when (status) {
     HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden -> LlmError.AuthFailed
@@ -62,6 +70,13 @@ internal fun HttpResponse.toLlmError(): LlmError = when (status) {
 
 /** `[baseUrl]` without a trailing slash, followed by [path]. */
 internal fun joinUrl(baseUrl: String, path: String): String = baseUrl.trimEnd('/') + path
+
+/** A short, provider-safe ID derived from the runner's durable ID. */
+internal fun toolCallWireId(prefix: String, localId: String): String {
+    val hash = MessageDigest.getInstance("SHA-256").digest(localId.encodeToByteArray())
+    val suffix = Base64.getUrlEncoder().withoutPadding().encodeToString(hash).take(32)
+    return prefix + suffix
+}
 
 /**
  * POSTs the JSON [body] to [url] and hands a successful response to [readStream]. A failed status, an IO

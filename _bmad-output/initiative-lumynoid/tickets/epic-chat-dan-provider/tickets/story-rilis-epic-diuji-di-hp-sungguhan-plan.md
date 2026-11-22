@@ -3,7 +3,7 @@ title: 'Epic release tested on a real phone'
 type: chore
 ticket: '12'
 created: '2026-11-20'
-status: built
+status: done
 baseline_revision: 'c2379a97695553bc207d8d59968e2b2b183168e6'
 route: oneshot
 route_source: auto
@@ -40,6 +40,8 @@ Phone result, 2026-11-20: the owner reported a crash with the `v0.2.0` pre-relea
 
 Same fix commit also takes Cubic's other code findings: `CrashStore.write` writes a `.part` file and renames it, and stamps each name above the newest report's so `newest()` is always the last write even when the clock moved back; `connect` keeps the form open with the user's edits (any field, name included) when they changed it during the test, tied to the saved provider; `streamPost` rethrows a downstream collector's exception instead of emitting `Failed` after it (new test fails without the fix); `CrashReportTest` uses `TemporaryFolder`. Docs corrected: story 1.8 is back to `built` (Stop and revoked-key unrecorded), 1.9 and 1.10 checklists ticked, stale notes and line references fixed, the epic Done-when records the FGS deviation.
 
+Live proof, 2026-11-20 (owner go-ahead at each outward step): PR #6 merged (`a923fb6`), tag `v0.2.0` published and crashed on the owner's phone. PR #7 merged (`91bc00b`) with the `LumynoidFileProvider` fix, Cubic findings and `v0.2.1`; tag `v0.2.1` ran `verify`, owner approval, `build`, `publish`, all green (run 44696815883). The pre-release holds exactly `lumynoid-v0.2.1.apk` and `SHA256SUMS`; the checksum matches, `apksigner` shows the committed fingerprint, `aapt2` shows `dev.lusalhi.lumynoid` 3 / `v0.2.1`, only `arm64-v8a`, and the manifest registers `LumynoidFileProvider`. The owner installed that APK from GitHub Releases on the real phone and reported every Done-when check passed ("lancar semua"), including story 1.8's Stop and revoked-key checks. Every item of the ticket's Verify is met.
+
 ## Review Triage Log
 
 Pass 1, quick lens (subagent, same model level). 4 findings: high 0, medium 0, low 0, false 4, maybe-false 0. No loopback.
@@ -54,9 +56,9 @@ Pass 1, quick lens (subagent, same model level). 4 findings: high 0, medium 0, l
 ## Tasks
 
 - [x] `app/build.gradle.kts` -- `versionCode = 2`, `versionName = "v0.2.0"`
-- [ ] Docs commit -- mark 1.10, 1.11 and this story done in the tree and plans after the live proof
-- [ ] Live (owner go-ahead each step): push branch, PR to `main`, merge, `git tag v0.2.1 origin/main`, push tag, owner approves environment `release`, verify the pre-release holds `lumynoid-v0.2.1.apk` + `SHA256SUMS` and the checksum matches
-- [ ] Owner on phone, APK from GitHub Releases, per epic Done-when: add provider (OpenAI-compatible preset, custom URL, Anthropic) with connection test showing result and reason; streaming markdown + code block chat; conversation in the list and continues after the app is closed; install to first answer without terminal or leaving the app; answer finishes and is saved with the app in background; plus story 1.8's owed checks: Stop ends an answer with "Stopped.", and a revoked key shows its reason
+- [x] Docs commit -- mark 1.10, 1.11 and this story done in the tree and plans after the live proof
+- [x] Live (owner go-ahead each step): push branch, PR to `main`, merge, `git tag v0.2.1 origin/main`, push tag, owner approves environment `release`, verify the pre-release holds `lumynoid-v0.2.1.apk` + `SHA256SUMS` and the checksum matches
+- [x] Owner on phone, APK from GitHub Releases, per epic Done-when: add provider (OpenAI-compatible preset, custom URL, Anthropic) with connection test showing result and reason; streaming markdown + code block chat; conversation in the list and continues after the app is closed; install to first answer without terminal or leaving the app; answer finishes and is saved with the app in background; plus story 1.8's owed checks: Stop ends an answer with "Stopped.", and a revoked key shows its reason
 
 ## Verification
 

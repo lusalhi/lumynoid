@@ -16,4 +16,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "lumynoid"
 
-include(":core", ":llm", ":data", ":app")
+include(":core", ":llm", ":data", ":userland", ":app")
+include(":userland-check")
+project(":userland-check").projectDir = file("tools/userland-check")

@@ -229,9 +229,20 @@ class CrashReportTest {
                 "android.permission.FOREGROUND_SERVICE",
                 "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
                 "android.permission.WAKE_LOCK",
+                "android.permission.POST_NOTIFICATIONS",
             ),
             permissions.toSet(),
         )
+    }
+
+    @Test fun debugBuildHasOnlyTheMainLauncher() {
+        val launchers = listOf("src/main/AndroidManifest.xml", "src/debug/AndroidManifest.xml").flatMap { path ->
+            val categories = parse(path).getElementsByTagName("category")
+            (0 until categories.length).map { categories.item(it) as Element }
+                .filter { it.getAttribute("android:name") == "android.intent.category.LAUNCHER" }
+                .map { (it.parentNode.parentNode as Element).getAttribute("android:name") }
+        }
+        assertEquals(listOf(".MainActivity"), launchers)
     }
 
     private fun parse(path: String) =

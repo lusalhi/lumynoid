@@ -1,0 +1,49 @@
+--- a/src/tracee/event.c
++++ b/src/tracee/event.c
+@@ -59,6 +59,10 @@
+ #define SYS_SECCOMP 1
+ #endif
+ 
++#ifndef PTRACE_O_EXITKILL
++#define PTRACE_O_EXITKILL (1UL << 20)
++#endif
++
+ static bool seccomp_after_ptrace_enter = false;
+ static bool seccomp_ptrace_event_supported = false;
+ 
+@@ -526,6 +530,7 @@
+ 		case SIGTRAP: {
+ 			const unsigned long default_ptrace_options = (
+ 				PTRACE_O_TRACESYSGOOD	|
++				PTRACE_O_EXITKILL	|
+ 				PTRACE_O_TRACEFORK	|
+ 				PTRACE_O_TRACEVFORK	|
+ 				PTRACE_O_TRACEVFORKDONE	|
+@@ -812,7 +817,17 @@
+ 			}
+ 			break;
+ 
+-		case SIGSTOP:
++		case SIGSTOP: {
++			static bool exitkill_armed = false;
++			/* The initial tracee stops before it can enter the guest.
++			 * Arm EXITKILL now, then retain it when setting all options. */
++			if (!exitkill_armed) {
++				if (ptrace(PTRACE_SETOPTIONS, tracee->pid, NULL, PTRACE_O_EXITKILL) < 0) {
++					note(tracee, ERROR, SYSTEM, "ptrace(PTRACE_O_EXITKILL)");
++					exit(EXIT_FAILURE);
++				}
++				exitkill_armed = true;
++			}
+ 			/* Stop this tracee until PRoot has received
+ 			 * the EVENT_*FORK|CLONE notification.  */
+ 			if (tracee->exe == NULL) {
+@@ -833,6 +848,8 @@
+ 				signal = 0;
+ 			}
+ 			break;
++
++		}
+ 
+ 		case SIGSYS: {
+ 			siginfo_t siginfo = {};

@@ -76,6 +76,8 @@ fun ProvidersRoute(
             onAdd = viewModel::startAdd,
             onEdit = viewModel::startEdit,
             onUse = viewModel::use,
+            onEditCallLimit = viewModel::editCallLimit,
+            onSaveCallLimit = viewModel::saveCallLimit,
             onLeave = onLeave,
         )
     }
@@ -88,6 +90,8 @@ private fun ProviderListScreen(
     onAdd: () -> Unit,
     onEdit: (ProviderSummary) -> Unit,
     onUse: (ProviderSummary) -> Unit,
+    onEditCallLimit: (String) -> Unit,
+    onSaveCallLimit: () -> Unit,
     onLeave: () -> Unit,
 ) {
     Column(
@@ -95,6 +99,7 @@ private fun ProviderListScreen(
             .fillMaxSize()
             .statusBarsPadding()
             .navigationBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -129,6 +134,36 @@ private fun ProviderListScreen(
             Button(onClick = onAdd) { Text(stringResource(R.string.provider_add)) }
             if (canLeave) TextButton(onClick = onLeave) { Text(stringResource(R.string.provider_back)) }
         }
+
+        state.callLimit?.let { CallLimitSetting(it, onEditCallLimit, onSaveCallLimit) }
+    }
+}
+
+@Composable
+private fun CallLimitSetting(state: CallLimitState, onEdit: (String) -> Unit, onSave: () -> Unit) {
+    OutlinedTextField(
+        value = state.input,
+        onValueChange = onEdit,
+        label = { Text(stringResource(R.string.provider_call_limit)) },
+        supportingText = {
+            Text(
+                stringResource(
+                    when {
+                        state.limit == null -> R.string.provider_call_limit_invalid
+                        state.saveFailed -> R.string.provider_call_limit_save_failed
+                        else -> R.string.provider_call_limit_help
+                    },
+                ),
+            )
+        },
+        isError = state.limit == null || state.saveFailed,
+        enabled = !state.saving,
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedButton(onClick = onSave, enabled = state.canSave) {
+        Text(stringResource(R.string.provider_save_call_limit))
     }
 }
 

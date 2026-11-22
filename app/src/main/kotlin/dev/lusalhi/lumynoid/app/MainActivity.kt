@@ -1,10 +1,16 @@
 package dev.lusalhi.lumynoid.app
 
+import android.Manifest.permission.POST_NOTIFICATIONS
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -29,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +46,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        viewModel.openApprovalNotification()
         setContent {
             LumynoidTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -47,12 +55,47 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        viewModel.openApprovalNotification()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        viewModel.connectAgent()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshNotificationPermission()
+    }
+
+    override fun onStop() {
+        viewModel.disconnectAgent()
+        super.onStop()
+    }
 }
 
 @Composable
 private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.refreshNotificationPermission()
+    }
+    LaunchedEffect(state.screen, state.providerConfigured) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            state.screen == Screen.CHAT && state.providerConfigured &&
+            context.checkSelfPermission(POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val prefs = context.getSharedPreferences("notification_permission", Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("requested", false)) {
+                prefs.edit().putBoolean("requested", true).apply()
+                notificationPermission.launch(POST_NOTIFICATIONS)
+            }
+        }
+    }
     val crashStore = remember { CrashHandler.store(context) }
     // One directory listing on first composition; Dismiss and a successful relaunch are the only ways it changes.
     var crashReport by remember { mutableStateOf(crashStore.newest()) }
@@ -87,6 +130,7 @@ private fun Root(viewModel: ChatViewModel, providers: ProvidersViewModel) {
 
 @Composable
 private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: ProvidersViewModel) {
+    val context = LocalContext.current
     when (state.screen) {
         Screen.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -100,18 +144,58 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
                 onFirstRunDone = viewModel::providerReady,
             )
         }
-        Screen.CHAT -> ChatScreen(
-            state = state,
-            onSend = viewModel::send,
-            onStop = viewModel::stop,
-            onOpenProvider = viewModel::openProvider,
-            onOpenConversations = viewModel::openConversations,
-            onNewConversation = viewModel::newConversation,
-        )
+        Screen.CHAT, Screen.ACTION_LOG -> {
+            // The chat's saveable state (its unsent draft) survives a trip to the action log and back.
+            val chatSaveable = rememberSaveableStateHolder()
+            var selected by remember(state.conversationId, state.screen, state.approvalFocus) {
+                mutableStateOf<ArtifactIdentity?>(null)
+            }
+            val openArtifact: (ArtifactIdentity) -> Unit = { artifact ->
+                if (artifact.isHtml()) {
+                    artifact.publishedIndex(state.conversationId, state.events)?.let { index ->
+                        context.startActivity(ArtifactHtmlActivity.intent(context, artifact, index))
+                    }
+                } else if (artifact.belongsTo(state.conversationId, state.events)) {
+                    selected = artifact
+                }
+            }
+            if (state.screen == Screen.CHAT) {
+                chatSaveable.SaveableStateProvider("chat") {
+                    ChatScreen(
+                        state = state,
+                        onSend = viewModel::send,
+                        onStop = viewModel::stop,
+                        onOpenProvider = viewModel::openProvider,
+                        onOpenConversations = viewModel::openConversations,
+                        onNewConversation = viewModel::newConversation,
+                        onApprovalDecision = viewModel::resolveApproval,
+                        onOpenActionLog = viewModel::openActionLog,
+                        onOpenArtifact = openArtifact,
+                    )
+                }
+            } else {
+                state.conversationId?.let { id ->
+                    ActionLogScreen(
+                        conversationId = id,
+                        events = state.events,
+                        title = state.title,
+                        onBack = viewModel::closeActionLog,
+                        onOpenArtifact = openArtifact,
+                    )
+                }
+            }
+            val artifact = selected
+            val stillPublished = remember(artifact, state.conversationId, state.events) {
+                artifact?.belongsTo(state.conversationId, state.events) == true
+            }
+            if (artifact != null && stillPublished) {
+                ArtifactTextDialog(artifact, onClose = { selected = null })
+            }
+        }
         Screen.CONVERSATIONS -> ConversationListScreen(
             conversations = state.conversations,
             openId = state.conversationId,
-            streamingId = state.streamingConversationId,
+            pendingIds = state.pendingConversationIds,
             providerConfigured = state.providerConfigured,
             onOpenProvider = viewModel::openProvider,
             onOpen = viewModel::openConversation,
@@ -124,7 +208,7 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
 }
 
 @Composable
-private fun LumynoidTheme(content: @Composable () -> Unit) {
+internal fun LumynoidTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
     val colors = when {

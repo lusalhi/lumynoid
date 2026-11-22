@@ -28,34 +28,54 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.lusalhi.lumynoid.core.ApprovalDecision
 import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.TaskEvent
 
 @Composable
-fun ChatScreen(
+internal fun ChatScreen(
     state: ChatState,
     onSend: (String) -> Unit,
     onStop: () -> Unit,
     onOpenProvider: () -> Unit,
     onOpenConversations: () -> Unit,
     onNewConversation: () -> Unit,
+    onApprovalDecision: (String, ApprovalDecision) -> Unit,
+    onOpenActionLog: () -> Unit,
+    onOpenArtifact: (ArtifactIdentity) -> Unit,
 ) {
-    var draft by rememberSaveable { mutableStateOf("") }
+    var draft by key(state.conversationId) { rememberSaveable { mutableStateOf("") } }
     val listState = rememberLazyListState()
     val liveText = state.live?.text.orEmpty()
-    val itemCount = state.events.size + if (state.live != null) 1 else 0
+    val rows = remember(state.events) { chatRows(state.events) }
+    val itemCount = rows.size + if (state.live != null) 1 else 0
+    val focus = state.approvalFocus
+    val focusIndex = remember(rows, focus) { if (focus == null) -1 else rows.indexOfFirst { it.key == focus.eventId } }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(itemCount, liveText.length) {
-        if (itemCount > 0) listState.scrollToItem(itemCount - 1)
+    LaunchedEffect(focus, focusIndex) {
+        if (focusIndex >= 0) {
+            focusManager.clearFocus()
+            keyboard?.hide()
+            listState.scrollToItem(focusIndex)
+        }
+    }
+    LaunchedEffect(state.conversationId, itemCount, liveText.length, focus) {
+        if (focus == null && itemCount > 0) listState.scrollToItem(itemCount - 1)
     }
 
     Column(
@@ -80,6 +100,9 @@ fun ChatScreen(
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onOpenConversations) { Text(stringResource(R.string.chat_conversations)) }
+            TextButton(onClick = onOpenActionLog, enabled = state.conversationId != null) {
+                Text(stringResource(R.string.chat_action_log))
+            }
             TextButton(onClick = onNewConversation) { Text(stringResource(R.string.chat_new)) }
             TextButton(onClick = onOpenProvider) { Text(stringResource(R.string.chat_settings)) }
         }
@@ -102,7 +125,15 @@ fun ChatScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    items(state.events.filter { it.isVisible() }, key = { it.id }) { event -> EventRow(event) }
+                    items(rows, key = { it.key }) { row ->
+                        when (row) {
+                            is ChatRow.Event -> EventRow(row.event)
+                            is ChatRow.Activity -> ActivityCard(row, state.conversationId, onOpenArtifact)
+                            is ChatRow.Approval -> ApprovalCard(row, state.approvalDeadlines[row.event.id]) {
+                                onApprovalDecision(row.event.id, it)
+                            }
+                        }
+                    }
                     state.live?.let { item(key = "live") { Bubble(it.text, fromUser = false) } }
                 }
             }
@@ -137,15 +168,12 @@ fun ChatScreen(
     }
 }
 
-private fun TaskEvent.isVisible() =
-    this is TaskEvent.UserMessage || this is TaskEvent.AssistantMessage ||
-        this is TaskEvent.TaskFailed || this is TaskEvent.TaskCancelled
-
 @Composable
 private fun EventRow(event: TaskEvent) {
     when (event) {
         is TaskEvent.UserMessage -> Bubble(event.text, fromUser = true)
         is TaskEvent.AssistantMessage -> Bubble(event.text, fromUser = false)
+        is TaskEvent.ToolCallRequested -> Bubble(event.assistantText, fromUser = false)
         is TaskEvent.TaskFailed -> Text(
             stringResource(event.reason.messageRes()),
             color = MaterialTheme.colorScheme.error,
@@ -179,13 +207,19 @@ private fun Bubble(text: String, fromUser: Boolean) {
     }
 }
 
-private fun FailureReason.messageRes(): Int = when (this) {
+internal fun FailureReason.messageRes(): Int = when (this) {
     FailureReason.AUTH_FAILED -> R.string.error_auth_failed
     FailureReason.RATE_LIMITED -> R.string.error_rate_limited
     FailureReason.QUOTA_EXHAUSTED -> R.string.error_quota_exhausted
     FailureReason.NETWORK -> R.string.error_network
     FailureReason.SERVER -> R.string.error_server
     FailureReason.INTERRUPTED -> R.string.error_interrupted
+    FailureReason.TOOL_DENIED -> R.string.error_tool_denied
+    FailureReason.APPROVAL_DENIED -> R.string.error_approval_denied
+    FailureReason.APPROVAL_EXPIRED -> R.string.error_approval_expired
+    FailureReason.APPROVAL_CHANGED -> R.string.error_approval_changed
+    FailureReason.MALFORMED_TOOL_CALL -> R.string.error_malformed_tool_call
+    FailureReason.BUDGET_EXHAUSTED -> R.string.error_budget_exhausted
 }
 
 /** Offers the saved crash report. Shown above every screen, so a crash during first-run setup can be shared too. */

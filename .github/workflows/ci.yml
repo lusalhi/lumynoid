@@ -26,6 +26,12 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
+      - name: Install runtime build tools
+        run: |
+          sdkmanager --install "ndk;28.2.13676358" "build-tools;37.0.0"
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static
+
       - name: Keep :core free of Android, Ktor and Room (AD-1)
         run: |
           ./gradlew -q :core:dependencies --configuration runtimeClasspath > core-deps.txt
@@ -41,15 +47,27 @@ jobs:
         run: ./gradlew :app:checkDependencyPolicy
 
       - name: JVM tests (include the persisted-name check)
-        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest
+        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest
 
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug
+      - name: Build the debug and instrumentation APKs and pinned rootfs
+        run: ./gradlew :app:assembleDebug :userland:assembleDebugAndroidTest :userland:buildUserlandRootfs
+
+      - name: Verify debug APK and staged runtime archive
+        run: |
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/37.0.0/zipalign" -c -P 16 4 "$apk"
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify "$apk"
+          python3 tools/userland/verify-apk.py "$apk" userland/build/userland/rootfs \
+            --test-apk userland/build/outputs/apk/androidTest/debug/userland-debug-androidTest.apk
 
       - uses: actions/upload-artifact@v7
         with:
           name: lumynoid-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            userland/build/outputs/apk/androidTest/debug/*.apk
+            userland/build/userland/rootfs/*
+            userland/build/userland/native/sources/*
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v7
@@ -60,6 +78,7 @@ jobs:
             core/build/reports/tests
             llm/build/reports/tests
             data/build/reports/tests
+            app/build/reports/tests
 
   schema-claims:
     # One Room schema version, claimed once (AD-19). Needs the PR's own history, so it only runs on pull requests.
