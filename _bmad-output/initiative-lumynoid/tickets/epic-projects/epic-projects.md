@@ -50,11 +50,13 @@ Pengguna bisa memulai chat baru untuk melanjutkan proyek yang sama, serta member
 ## References
 
 - parent — `_bmad-output/initiative-lumynoid/initiative-lumynoid.md`, R13, Done when, dan Draf desain — Projects
+- breakdown — `tickets/tickets.toml`, stories 8.1–8.8
 - baseline — Story 2.12, APK Epic 2 bertanda tangan dan bukti upgrade di HP
 - architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-4, AD-5, AD-13, AD-16, AD-18, AD-19, AD-25, AD-27
 
 ## Notes
 
-- Decision: 2026-11-22 — Epic Projects berdiri sendiri setelah rilis Epic 2; Tugas Terjadwal dan Hemat Kuota memakai kontrak yang dihasilkannya. Tracer yang akan dibahas saat menyusun stories: chat A membuat file, chat B di proyek yang sama membacanya tanpa membawa riwayat chat A, dan proyek lain tidak dapat mengakses file itu.
+- Decision: 2026-11-22 — Epic Projects berdiri sendiri setelah rilis Epic 2; Tugas Terjadwal dan Hemat Kuota memakai kontrak yang dihasilkannya.
 - Decision: 2026-11-22 — AD-27 menetapkan kepemilikan, isolasi konteks, penghapusan yang bisa dilanjutkan, dan upgrade. Epic 8 tidak menunggu penjadwalan atau pemangkasan; kedua epic itu mengadopsi kontrak saat gilirannya.
 - Decision: 2026-11-22 — Story yang menguji upgrade bergantung pada Story 2.12 sebagai baseline rilis, bukan pada penuntasan seluruh spike isolasi Epic 2.
+- Decision: 2026-11-22 — Breakdown 8.1–8.8 disetujui. Tracer 8.1 membuktikan dua chat berbagi file dan paket tanpa mencampur riwayat; proyek lain dan chat biasa tidak mendapat akses. Migrasi 8.2 menyusul untuk membuktikan upgrade. Preview dan instruksi (8.3–8.4) dapat berjalan paralel setelah 8.2. Refactor sweep (8.7) mendahului penerimaan APK bertanda tangan (8.8).

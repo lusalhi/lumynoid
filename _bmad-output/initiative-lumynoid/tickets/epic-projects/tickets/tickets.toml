@@ -1,0 +1,97 @@
+# Epic 8 — Projects, urutan build yang disetujui.
+# Story 2.12 memberi baseline APK bertanda tangan. Epic 8 tidak menunggu spike shell bebas (2.1).
+
+[[entry]]
+id = 1
+type = "story"
+title = "Dua percakapan memakai file proyek yang sama"
+description = "Tracer: tetapkan skema Project dan kontrak ProjectPort untuk metadata, keanggotaan percakapan melalui ConversationPort, dan penyimpanan instruksi proyek, dengan migrasi skema eksplisit. Dari daftar percakapan, buat proyek bernama serta buat dan buka beberapa chat. Pakai scope workspace persisten yang sama di TaskRunner dan tool coding; chat biasa tidak mendapat tool workspace. Sediakan resolver scope untuk preview. Pisahkan cleanup workspace dari hapus chat sebelum mengaktifkan keanggotaan proyek. Tidak ada rilis parsial."
+verify = "Catat APK Story 2.12 bertanda tangan sebagai baseline; jalankan tracer pada instalasi debug bersih di HP arm64, tanpa upgrade. Buat Project A, tulis file dan pasang paket lokal dari chat pertama, lalu baca, ubah, dan jalankan skrip bawaan dengan paket itu dari chat kedua. Setelah relaunch, file dan log tiap chat tetap ada. Request chat kedua tidak membawa riwayat chat pertama. Project B dan New Chat tidak bisa membaca file A; New Chat masih menjawab."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-27--project-memiliki-workspace-percakapan-memiliki-riwayat"]
+covers = ["R1", "R2"]
+after = ["2.12"]
+hitl = true
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Upgrade mengadopsi chat dan data proyek Epic 2 tanpa menyalin file"
+description = "Di proses utama, adopsi kedua root legacy dengan ID workspace lama tanpa mengubah chat, event, blob, atau data tugas historis. Tahan task, preview, dan hapus chat legacy sampai status adopsi diketahui; proses HTML preview tidak menjalankan adopsi. Nama proyek memakai judul chat lama atau label Untitled Project jika kosong; judul sama tidak menyatukan proyek. Catat penyelesaian secara persisten; restart, root kosong, dan kegagalan baca tidak membuang atau menggandakan data."
+verify = "Jalankan suite upgrade dengan skema dan data baseline 2.12: chat dengan file dan log, chat dengan instalasi paket saja, serta chat biasa dengan root kosong. Interupsi adopsi dan buka ulang: task, preview, dan hapus chat yang belum terklasifikasi ditolak tanpa fallback. Sesudah coba ulang, tepat satu proyek per pemilik data; chat biasa tetap biasa. File, paket, chat, dan log tersedia tanpa salinan, termasuk saat pemeriksaan awal sempat gagal baca."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-27--project-memiliki-workspace-percakapan-memiliki-riwayat"]
+covers = ["R4"]
+after = [1, "2.12"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Pratinjau memakai event asal dan workspace proyek yang sah"
+description = "Validasi event dan artefak dengan percakapan asal, lalu pakai resolver scope dari 8.1 untuk preview teks dan HTML, termasuk saat Activity HTML membuka data dari proses terpisah. Preview hanya membaca scope aktif yang sudah diadopsi. Jaga batas offline, JavaScript opt-in, dan aturan path Epic 2."
+verify = "Dari event asli yang dipertahankan pada upgrade, buka file teks dan HTML; keduanya terbuka offline. Pasangkan event dengan ID percakapan proyek lain, pakai path di luar workspace, atau buka target tidak aktif: aplikasi tidak menampilkan isi file."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-18--preview-adalah-sandbox-offline"]
+covers = ["R2", "R4"]
+after = [2, "2.10"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Instruksi proyek tetap konsisten sampai tugas selesai"
+description = "Pakai penyimpanan instruksi dari 8.1. Tambahkan pengaturan instruksi di halaman Project dengan batas penyimpanan yang terlihat (usulan: 2.000 karakter Unicode; jangan memangkas diam-diam). Ambil satu snapshot sebelum request pertama dan pakai sampai tugas berakhir, termasuk retry dan resume approval. Susun riwayat dari percakapan tugas saja; perubahan instruksi tidak mengubah persetujuan atau izin tool."
+verify = "Di halaman Project, isi dan simpan instruksi, lalu buka lagi dan lihat nilai tersimpan. Ubah dari UI saat chat pertama menunggu persetujuan; provider fixture melihat resume memakai instruksi awal, tugas berikutnya memakai instruksi baru, dan tidak ada riwayat chat lain. Chat biasa tanpa instruksi proyek. Nilai melewati batas ditolak dengan pesan UI."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-13--penyusunan-konteks-lewat-contributor"]
+covers = ["R1", "R2"]
+after = [2]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Hapus percakapan tanpa menghapus file proyek"
+description = "Selesaikan alur hapus chat dengan memanfaatkan pemisahan cleanup di 8.1: dialog membedakan data chat yang dihapus dari file dan paket proyek yang tetap ada. Penerimaan tugas dan hapus chat berbagi gerbang serial; chat yang masih menerima tugas, antre, berjalan, atau menunggu persetujuan tidak bisa dihapus."
+verify = "Buka dua chat dengan file dan paket bersama. Saat salah satu chat sedang bekerja, UI tidak mengizinkan penghapusan chat itu. Setelah idle, dialog menyatakan file dan paket proyek tetap ada. Konfirmasi menghapus chat, log, dan blob miliknya; chat lain tetap bisa membaca file, memakai paket, dan membuka log sendiri."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-27--project-memiliki-workspace-percakapan-memiliki-riwayat"]
+covers = ["R3"]
+after = [3, 4, "2.9"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Hapus proyek secara terbatas dan lanjutkan jika terputus"
+description = "Dialog menamai proyek dan data yang dihapus. Gerbang yang sama mencegah admission atau penambahan chat selama penghapusan; tandai DELETING persisten sebelum kerja lintas pemilik. Hapus chat/log, instruksi, workspace dan paket proyek tersebut, lalu metadata proyek. Jangan membuka preview baru sampai selesai. UI memungkinkan pengguna melanjutkan cleanup yang terputus; tidak menambah SchedulerPort sebelum Epic 3."
+verify = "Dengan proyek A dan B, UI tidak mengizinkan hapus A saat satu chat A belum idle. Setelah idle, dialog menyebut A dan daftar data yang dihapus. Konfirmasi lalu interupsi cleanup; relaunch menolak kerja, anggota, dan preview baru untuk A, tetapi B tetap berjalan. Lanjutkan cleanup; hanya A hilang, provider dan runtime bersama tetap ada."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-27--project-memiliki-workspace-percakapan-memiliki-riwayat"]
+covers = ["R3"]
+after = [5]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Refactor sweep"
+description = "Rapikan hanya duplikasi atau utang implementasi yang dicatat oleh story dan review Epic 8; pertahankan kontrak data, tampilan, dan perilaku."
+verify = "Regresi Projects (isolasi chat, migrasi, preview, cleanup) dan gate CI tetap hijau."
+covers = []
+after = [1, 2, 3, 4, 5, 6]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 8
+type = "story"
+title = "APK Projects bertanda tangan lulus uji upgrade dan dua percakapan di HP"
+description = "Rilis Projects melalui workflow tag resmi ke GitHub Releases. Jalankan penerimaan end-to-end dari APK Epic 2 bertanda tangan, termasuk kasus instalasi paket tanpa file, scope dan preview, instruksi saat resume, penghapusan dan pemulihan. Ini uji integrasi, bukan implementasi fitur baru."
+verify = "Di HP arm64, pasang APK Projects di atas Story 2.12 tanpa reset; cek file, paket, chat, log dan preview lama. Jalankan tracer dua chat dan penolakan lintas proyek, snapshot instruksi saat approval, serta hapus satu chat lalu satu proyek termasuk pemulihan setelah interupsi. APK bertanda tangan tersedia dan bukti uji tercatat."
+references = ["docs/release.md"]
+covers = []
+after = [7, "2.12"]
+hitl = true
+risk = "high"
