@@ -38,7 +38,7 @@ Pengguna bisa mengandalkan asisten untuk menjalankan tugas pada waktunya, walau 
 
 - parent — `_bmad-output/initiative-lumynoid/initiative-lumynoid.md`, Requirements R6; Constraints; Notes
 - breakdown — `_bmad-output/initiative-lumynoid/tickets/tickets.toml`, epic `epic-tugas-terjadwal`
-- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-2, AD-3, AD-5, AD-6, AD-7 (PERSISTENT), AD-10, AD-16, AD-22, AD-23, AD-24; Deferred (onboarding baterai dan izin)
+- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-2, AD-3, AD-5, AD-6, AD-7 (PERSISTENT), AD-10, AD-16, AD-22, AD-23, AD-24, AD-27 (target proyek dan penghapusan); Deferred (onboarding baterai dan izin)
 
 ## Notes
 

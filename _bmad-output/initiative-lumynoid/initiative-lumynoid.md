@@ -94,8 +94,8 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 
 - research — `_bmad-output/research-lumynoid-android-agent/research-lumynoid-android-agent.md`, Ringkasan eksekutif; D1 (latar belakang 24 jam); D2 (kontrol HP, browser, distribusi); D3 (eksekusi kode); D4 (akses LLM gratis); D5 (peta proyek); Rekomendasi; Pertanyaan terbuka; Lampiran sumber [1]–[61]
 - decisions — `_bmad-output/lumynoid-decisions.md`, Visi; Keputusan K1–K13; Masih terbuka; Urutan berikutnya
-- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-1–AD-26; Consistency Conventions; Stack; Capability → Architecture Map; Deferred
-- Projects — [Epic 8 Projects](tickets/epic-projects/epic-projects.md); kontrak arsitektur Projects masih perlu diselaraskan lewat `bmad-architecture` sebelum menyusun stories.
+- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-1–AD-27; Consistency Conventions; Stack; Capability → Architecture Map; Deferred
+- Projects — [Epic 8 Projects](tickets/epic-projects/epic-projects.md) dan [AD-27: kepemilikan workspace, konteks, dan penghapusan](architecture-lumynoid/architecture-lumynoid.md#ad-27--project-memiliki-workspace-percakapan-memiliki-riwayat).
 
 ## Notes
 

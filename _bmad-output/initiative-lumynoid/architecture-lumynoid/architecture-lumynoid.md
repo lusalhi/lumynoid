@@ -4,11 +4,11 @@ type: architecture-spine
 purpose: build-substrate
 altitude: initiative
 paradigm: 'hexagonal (ports & adapters) dengan event log single-writer'
-scope: 'Seluruh app Android Lumynoid v1: tujuh epic di tickets.toml'
+scope: 'Seluruh app Android Lumynoid v1: delapan epic di tickets.toml'
 status: final
 created: '2026-11-14'
-updated: '2026-11-14'
-binds: [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, C1, C2, C3, C5, C6, C7, C8, C9, C11, C13, C14]
+updated: '2026-11-22'
+binds: [R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, C1, C2, C3, C5, C6, C7, C8, C9, C11, C13, C14]
 sources:
   - _bmad-output/initiative-lumynoid/initiative-lumynoid.md
   - _bmad-output/initiative-lumynoid/tickets/tickets.toml
@@ -65,10 +65,10 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 
 ### AD-2 — Satu jalur eksekusi: TaskRunner di AgentService
 
-- **Binds:** R3, R4, R6, C5, epic-chat-dan-provider, epic-agent-shell, epic-tugas-terjadwal
+- **Binds:** R3, R4, R6, R13, C5, epic-chat-dan-provider, epic-agent-shell, epic-projects, epic-tugas-terjadwal
 - **Prevents:** epic 1 membangun jalur chat terpisah yang lalu dibongkar epic 2; scheduler memanggil LLM sendiri; UI memegang loop yang mati saat layar ditutup.
 - **Rule:**
-  - Setiap giliran LLM (chat polos, tugas agent, tugas terjadwal) masuk lewat `TaskRunner.submit(TaskRequest{origin, conversationId, workspaceId, input})`.
+  - Setiap giliran LLM (chat polos, tugas agent, tugas terjadwal) masuk lewat `TaskRunner.submit`. Sampai Epic 2, `TaskRequest` membawa `workspaceId`; sejak Projects, pemanggil hanya menentukan percakapan, dan runner memperoleh scope workspace dari AD-27.
   - TaskRunner di-host `AgentService` (FGS `specialUse`) yang berjalan di proses utama app. Service ini naik ke foreground dan memegang partial wake lock selama ada tugas `RUNNING`, lalu berhenti saat tidak ada.
   - UI dan scheduler tidak pernah memanggil `LlmPort`. Satu-satunya pengecualian adalah `ProviderAdminPort` (AD-23).
   - epic-chat-dan-provider membangun kerangka TaskRunner dan AgentService tanpa tool; epic-agent-shell menambah tool dan gerbang ke kerangka yang sama.
@@ -86,7 +86,7 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 - **Rule:**
   - Eksekusi menghasilkan `TaskEvent` bertipe yang di-append **hanya oleh TaskRunner**.
   - Transkrip, kartu aktivitas, kartu konfirmasi, log aksi (R9), dan notifikasi hasil adalah proyeksi baca dari event log.
-  - Event bersifat append-only. Kode agent tidak pernah mengubah atau menghapusnya. Hanya pengguna, lewat `ConversationPort.delete`, yang bisa menghapus satu percakapan utuh beserta event, blob, dan workspace-nya.
+  - Event bersifat append-only. Kode agent tidak pernah mengubah atau menghapusnya. Pengguna dapat menghapus percakapan beserta event dan blob-nya. Hingga Projects diterapkan, workspace milik percakapan ikut terhapus; setelahnya penghapusan workspace mengikuti AD-27.
   - Delta streaming tidak dipersist (hot `StateFlow`); event persisten adalah batas tahan-crash.
   - Status provider dan kuota bukan bagian dari event log (AD-23).
 
@@ -99,6 +99,8 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 | Entitas | Pemilik tulis (modul / epic) |
 | --- | --- |
 | Conversation, Task, TaskEvent, EventBlob | `:core` TaskRunner + ConversationPort / epic-agent-shell (skema awal epic-chat-dan-provider) |
+| Project, instruksi, status penghapusan | `:core` ProjectPort / implementasi `:data` / epic-projects |
+| Keanggotaan Conversation pada Project | `:core` ConversationPort / implementasi `:data` / epic-projects |
 | ProviderConfig, ModelProfile | `:llm` / epic-chat-dan-provider |
 | Secret | `SecretPort` (impl `:data`) / epic-chat-dan-provider |
 | RouterState (rotasi, cooldown, sisa kuota) | `:llm` LlmRouter / epic-hemat-kuota |
@@ -179,12 +181,12 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 
 ### AD-13 — Penyusunan konteks lewat contributor
 
-- **Binds:** R5, R7, R9, R12, epic-agent-shell, epic-hemat-kuota, epic-browsing-web, epic-skill-pihak-ketiga
+- **Binds:** R5, R7, R9, R12, R13, epic-agent-shell, epic-projects, epic-hemat-kuota, epic-browsing-web, epic-skill-pihak-ketiga
 - **Prevents:** epic 5 dan 6 memotong atau menyisipkan konteks dengan caranya sendiri; pemangkasan memisahkan pasangan tool call/result sehingga provider menolak request; log aksi ikut terpangkas.
 - **Rule:**
-  - `ContextAssembler` di `:core` menyusun setiap `LlmRequest` dari event log. Pemiliknya epic-hemat-kuota; versi naifnya dibuat epic-agent-shell.
-  - Bahan konteks masuk lewat `ContextContributor` dengan dua kelas:
-    - `Pinned`: system prompt dan instruksi skill aktif. Tidak pernah dipangkas, tetapi dibatasi budget (AD-21).
+  - `ContextAssembler` di `:core` menyusun setiap `LlmRequest` dari event log percakapan tugas. Versi awal dibuat di Story 1.7; Epic Projects menambah instruksi proyek ke jalur itu tanpa menunggu pemangkasan (AD-27).
+  - Epic Hemat Kuota memiliki pemangkasan dan memperkenalkan `ContextContributor` dengan dua kelas:
+    - `Pinned`: system prompt, instruksi skill aktif (AD-21), dan instruksi proyek setelah AD-27. Tidak dipangkas, tetapi dibatasi budget.
     - `Trimmable`: riwayat dan output tool, dipangkas menurut `TruncationPolicy` per `truncationHint`.
   - Unit pemangkasan adalah giliran utuh: `AssistantMessage` beserta semua `ToolCallRequested` dan `ToolResult` pasangannya.
   - Pemangkasan hanya berlaku untuk konteks; event log selalu menyimpan output penuh.
@@ -215,10 +217,11 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 - **Prevents:** tugas dari chat dan dari layar disimpan dengan bentuk berbeda; scheduler mengubah loop; alarm hilang setelah update atau saat izin dicabut; run ganda.
 - **Rule:**
   - Tugas terjadwal dibuat hanya lewat `SchedulerPort.create()`, baik dari layar maupun dari tool `schedule_create` (berkelas `PERSISTENT`).
-  - `ScheduledTask.schedule` adalah sealed `Once | Daily | Weekly` dalam waktu lokal + `zoneId`. Setiap tugas terjadwal punya satu conversation khusus tempat setiap run di-append, dan mewarisi `workspaceId` dari conversation tempat ia dibuat.
+  - `ScheduledTask.schedule` adalah sealed `Once | Daily | Weekly` dalam waktu lokal + `zoneId`. Setiap tugas terjadwal memiliki percakapan hasil khusus. Dari chat proyek, percakapan hasil menjadi anggota proyek asal; dari chat biasa tetap tanpa proyek. Untuk jadwal yang dibuat dari layar, proyek ditentukan oleh pilihan pengguna atau tidak ada. Workspace selalu di-resolve lewat AD-27.
   - Alurnya: exact alarm → receiver → `AgentService` → `TaskRunner.submit(origin = SCHEDULED(scheduleId), runKey = scheduleId + fireTime)`. `runKey` yang sama tidak pernah dieksekusi dua kali.
   - Alarm berikutnya dihitung saat fire. Alarm dipasang ulang pada `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`, `TIME_SET`, `TIMEZONE_CHANGED`, dan `SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED`.
   - Jadwal yang terlewat (HP mati, alarm terlambat) mendapat paling banyak satu run susulan.
+  - Epic Tugas Terjadwal menghapus jadwal proyek dan membatalkan alarmnya sebelum data proyek dibersihkan. Pembuatan jadwal dan pemasangan ulang alarm memakai gerbang lifecycle target (AD-27), sehingga tidak bisa lolos setelah penghapusan dimulai. Fire memeriksa jadwal masih ada dan target aktif saat runner menerima tugas. Percakapan hasil tidak bisa dihapus sendiri selama masih dirujuk jadwal.
 
 ### AD-17 — Dependensi bebas, tanpa layanan Google
 
@@ -232,13 +235,14 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 
 ### AD-18 — Preview adalah sandbox offline
 
-- **Binds:** R11, epic-agent-shell
+- **Binds:** R11, R13, epic-agent-shell, epic-projects
 - **Prevents:** HTML hasil kerja agent menjadi jalur egress atau membaca file di luar workspace.
 - **Rule:**
   - WebView preview memuat file workspace hanya lewat `WebViewAssetLoader`, dengan `shouldInterceptRequest` deny-all untuk semua request lain dan `setBlockNetworkLoads(true)`.
   - Navigasi keluar diblok dan tidak pernah diserahkan ke app lain. Akses file dan content dimatikan, dan CSP yang melarang koneksi jaringan disuntikkan.
   - JavaScript mati secara default dan hanya dinyalakan pengguna per preview dari kartu.
   - Path di-resolve kanonik dan harus berada di dalam workspace; symlink yang keluar dari workspace ditolak. File non-HTML dipratinjau oleh viewer di dalam app.
+  - Setelah Projects, setiap preview baru memverifikasi event artefak terhadap percakapan asal dan memperoleh workspace dari keanggotaan yang tersimpan. Workspace yang sudah tidak aktif atau tidak dapat di-resolve tidak boleh dibaca; ID workspace dari pemanggil tidak menjadi otoritas.
 
 ### AD-19 — Persistensi tunggal dengan migrasi wajib
 
@@ -286,10 +290,10 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
 - **Binds:** R2, R3, R6, R12, epic-chat-dan-provider, epic-tugas-terjadwal, epic-hemat-kuota
 - **Prevents:** layar pengaturan dan jadwal menulis langsung ke DB; tes koneksi melanggar AD-2; dua sumber angka kuota; teks buatan model diperlakukan sebagai pesan pengguna.
 - **Rule:**
-  - UI menulis hanya lewat port bernama: `TaskRunner.submit/cancel`, `ApprovalPort.resolve`, `ConversationPort` (buat, ubah nama, hapus), `SchedulerPort`, `ProviderAdminPort {save, testConnection, listModels, fetchQuota}`, `SkillInstallPort`, dan `SecretPort`.
+  - UI menulis hanya lewat port bernama: `TaskRunner.submit/cancel`, `ApprovalPort.resolve`, `ConversationPort` (buat, ubah nama, hapus), `SchedulerPort`, `ProviderAdminPort {save, testConnection, listModels, fetchQuota}`, `SkillInstallPort`, `SecretPort`, dan `ProjectPort` saat fitur Projects diterapkan (AD-27).
   - `UserMessage` mencatat origin: `USER` atau `SCHEDULE(scheduleId)`.
   - `RouterState`, yang diekspos `:llm` sebagai `Flow`, adalah satu-satunya sumber indikator kuota dan status provider.
-  - `workspaceId` terpisah dari `conversationId`.
+  - `workspaceId` dan `conversationId` adalah identitas logis yang berbeda. Sebelum Projects, chat pengguna memakai nilainya yang sama; setelah Projects, scope workspace ditentukan oleh AD-27.
 
 ### AD-24 — Batas izin dan batas produk
 
@@ -324,6 +328,19 @@ Panah berarti "boleh bergantung". Adapter tidak saling bergantung. Kebutuhan lin
   - Runner menegakkan batas panggilan LLM per tugas: `MAX_LLM_CALLS`, default 20 dan bisa diatur pengguna. Tugas yang melewatinya berakhir `TaskFailed(BUDGET_EXHAUSTED)`.
   - Retry karena limit dan kuota menjadi milik router (AD-12).
   - Untuk `MalformedToolCall`, runner mengirim satu pesan perbaikan lalu mencoba lagi sekali. Jika masih rusak, tugas berakhir `TaskFailed(MALFORMED_TOOL_CALL)` yang terlihat pengguna. Event `LlmRetry` dan `ToolCallRejected` dicatat.
+
+### AD-27 — Project memiliki workspace, percakapan memiliki riwayat
+
+- **Binds:** R13, epic-projects, epic-tugas-terjadwal, epic-hemat-kuota, epic-rilis-publik. Berlaku mulai rilis Projects; Story 2.12 tetap memakai kontrak Epic 2.
+- **Prevents:** chat kedua membuat workspace baru untuk proyek yang sama, mengirim riwayat chat lain ke provider, atau menghapus file bersama saat satu chat dihapus; jadwal atau kartu lama memakai workspace yang sudah dihapus.
+- **Rule:**
+  - Project memiliki ID workspace unik dan stabil; semua anggotanya berbagi file dan paket lokal di workspace itu. `ProjectPort` mengelola metadata, instruksi pengguna, dan penghapusan. `ConversationPort` menetapkan keanggotaan nol atau satu Project saat membuat chat atau mengadopsi data lama. Tidak ada pindah chat antarproyek. Metadata dan keanggotaan persisten di `:data`; operasi file tetap milik `:userland`.
+  - Saat menerima tugas, `TaskRunner` memperoleh scope workspace dari keanggotaan tersimpan. Resume approval hanya melanjutkan scope yang sama dan masih aktif. Chat biasa tidak mendapat tool yang membutuhkan workspace. Scope hilang, invalid, atau sedang dihapus bukan chat biasa; tolak akses, jangan fallback ke ID percakapan.
+  - Sebelum request pertama, runner mengambil satu snapshot instruksi proyek yang disunting pengguna, berlaku untuk semua request dan resume approval dalam tugas itu. Instruksi dibatasi saat disimpan; tidak menambah izin tool. Hanya riwayat dan hasil tool dari percakapan tugas masuk konteks. Isi file masuk setelah dibaca lewat tool, bukan otomatis. Epic Hemat Kuota memperlakukan snapshot instruksi sebagai `Pinned` (AD-13).
+  - Penerimaan tugas, mutasi keanggotaan, dan penghapusan memakai satu gerbang serial: cek target aktif dan catat penerimaan tugas sebelum melepas gerbang, atau cek scope idle dan mulai penghapusan sebelum melepasnya. Jika penerimaan menang, penghapusan ditolak selama tugas sedang diterima, antre, berjalan, atau menunggu persetujuan; jika penghapusan menang, tolak penerimaan baru. Ini berlaku juga untuk hapus satu chat, yang hanya membersihkan data chat.
+  - Setelah konfirmasi UI, `ProjectPort.delete` mencatat `DELETING` di dalam gerbang sebelum cleanup dan tidak menerima kerja, anggota, atau preview baru untuk proyek itu. Cleanup memakai pemilik di AD-5: `ConversationPort` untuk chat, event dan blob; `:userland` untuk workspace dan paket. Simpan identitas proyek dan workspace sampai pemilik menyelesaikan cleanup; baru hapus metadata proyek. Cleanup dapat diulang setelah interupsi. Rootfs dan provider tidak ikut dihapus.
+  - Epic Projects tidak memerlukan `SchedulerPort`. Epic Tugas Terjadwal menambahkan pembatalan jadwal ke alur penghapusan dan pemeriksaan target lewat AD-16. Jangan menyelesaikan penghapusan proyek jika penonaktifan jadwal terkait gagal.
+  - Upgrade dari APK Story 2.12 mempertahankan ID chat dan event, data tugas historis, serta blob per chat. Untuk setiap chat lama, periksa kedua root privat Epic 2 (`workspaces/<conversationId>` dan `coding-installs/<conversationId>`) tanpa membuat direktori. Jika ada data di salah satu root, buat tepat satu Project memakai `<conversationId>` sebagai ID workspace lama; file dan paket tidak dipindah atau disalin. Direktori kosong saja tidak membuat Project; kegagalan baca bukan bukti bahwa data tidak ada. Migrasi skema mengikuti AD-19. Adopsi filesystem berjalan di luar transaksi migrasi skema, persisten dan aman diulang, serta selesai sebelum task atau preview dipakai. Preview lama tetap memakai percakapan dan event asal (AD-18). APK Epic 2 belum memiliki jadwal untuk dimigrasikan.
 
 ## Consistency Conventions
 
@@ -376,9 +393,11 @@ sequenceDiagram
   participant C as ContextAssembler
   participant L as LlmRouter (:llm)
   participant T as Tool (snapshot registry)
-  participant DB as Event log (:data)
+  participant DB as Scope dan event log (:data)
   UI->>S: submit(TaskRequest)
-  S->>R: run (FIFO, satu RUNNING)
+  S->>R: submit
+  R->>DB: resolve scope dan catat penerimaan (AD-27)
+  R->>R: run (FIFO, satu RUNNING)
   loop sampai tanpa tool_calls atau MAX_LLM_CALLS
     R->>C: susun LlmRequest dari event log
     R->>L: stream(request)
@@ -400,10 +419,13 @@ sequenceDiagram
 
 ### Entitas inti
 
+Relasi berikut menggambarkan target setelah fitur Projects diterapkan (AD-27); sebelum itu chat Epic 2 memakai satu workspace dengan ID percakapannya.
+
 ```mermaid
 erDiagram
   CONVERSATION ||--o{ TASK : berisi
-  CONVERSATION }o--|| WORKSPACE : memakai
+  PROJECT |o--o{ CONVERSATION : menaungi
+  PROJECT ||--|| WORKSPACE : memiliki
   TASK ||--o{ TASK_EVENT : menghasilkan
   TASK_EVENT ||--o| EVENT_BLOB : merujuk
   SCHEDULED_TASK ||--|| CONVERSATION : "punya satu"
@@ -471,6 +493,7 @@ lumynoid/
 | R10 tahan prompt injection | `:core`, `:userland`, `:web` | AD-7, AD-8, AD-9, AD-20, AD-21 |
 | R11 preview hasil | `:app` | AD-10, AD-18 |
 | R12 hemat kuota | `:llm` router, `:core` ContextAssembler | AD-11, AD-12, AD-13, AD-23, AD-26 |
+| R13 Projects | `:app`, `:core`, `:data`, `:userland` | AD-4, AD-5, AD-13, AD-16, AD-18, AD-19, AD-23, AD-27 |
 
 ## Deferred
 
@@ -484,6 +507,7 @@ lumynoid/
 | Preset provider dan model gratis yang andal untuk tool calling | epic-chat-dan-provider / epic-hemat-kuota; butuh uji sendiri |
 | Backend pencarian default final (DuckDuckGo HTML rapuh: bot challenge) | epic-browsing-web; SearchPort membuat penggantiannya murah |
 | Onboarding pengecualian baterai, panduan autostart per merek, izin notifikasi dan exact alarm, fallback bila izin ditolak | epic-tugas-terjadwal, dalam batas AD-16 dan AD-24 |
+| Nama default proyek hasil upgrade, tata letak Projects, dan besaran batas instruksi | Epic Projects saat menyusun stories; bukan perubahan cakupan R13 atau AD-27 |
 | Retensi dan ekspor riwayat chat | Sebelum epic-rilis-publik; backup awan sudah dimatikan (AD-25) |
 | Lisensi Lumynoid (harus kompatibel dengan proot GPL-2.0 yang dibundel) | Story hitl pertama epic-chat-dan-provider |
 | PSE Komdigi | epic-rilis-publik |

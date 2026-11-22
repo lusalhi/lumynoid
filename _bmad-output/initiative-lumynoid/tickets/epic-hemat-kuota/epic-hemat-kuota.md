@@ -39,7 +39,7 @@ Pengguna dengan key gratis tetap bisa menyelesaikan beberapa tugas sehari dan ta
 
 - parent — `_bmad-output/initiative-lumynoid/initiative-lumynoid.md`, Requirements R12; Constraints; Notes
 - breakdown — `_bmad-output/initiative-lumynoid/tickets/tickets.toml`, epic `epic-hemat-kuota`
-- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-11, AD-12, AD-13, AD-23, AD-26; Deferred (rotasi, cooldown, sumber kuota)
+- architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-11, AD-12, AD-13, AD-23, AD-26, AD-27 (snapshot instruksi proyek dan batas riwayat); Deferred (rotasi, cooldown, sumber kuota)
 
 ## Notes
 
