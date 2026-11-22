@@ -27,6 +27,7 @@ Pengguna dengan key gratis tetap bisa menyelesaikan beberapa tugas sehari dan ta
 - Tugas agent tidak memakai model yang tidak mendukung tools.
 - Sisa kuota dan status provider terlihat di app.
 - Titik sambung penyusunan konteks untuk output tool panjang dan instruksi skill tersedia dan didokumentasikan untuk epic 5 dan 6.
+- Saat konteks dipangkas, instruksi proyek tetap tersedia dan riwayat chat lain tidak masuk request.
 - Dirilis di GitHub Releases.
 
 ## Boundaries
@@ -43,3 +44,4 @@ Pengguna dengan key gratis tetap bisa menyelesaikan beberapa tugas sehari dan ta
 ## Notes
 
 - Decision: 2026-11-14 — Penanganan tool call kosong/rusak pindah ke epic-agent-shell (AD-26: ditegakkan runner); epic ini tetap memegang retry karena limit dan kuota lewat router.
+- Decision: 2026-11-22 — Pemangkasan menggunakan sumber instruksi proyek dan batas riwayat per percakapan yang ditetapkan Epic 8, tanpa mendefinisikan ulang kepemilikan konteks.

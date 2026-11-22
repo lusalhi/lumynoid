@@ -17,20 +17,34 @@ covers = ["R4", "R8", "R9", "R10", "R11"]
 after = [{ epic = 1, needs = "kerangka TaskRunner + AgentService dengan event log, adapter provider, dan layar chat streaming tempat kartu tampil" }]
 
 [[epic]]
+id = 8
+slug = "epic-projects"
+title = "Pengguna melanjutkan proyek dari beberapa percakapan"
+description = "Di APK bertanda tangan setelah Epic 2, chat dalam proyek bernama berbagi file, paket lokal, dan instruksi, tetapi bukan riwayat atau log; chat biasa tetap tersedia. Setelah konfirmasi, hapus chat menyisakan data proyek, sementara hapus proyek membersihkan datanya saja. Upgrade memakai workspace, paket, log, dan artefak yang sudah dirilis Epic 2 tanpa menyalin data; chat dan pratinjau lama tetap dapat dibuka, dan chat tanpa workspace tetap biasa. Epic ini menetapkan identitas dan siklus hapus proyek yang akan dipakai Tugas Terjadwal; integrasi pembatalan jadwal dikerjakan di Epic 3. Sumber instruksi proyek dan batas riwayat diteruskan ke Hemat Kuota."
+covers = ["R13"]
+after = [{ epic = 2, needs = "workspace, artefak/log, dan APK bertanda tangan Epic 2 sebagai baseline migrasi" }]
+
+[[epic]]
 id = 3
 slug = "epic-tugas-terjadwal"
 title = "Tugas terjadwal jalan tepat waktu saat app tertutup"
-description = "Pengguna membuat tugas sekali atau berulang lewat chat atau layar tugas; exact alarm membangunkan app dan memanggil TaskRunner (kerangka epic 1, loop tool dan gerbang epic 2) tanpa mengubah loop-nya; hasil muncul sebagai notifikasi dan di percakapan; onboarding pengecualian baterai dan panduan autostart per merek tersedia; uji 7 hari di Xiaomi dan Samsung lulus."
+description = "Pengguna membuat tugas sekali atau berulang lewat chat atau layar tugas; exact alarm memanggil TaskRunner tanpa mengubah loop-nya. Hasil muncul sebagai notifikasi dan di percakapan. Epic ini mengikat jadwal serta hasilnya ke proyek asal dan memasang pembatalan ketika proyek dihapus. Onboarding pengecualian baterai dan panduan autostart tersedia; uji 7 hari di Xiaomi dan Samsung lulus."
 covers = ["R6"]
-after = [{ epic = 2, needs = "loop tool call dan gerbang konfirmasi di TaskRunner, agar tugas agent berjalan di AgentService tanpa layar chat terbuka" }]
+after = [
+  { epic = 2, needs = "loop tool call dan gerbang konfirmasi di TaskRunner, agar tugas agent berjalan di AgentService tanpa layar chat terbuka" },
+  { epic = 8, needs = "keanggotaan proyek dan batas penghapusan untuk tugas terjadwal" },
+]
 
 [[epic]]
 id = 4
 slug = "epic-hemat-kuota"
 title = "Tugas tetap selesai dengan kuota API gratis"
-description = "Saat key/provider kena limit, key/provider berikutnya dipakai; tugas agent hanya memakai model yang mendukung tools; sisa kuota dan status provider terlihat. Epic ini juga memiliki penyusunan konteks: pemangkasan konteks dengan titik sambung yang stabil untuk memotong output tool panjang (dipakai epic 5) dan memuat instruksi skill tanpa terpangkas (dipakai epic 6)."
+description = "Saat key/provider kena limit, key/provider berikutnya dipakai; tugas agent hanya memakai model yang mendukung tools; sisa kuota dan status provider terlihat. Pemangkasan menjaga instruksi proyek dan batas riwayat per chat, serta memberi titik sambung untuk memotong output tool panjang (epic 5) dan memuat instruksi skill tanpa terpangkas (epic 6)."
 covers = ["R12"]
-after = [{ epic = 2, needs = "loop agent tempat rotasi, filter model, dan pemangkasan konteks dipasang" }]
+after = [
+  { epic = 2, needs = "loop agent tempat rotasi, filter model, dan pemangkasan konteks dipasang" },
+  { epic = 8, needs = "sumber instruksi proyek dan batas riwayat per percakapan untuk pemangkasan" },
+]
 
 [[epic]]
 id = 5
@@ -58,9 +72,10 @@ after = [
 id = 7
 slug = "epic-rilis-publik"
 title = "Lumynoid v1 terbit untuk umum"
-description = "Penguji awam menyelesaikan chat, tugas lewat tool coding, jawaban dari web, dan tugas terjadwal tanpa terminal dan tanpa dokumentasi. Rilis v1 sebagai APK bertanda tangan di GitHub Releases. Bagian R1 di sini mencakup seluruh alur pengguna."
+description = "Penguji awam menyelesaikan chat, tugas lewat tool coding di proyek, jawaban web, dan tugas terjadwal tanpa terminal atau dokumentasi. Rilis publik mengulang uji upgrade yang mempertahankan data serta alur dua chat yang berbagi file tanpa mengakses riwayat chat lain atau workspace proyek lain. Rilis v1 sebagai APK bertanda tangan di GitHub Releases; epic ini menguji integrasi, bukan mengimplementasikan Projects."
 covers = ["R1"]
 after = [
+  { epic = 8, needs = "Projects lulus uji migrasi dan alur dua chat untuk sesi penguji awam" },
   { epic = 3, needs = "tugas terjadwal yang lulus uji 7 hari, untuk sesi penguji awam" },
   { epic = 4, needs = "rotasi kuota, agar penguji awam bisa memakai key gratis" },
   { epic = 5, needs = "browsing web, untuk sesi penguji awam" },

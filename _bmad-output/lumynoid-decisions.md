@@ -47,3 +47,9 @@ Lumynoid adalah app Android **open source dan gratis** untuk **orang awam**: ins
 1. Sofia (`bmad-agent-po`) menulis initiative dari riset + catatan ini.
 2. `bmad-ux`: desain chat (DESIGN.md / EXPERIENCE.md).
 3. `bmad-architecture`: harness, provider adapter, sandbox userland, penjadwal, jalur distribusi.
+
+## Keputusan lanjutan
+
+### K13 — Projects di v1
+
+2026-11-22 — Pemilik produk menyetujui replan setelah membahas struktur **Project → Conversation**. Satu proyek dapat memiliki beberapa percakapan yang berbagi file, paket lokal, dan instruksi proyek, tanpa berbagi riwayat atau log chat. Chat biasa tetap tersedia tanpa proyek. Setelah konfirmasi, hapus chat menyisakan file proyek; hapus proyek membersihkan data milik proyek saja. Upgrade mempertahankan data yang sudah ada. Projects tidak menambah cakupan uji APK Epic 2 di Story 2.12.

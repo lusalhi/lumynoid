@@ -14,7 +14,7 @@ risk: high
 
 ## Description
 
-Lumynoid v1 adalah app Android open source dan gratis. Pengguna memasangnya, mengisi endpoint AI miliknya, lalu punya asisten pribadi yang bisa chat, mengerjakan tugas coding, mencari dan membaca web, menjalankan tugas terjadwal, dan memakai skill pihak ketiga, tanpa langganan bot, VPS, atau terminal. Riset menyimpulkan ide ini layak dengan syarat [riset, Ringkasan eksekutif]. Catatan 2026-11-14 menetapkan bentuk awal v1 (K1–K12). Replan 2026-11-21 menetapkan cakupan tool coding.
+Lumynoid v1 adalah app Android open source dan gratis. Pengguna memasangnya, mengisi endpoint AI miliknya, lalu punya asisten pribadi yang bisa chat, mengerjakan tugas coding, mencari dan membaca web, menjalankan tugas terjadwal, dan memakai skill pihak ketiga, tanpa langganan bot, VPS, atau terminal. Projects memisahkan ruang kerja proyek dari percakapan (K13). Riset menyimpulkan ide ini layak dengan syarat [riset, Ringkasan eksekutif]. Catatan 2026-11-14 menetapkan bentuk awal v1 (K1–K12). Replan 2026-11-21 menetapkan cakupan tool coding.
 
 ## Outcome
 
@@ -34,6 +34,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - R10 (K10): Instruksi di konten web atau output tool tidak bisa memicu aksi yang butuh konfirmasi tanpa kartu konfirmasi R8.
 - R11 (K9): Hasil kerja agent berupa halaman web/HTML atau file bisa dipratinjau di dalam app.
 - R12 (K9, K11, riset Rek 5): App hemat kuota: saat key/provider kena limit, key/provider berikutnya yang dikonfigurasi dipakai; tugas agent hanya memakai model yang mendukung tools; konteks dipangkas; sisa kuota dan status provider terlihat di app.
+- R13 (K13): Pengguna membuat proyek bernama dan membuka beberapa percakapan yang berbagi file, paket lokal, dan instruksi proyek, dengan riwayat AI dan log terpisah. Chat biasa tetap bisa dibuat tanpa proyek. Setelah konfirmasi, menghapus chat tidak menghapus data proyek; menghapus proyek menghapus file, paket, instruksi, dan semua chat serta log dalam proyek itu saja. Upgrade dari Epic 2 mempertahankan file, paket, chat, log, dan akses pratinjau yang sudah ada.
 
 ## Constraints
 
@@ -54,11 +55,12 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 
 ## Done when
 
-- Penguji awam yang belum pernah melihat Lumynoid memasang APK dari GitHub Releases di HP sungguhan, mengisi API key-nya sendiri, lalu menyelesaikan satu chat, satu tugas lewat tool coding, satu jawaban dari pencarian web, dan satu tugas terjadwal, tanpa melihat terminal dan tanpa membaca dokumentasi.
+- Penguji awam yang belum pernah melihat Lumynoid memasang APK dari GitHub Releases di HP sungguhan, mengisi API key-nya sendiri, lalu menyelesaikan satu chat biasa, satu tugas lewat tool coding di proyek, satu jawaban dari pencarian web, dan satu tugas terjadwal, tanpa melihat terminal dan tanpa membaca dokumentasi.
 - Tugas terjadwal harian berjalan tepat waktu dengan app tertutup dan layar mati, setiap hari selama 7 hari, di satu HP Xiaomi dan satu HP Samsung yang disiapkan lewat panduan di app.
 - Pada skenario uji, setiap aksi merusak, keuangan, atau pengiriman data keluar menunggu kartu konfirmasi dan tercatat di log aksi; halaman web uji berisi prompt injection tidak bisa memicu aksi tanpa konfirmasi.
 - Skill pihak ketiga berformat `SKILL.md` (acuan: Binance Agentic Wallet) terpasang dan dipakai agent sampai langkah transaksi `preview`, dan `execute` hanya jalan setelah konfirmasi.
 - Dengan dua key/provider gratis yang dikonfigurasi, tugas tetap selesai saat key pertama kena limit, dan app menampilkan sisa kuotanya.
+- Setelah upgrade dari APK Epic 2, pengguna membuka chat, log, dan pratinjau lama. Di satu proyek, chat kedua dapat membaca dan mengubah file chat pertama tanpa membawa riwayatnya; proyek lain dan chat biasa tidak dapat mengakses file itu. Hapus chat pertama tidak menghapus file; hapus proyek menghapus datanya tanpa memengaruhi proyek lain.
 - Kode sumber terbit di GitHub, dan rilis v1 tersedia sebagai APK bertanda tangan di GitHub Releases dari developer Android terverifikasi.
 
 ## Boundaries
@@ -70,6 +72,7 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Di luar v1: LLM yang "berpikir terus" 24 jam; model lokal sebagai otak agent (riset Ringkasan eksekutif 2, D4).
 - Di luar: iOS (K8); fork Operit (K12).
 - Di luar v1: distribusi lewat Google Play dan F-Droid (C14).
+- Di luar Projects v1: pemindahan percakapan antarproyek dan pemakaian otomatis riwayat percakapan lain sebagai konteks.
 - Touch point: API provider LLM (OpenAI-compatible, Anthropic, OpenRouter) — dipakai lewat API key pengguna; owner: epic-chat-dan-provider.
 - Touch point: endpoint sisa kuota provider (mis. OpenRouter) — dibaca untuk penghitung kuota; owner: epic-hemat-kuota.
 - Touch point unduhan rootfs dikelola epic-agent-shell. Paket npm untuk tool coding disediakan aplikasi. Akses registry npm untuk skill pihak ketiga dibuktikan di epic-skill-pihak-ketiga.
@@ -79,11 +82,20 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Touch point: verifikasi developer Android (akun developer Google milik pemilik proyek) — pendaftaran nama package dan kunci tanda tangan; owner: epic-chat-dan-provider.
 - Tracer path: pengguna mengisi API key → mengirim chat → harness memanggil provider → agent memakai tool coding → kartu aktivitas dan, bila perlu, kartu konfirmasi tampil → jawaban mengalir ke chat.
 
+## Draf desain — Projects
+
+- **Navigasi:** **Projects → New Project** membuat proyek bernama. Halaman Project menampilkan daftar percakapan, **New Conversation**, dan pengaturan instruksi proyek. **New Chat** tetap tersedia di luar Projects.
+- **Konfirmasi penghapusan:** Dialog chat menjelaskan bahwa file proyek tetap ada. Dialog proyek menyebut nama proyek dan data yang akan dihapus. Penghapusan tidak tersedia selama ada pekerjaan terkait yang antre, berjalan, atau menunggu persetujuan.
+- **Upgrade:** Chat lama yang memiliki file proyek atau instalasi paket tampil dalam proyek tersendiri; chat lain tetap menjadi chat biasa. File tidak disalin. Pengguna tidak perlu memindahkan data manual.
+- **Integrasi jadwal:** Saat penjadwalan dirilis, hasil tugas proyek tetap berada di proyek itu. Hapus proyek juga membatalkan jadwalnya; percakapan yang masih menjadi tujuan hasil tidak dihapus sebelum jadwal tersebut dihapus.
+- **Pemisahan rilis:** Projects tidak menunggu `SchedulerPort`. Epic Tugas Terjadwal menambahkan pembatalan jadwal ke alur hapus proyek ketika fitur jadwal dirilis. Epic Hemat Kuota mempertahankan instruksi proyek dan batas riwayat per chat saat memperkenalkan pemangkasan konteks.
+
 ## References
 
 - research — `_bmad-output/research-lumynoid-android-agent/research-lumynoid-android-agent.md`, Ringkasan eksekutif; D1 (latar belakang 24 jam); D2 (kontrol HP, browser, distribusi); D3 (eksekusi kode); D4 (akses LLM gratis); D5 (peta proyek); Rekomendasi; Pertanyaan terbuka; Lampiran sumber [1]–[61]
-- decisions — `_bmad-output/lumynoid-decisions.md`, Visi; Keputusan K1–K12; Masih terbuka; Urutan berikutnya
+- decisions — `_bmad-output/lumynoid-decisions.md`, Visi; Keputusan K1–K13; Masih terbuka; Urutan berikutnya
 - architecture — `_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md`, AD-1–AD-26; Consistency Conventions; Stack; Capability → Architecture Map; Deferred
+- Projects — [Epic 8 Projects](tickets/epic-projects/epic-projects.md); kontrak arsitektur Projects masih perlu diselaraskan lewat `bmad-architecture` sebelum menyusun stories.
 
 ## Notes
 
@@ -116,3 +128,5 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Decision: 2026-11-14 — Story epic-chat-dan-provider: story 1 tracer bullet, lisensi di story 1.2, kunci rilis dan verifikasi developer di story 1.3; menggantikan "story fondasi" dan "story hitl pertama" di Decision di atas. ContextAssembler versi naif dibangun story 1.7 (riwayat chat saja); AD-13 menunggu pembaruan lewat `bmad-architecture`.
 - Decision: 2026-11-14 — Penanganan tool call kosong/rusak (AD-26) milik runner di epic-agent-shell; epic-hemat-kuota memegang retry karena limit lewat router.
 - Decision: 2026-11-21 — Replan Epic 2 setelah PRoot lulus di Samsung API 37. Tahap awal R4 memakai satu APK dengan folder proyek biasa dan tool coding yang ditentukan aplikasi. Eksekusi kode pihak ketiga menunggu bukti perlindungan data privat dan egress. Epic skill memakai lifecycle userland dan gerbang tool dari Epic 2, lalu membuktikan perlindungan CLI skill sebelum mengaktifkannya. [Epic 2](tickets/epic-agent-shell/epic-agent-shell.md)
+- Decision: 2026-11-21 — Desain fitur Projects disetujui: Project memiliki workspace dan instruksi bersama, Conversation memiliki konteks dan log sendiri. Chat biasa tetap ada. Implementasi terpisah dari penerimaan APK Epic 2 di Story 2.12.
+- Decision: 2026-11-22 — Replan memasukkan Projects ke v1 sebagai R13 (K13). Pemilik menyetujui Epic 8 setelah rilis Epic 2 dan sebelum Tugas Terjadwal, Hemat Kuota, dan Rilis Publik. R1–R12, ID epic yang lama, dan Story 2.12 tetap.
