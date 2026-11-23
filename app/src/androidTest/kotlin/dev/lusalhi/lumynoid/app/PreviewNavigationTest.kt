@@ -43,6 +43,7 @@ class PreviewNavigationTest {
         var otherProjectId: String? = null
         var fixtureConversationId: String? = null
         var mainActivity: MainActivity? = null
+        var testFailure: Throwable? = null
         try {
             if (Build.VERSION.SDK_INT >= 33) {
                 automation.grantRuntimePermission(app.packageName, android.Manifest.permission.POST_NOTIFICATIONS)
@@ -149,45 +150,54 @@ class PreviewNavigationTest {
             } catch (_: SocketTimeoutException) {
                 // No HTTP connection, including speculative preconnect or the external link.
             }
+        } catch (failure: Throwable) {
+            testFailure = failure
+            throw failure
         } finally {
-            try {
-                mainActivity?.let { activity ->
-                    instrumentation.runOnMainSync { activity.finish() }
-                }
-                instrumentation.waitForIdleSync()
-            } finally {
-                if (InstrumentationRegistry.getArguments().getString("keepPreviewFixture") != "true") {
-                    runBlocking {
-                        try {
-                            fixtureConversationId?.let { id ->
-                                try {
-                                    data.adoptLegacyWorkspaces("Untitled Project") { pendingId ->
-                                        if (pendingId == id) UserlandRuntime.legacyWorkspaceHasData(app, pendingId) else null
-                                    }
-                                    val projectId = data.conversations.observeAll().first().firstOrNull { it.id == id }?.projectId
-                                    if (projectId != null) {
-                                        check(data.projects.delete(projectId)) {
-                                            "Could not delete the adopted preview project fixture."
+            runCatching {
+                try {
+                    mainActivity?.let { activity ->
+                        instrumentation.runOnMainSync { activity.finish() }
+                    }
+                    instrumentation.waitForIdleSync()
+                } finally {
+                    if (InstrumentationRegistry.getArguments().getString("keepPreviewFixture") != "true") {
+                        runBlocking {
+                            try {
+                                fixtureConversationId?.let { id ->
+                                    try {
+                                        // Teardown owns this ID; settle a failed probe as plain before removing the fixture.
+                                        data.adoptLegacyWorkspaces("Untitled Project") { pendingId ->
+                                            if (pendingId == id) false else null
                                         }
-                                    } else {
-                                        check(data.conversations.delete(id)) {
-                                            "Could not delete the unadopted preview conversation fixture."
+                                        val projectId = data.conversations.observeAll().first().firstOrNull { it.id == id }?.projectId
+                                        if (projectId != null) {
+                                            check(data.projects.delete(projectId)) {
+                                                "Could not delete the adopted preview project fixture."
+                                            }
+                                        } else {
+                                            check(data.conversations.delete(id)) {
+                                                "Could not delete the unadopted preview conversation fixture."
+                                            }
+                                            UserlandRuntime.deleteWorkspace(app, id)
                                         }
-                                        UserlandRuntime.deleteWorkspace(app, id)
+                                    } finally {
+                                        app.filesDir.resolve("workspaces/$id-outside.html").delete()
                                     }
-                                } finally {
-                                    app.filesDir.resolve("workspaces/$id-outside.html").delete()
                                 }
-                            }
-                        } finally {
-                            otherProjectId?.let { id ->
-                                check(data.projects.delete(id)) {
-                                    "Could not delete the unrelated preview project fixture."
+                            } finally {
+                                otherProjectId?.let { id ->
+                                    check(data.projects.delete(id)) {
+                                        "Could not delete the unrelated preview project fixture."
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }.onFailure { cleanupFailure ->
+                val original = testFailure ?: throw cleanupFailure
+                original.addSuppressed(cleanupFailure)
             }
         }
     }

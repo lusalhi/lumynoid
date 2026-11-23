@@ -409,11 +409,13 @@ internal suspend fun checkProjectPreview(context: Context) {
                 while (evaluate(view, "document.getElementById('status')?.textContent") != "\"Preview script marker\"") delay(50)
             }
             expect(findText(view, "Preview script marker") > 0) { "The opted-in script marker did not render" }
+            val locationBeforeClick = evaluate(view, "location.href")
             evaluate(view, "document.getElementById('outside').click()")
             val deniedUrl = bounded(10_000, "the production delegate to deny the external link") {
                 blockedExternalUrl.await()
             }
             expectEqual("https://outside.invalid/page", deniedUrl, "external navigation denied by production delegate")
+            expectEqual(locationBeforeClick, evaluate(view, "location.href"), "external link did not change the preview location")
         }
 
         // A wrong conversation reveals nothing: the result event is scoped to its own conversation.

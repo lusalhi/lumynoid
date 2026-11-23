@@ -97,7 +97,7 @@ over `v0.3.1` without uninstalling or clearing data. The first two chats must be
 the ordinary chat stays plain. In the package-only chat, write a fresh JSON file and format it with
 the existing package without reinstalling. With the handset offline, reopen both old files from
 their original log events. The HTML script marker must appear only after selecting **Enable JavaScript**.
-Confirm the provider and model are unchanged and plain chat still answers without re-entering credentials.
+Reconnect, then confirm the provider and model are unchanged and plain chat answers without re-entering credentials.
 
 1. Create a disposable project. In chat A, write `tracer.json`, install `@lumynoid/json-tools`, and
    send a unique chat-only marker. In chat B, read, edit and format `tracer.json` without reinstalling.

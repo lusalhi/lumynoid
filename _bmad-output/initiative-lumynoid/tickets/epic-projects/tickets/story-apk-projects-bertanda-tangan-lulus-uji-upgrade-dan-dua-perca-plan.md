@@ -55,8 +55,10 @@ Downloaded the published Story 2.12 baseline and independently verified its `SHA
 
 Record the physical device and OS, both APK digests, the GitHub Actions run, and evidence or failure for each handset case. Do not reset app data or treat emulator runs as signed handset evidence.
 
-**Local evidence:** Gradle packaging and lint-vital passed. `aapt2` reported non-debuggable `dev.lusalhi.lumynoid` `v0.4.0` (code 6), target API 37 and only `arm64-v8a`. ZIP and all three runtime ELFs passed 16 KiB alignment; the staged rootfs matched APK metadata. Release checker: 19 self-tests passed. Unsigned candidate SHA-256: `5e3da11e51e088b40e038697a121fe259b9dad15f4bf2559048dffd7acc81ca1`.
+**Local v0.4.1 evidence:** Gradle packaging and lint-vital passed. `aapt2` reported `dev.lusalhi.lumynoid` `v0.4.1` (code 7), target API 37 and only `arm64-v8a`. ZIP and all three runtime ELFs passed 16 KiB alignment; the staged rootfs matched APK metadata. The debug and unsigned release APKs contained no diagnostic launcher, schema or rootfs fixture. Release checker: 19 self-tests passed.
 
 **Supplementary handset evidence (owner report):** All six scenarios in the [standalone Projects diagnostic](../../../plan-8-projects-one-tap-apk.md#verification) passed on a physical phone. The diagnostic uses an isolated package and fixture data; the official signed upgrade checklist remains open.
 
 **Release recovery:** [PR #8](https://github.com/lusalhi/lumynoid/pull/8) merged with green CI and schema checks, but its completed Cubic check reported 16 findings. The [v0.4.0 workflow](https://github.com/lusalhi/lumynoid/actions/runs/45109632829) passed verification and was cancelled before signing at the owner's request to fix valid findings first. The original tag is unchanged and no v0.4.0 APK was published. The corrected candidate is `v0.4.1` (code 7); signed handset acceptance remains open.
+
+The frozen approach above describes the initial `v0.4.0` preparation. Use `v0.4.1` for every remaining release and handset check.
