@@ -51,7 +51,7 @@ jobs:
         run: ./gradlew :app:checkDependencyPolicy
 
       - name: JVM tests (include the persisted-name check)
-        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest
+        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest :userland:testDebugUnitTest
 
       - name: Build the debug and instrumentation APKs and pinned rootfs
         run: ./gradlew :app:assembleDebug :userland:assembleDebugAndroidTest :userland:buildUserlandRootfs

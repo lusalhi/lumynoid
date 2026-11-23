@@ -110,6 +110,24 @@ class TaskRunnerTest {
     }
 
     @Test
+    fun plainToolSnapshotValidatesHiddenWorkspaceRegistrations() {
+        fun tool(name: String, workspace: Boolean) =
+            FixtureTool(name, requiresWorkspace = workspace) { _, _ -> error("Tools must not execute during registration") }
+        fun registry(vararg tools: Tool) = ToolRegistry(tools.map { tool -> ToolProvider { listOf(tool) } })
+
+        val plain = tool("web_public", false)
+        val project = tool("shell_private", true)
+        assertEquals(setOf(plain.name), registry(plain, project).snapshot(hasWorkspace = false).keys)
+        for (name in listOf("Invalid name", "missing_prefix")) {
+            assertFailsWith<IllegalArgumentException> { registry(tool(name, true)).snapshot(hasWorkspace = false) }
+        }
+        val duplicate = tool(project.name, false)
+        for (entries in listOf(arrayOf(project, duplicate), arrayOf(duplicate, project), arrayOf(project, project))) {
+            assertFailsWith<IllegalStateException> { registry(*entries).snapshot(hasWorkspace = false) }
+        }
+    }
+
+    @Test
     fun workspaceToolsShareOnlyProjectFilesWhileModelHistoryRemainsConversationScoped() = runnerTest { scope ->
         val events = InMemoryEvents()
         val files = mutableMapOf<String, String>()

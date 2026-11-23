@@ -96,13 +96,18 @@ class ToolRegistry(private val providers: List<ToolProvider> = emptyList()) {
     internal fun snapshot(hasWorkspace: Boolean): Map<String, Entry> {
         if (providers.isEmpty()) return emptyMap()
         return buildMap {
+            var hiddenNames: MutableSet<String>? = null
             for (provider in providers) {
                 for (tool in provider.tools()) {
-                    if (!hasWorkspace && tool.requiresWorkspace) continue
                     val name = tool.name
                     require(namePattern.matches(name)) { "Invalid tool name: $name" }
                     require(ownerPrefixes.any { name.startsWith(it) }) { "Missing tool owner prefix: $name" }
-                    check(name !in this) { "Duplicate tool name: $name" }
+                    check(name !in this && hiddenNames?.contains(name) != true) { "Duplicate tool name: $name" }
+                    if (!hasWorkspace && tool.requiresWorkspace) {
+                        val hidden = hiddenNames ?: HashSet<String>().also { hiddenNames = it }
+                        hidden.add(name)
+                        continue
+                    }
                     val schema = JsonObject(tool.inputSchema.mapValues { it.value.detached() })
                     put(name, Entry(ToolDefinition(name, tool.description, schema), tool))
                 }

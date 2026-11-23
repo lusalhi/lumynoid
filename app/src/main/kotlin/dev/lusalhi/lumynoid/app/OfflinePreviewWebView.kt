@@ -24,6 +24,7 @@ internal fun createOfflinePreviewWebView(
     path: String,
     javascript: Boolean,
     read: (String) -> ByteArray?,
+    onNavigationBlocked: ((String) -> Unit)? = null,
     onUnavailable: () -> Unit,
 ): WebView {
     val document = Uri.Builder().scheme("https").authority(HOST).appendPath("workspace").apply {
@@ -63,8 +64,14 @@ internal fun createOfflinePreviewWebView(
                 WebSettings.MENU_ITEM_SHARE or WebSettings.MENU_ITEM_WEB_SEARCH or WebSettings.MENU_ITEM_PROCESS_TEXT
         }
         webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
-            override fun shouldOverrideUrlLoading(view: WebView, url: String) = true
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (onNavigationBlocked != null) onNavigationBlocked(request.url.toString())
+                return true
+            }
+            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                onNavigationBlocked?.invoke(url)
+                return true
+            }
 
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
                 val url = request.url

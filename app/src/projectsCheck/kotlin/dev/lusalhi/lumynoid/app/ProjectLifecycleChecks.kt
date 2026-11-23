@@ -17,11 +17,17 @@ import dev.lusalhi.lumynoid.core.ToolArtifact
 import dev.lusalhi.lumynoid.core.parseToolArguments
 import dev.lusalhi.lumynoid.userland.UserlandRuntime
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
@@ -374,13 +380,12 @@ internal suspend fun checkConversationDeletion(context: Context) {
 }
 
 /** 8.6 — a deletion interrupted after its durable marker resumes on reopen and removes only the target. */
-internal suspend fun checkProjectDeletion(context: Context) {
+internal suspend fun checkProjectDeletion(context: Context) = coroutineScope {
     val nonce = UUID.randomUUID().toString().take(8)
     val survivorContent = "survivor page $nonce"
     val inputSurvive = "survivor works $nonce"
     val inputRead = "survivor reads $nonce"
     val entered = CompletableDeferred<Unit>()
-    val release = CompletableDeferred<Unit>()
     val boundaryCalls = Collections.synchronizedList(mutableListOf<String>())
     val provider = ProviderConfig("provider-$nonce", "Fixture", null, "https://fixture.invalid/v1", SecretRef("key-$nonce"))
 
@@ -391,9 +396,10 @@ internal suspend fun checkProjectDeletion(context: Context) {
         deleteWorkspace = { id ->
             boundaryCalls += id
             entered.complete(Unit)
-            release.await()
+            awaitCancellation()
         },
     )
+    var interruptedCleanup: Job? = null
     try {
         val data = first.data
         first.awaitIdle("runner recovery before project-deletion checks")
@@ -428,11 +434,20 @@ internal suspend fun checkProjectDeletion(context: Context) {
         data.providerConfigs.setActive(ActiveModel(provider.id, "fixture-model"))
 
         // Deletion commits the marker, cleans chat-owned data, then blocks in the workspace boundary.
-        val deletion = first.scope.launch { data.projects.delete(doomed.id) }
-        try {
-            withTimeout(15_000) { entered.await() }
-        } catch (e: TimeoutCancellationException) {
-            throw AssertionError("Failed observation: deletion never reached the workspace boundary", e)
+        val deletion = async(Dispatchers.Default) { data.projects.delete(doomed.id) }
+        interruptedCleanup = deletion
+        val reachedBoundary = withTimeoutOrNull(15_000) {
+            select<Unit> {
+                entered.onAwait { }
+                deletion.onAwait { result ->
+                    throw AssertionError(
+                        "Failed observation: deletion completed before the workspace boundary — returned [$result]",
+                    )
+                }
+            }
+        }
+        if (reachedBoundary == null) {
+            throw AssertionError("Failed observation: deletion never reached the workspace boundary")
         }
         expect(data.projects.observeAll().first().single { it.id == doomed.id }.deleting, "durable deleting marker")
         expectEquals(listOf(doomed.workspaceId), boundaryCalls.toList(), "boundary entered once for the target")
@@ -531,6 +546,7 @@ internal suspend fun checkProjectDeletion(context: Context) {
             second.close()
         }
     } finally {
+        withContext(NonCancellable) { interruptedCleanup?.cancelAndJoin() }
         first.close()
     }
 }
