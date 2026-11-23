@@ -132,3 +132,15 @@ covers = []
 after = [11, "1.12"]
 hitl = true
 risk = "high"
+
+[[entry]]
+id = 13
+type = "story"
+title = "Agent menawarkan alternatif setelah pengguna menolak aksi"
+description = "Saat pengguna menekan Decline, pertahankan keputusan bertipe di log dan beri model status dari aplikasi bahwa aksi ditolak dan tidak dijalankan. Minta paling banyak satu balasan teks dalam batas panggilan tugas yang ada, tanpa memberi model tool untuk langkah ini. Jangan jalankan ulang aksi yang ditolak atau sisa batch; hasil yang sudah terbit tetap utuh. Jika balasan tidak tersedia, chat tetap menunjukkan penolakan tanpa mengklaim aksi berhasil. Approve, Stop, kedaluwarsa, dan pemulihan tanpa replay tidak berubah."
+verify = "Di HP, minta timpa file uji, ketuk Decline, lalu lihat satu alternatif di chat dan status Declined di Log; buka ulang dan cek isi file tetap sama. Fixture OpenAI-compatible dan Anthropic membuktikan status penolakan sampai ke model, tidak ada tool atau kartu konfirmasi tambahan walau model memintanya, serta jalur Stop dan budget habis tidak memicu panggilan tambahan."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-7--gerbang-konfirmasi-milik-runner-default-deny", "_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-13--penyusunan-konteks-lewat-contributor"]
+covers = ["R6"]
+after = [9]
+hitl = true
+risk = "high"

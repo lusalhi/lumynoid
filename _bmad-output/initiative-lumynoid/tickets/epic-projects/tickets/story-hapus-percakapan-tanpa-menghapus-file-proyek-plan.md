@@ -3,7 +3,7 @@ title: 'Hapus percakapan tanpa menghapus file proyek'
 type: feature
 ticket: '5'
 created: '2026-11-22'
-status: built
+status: done
 baseline_revision: 'ec701cfe324727de575aa1608fd976a6c52c6041'
 route: oneshot
 route_source: auto

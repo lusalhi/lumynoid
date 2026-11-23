@@ -3,7 +3,7 @@ title: 'APK Projects bertanda tangan lulus uji upgrade dan dua percakapan di HP'
 type: chore
 ticket: '8'
 created: '2026-11-23'
-status: in-progress
+status: done
 baseline_revision: 'acf8ba8155be68cdbfecd18579624f27d43aed16'
 route: oneshot
 route_source: auto
@@ -47,18 +47,29 @@ Downloaded the published Story 2.12 baseline and independently verified its `SHA
 ## Verification
 
 - [x] Build the unsigned candidate with `./gradlew --offline --max-workers=2 :app:packageRelease :userland:buildUserlandRootfs`; use `aapt2`, `zipalign -c -P 16 4`, and `tools/userland/verify-apk.py` to confirm package, version, non-debuggable arm64 ABI, alignment and matching runtime. Run `python3 .github/scripts/check_release.py --self-test`.
-- [ ] Given the corrected Projects revision is merged to `main`, when the replacement tag passes the official tag check and the owner approves the `release` environment, then GitHub Releases publishes the signed APK and matching assets. Verify `SHA256SUMS`, `apksigner`, `aapt2`, alignment, and the APK-pinned rootfs before testing.
-- [ ] Given signed `v0.3.1` on a physical arm64 handset with a file/HTML chat, a package-only chat, and an ordinary chat, when the signed Projects release is installed in place, then both eligible chats become separate projects without copying workspace data; the ordinary chat stays plain, old files/package/logs remain usable, and offline text/HTML previews open from their original events (scripts off by default).
-- [ ] Given a new project, when the first chat writes and installs the bundled package and the second reads, edits and formats the same file, then both share files, the package and instructions across relaunch, but never histories or logs. Another project and a plain chat cannot access those files; plain chat still answers. Preview access from the wrong project or a deleting project is denied.
-- [ ] Given a task paused for overwrite approval, when project instructions change and the task resumes, then that task uses its original instructions and the next task sees the new ones, without sending another chat's history.
-- [ ] Given two chats in a project, when one is deleted after confirmation, then only its conversation and log disappear. With pending work, deletion is denied. When project deletion is interrupted and resumed after relaunch, then the marked project rejects new work and preview; resuming removes its chats, logs, instructions, files and packages without harming another project, the provider or shared runtime.
+- [x] Publish signed `v0.4.1` from the official tag workflow and verify `SHA256SUMS`, the registered certificate, package/version, alignment, and the APK-pinned rootfs.
+- [x] Given signed `v0.3.1` on a physical arm64 handset with a file/HTML chat, a package-only chat, and an ordinary chat, when signed `v0.4.1` is installed in place, then both eligible chats become separate projects without copying workspace data; the ordinary chat stays plain, saved provider access remains, old files/package/logs remain usable, and offline text/HTML previews open from their original events (scripts off by default).
+- [x] Given a new project, when the first chat writes and installs the bundled package and the second reads, edits and formats the same file, then both share files, the package and instructions across relaunch, but never histories or logs. Another project and a plain chat cannot access those files; plain chat still answers. Preview access from the wrong project or a deleting project is denied.
+- [x] Given a task paused for overwrite approval, when project instructions change and the task resumes, then that task uses its original instructions and the next task sees the new ones, without sending another chat's history.
+- [x] Given two chats in a project, when one is deleted after confirmation, then only its conversation and log disappear. With pending work, deletion is denied. When project deletion is interrupted and resumed after relaunch, then the marked project rejects new work and preview; resuming removes its chats, logs, instructions, files and packages without harming another project, the provider or shared runtime.
 
 Record the physical device and OS, both APK digests, the GitHub Actions run, and evidence or failure for each handset case. Do not reset app data or treat emulator runs as signed handset evidence.
 
 **Local v0.4.1 evidence:** Gradle packaging and lint-vital passed. `aapt2` reported `dev.lusalhi.lumynoid` `v0.4.1` (code 7), target API 37 and only `arm64-v8a`. ZIP and all three runtime ELFs passed 16 KiB alignment; the staged rootfs matched APK metadata. The debug and unsigned release APKs contained no diagnostic launcher, schema or rootfs fixture. Release checker: 19 self-tests passed.
 
-**Supplementary handset evidence (owner report):** All six scenarios in the [standalone Projects diagnostic](../../../plan-8-projects-one-tap-apk.md#verification) passed on a physical phone. The diagnostic uses an isolated package and fixture data; the official signed upgrade checklist remains open.
+**Supplementary handset evidence (owner report):** All six [standalone Projects diagnostic](../../../plan-8-projects-one-tap-apk.md#verification) scenarios passed on a physical phone. The diagnostic uses a separate package and fixture data; it is not the signed in-place upgrade.
 
-**Release recovery:** [PR #8](https://github.com/lusalhi/lumynoid/pull/8) merged with green CI and schema checks, but its completed Cubic check reported 16 findings. The [v0.4.0 workflow](https://github.com/lusalhi/lumynoid/actions/runs/45109632829) passed verification and was cancelled before signing at the owner's request to fix valid findings first. The original tag is unchanged and no v0.4.0 APK was published. The corrected candidate is `v0.4.1` (code 7); signed handset acceptance remains open.
+**Release recovery:** [PR #8](https://github.com/lusalhi/lumynoid/pull/8) merged with green CI and schema checks, but its completed Cubic check reported 16 findings. The [v0.4.0 workflow](https://github.com/lusalhi/lumynoid/actions/runs/45109632829) passed verification and was cancelled before signing at the owner's request to fix valid findings first. The original tag is unchanged and no v0.4.0 APK was published.
 
-The frozen approach above describes the initial `v0.4.0` preparation. Use `v0.4.1` for every remaining release and handset check.
+**Corrected candidate:** [PR #9](https://github.com/lusalhi/lumynoid/pull/9) merged with passing CI and zero new Cubic findings on the final revision. On isolated arm64 API 34, all three Projects instrumentation cases passed twice with no fixture rows left. After the final follow-up, the two affected instrumentation cases passed again and the diagnostic passed 6/6.
+
+**Published:** Tag `v0.4.1` (code 7) points to `5c59abfa8ffa4f1029e5edffa48a2d29159fee7f`. The [release workflow](https://github.com/lusalhi/lumynoid/actions/runs/45114850629) passed `verify`, `build`, and `publish` after owner approval. All eight entries in `SHA256SUMS` matched; the official non-debuggable arm64 APK matched the registered certificate, passed 16 KiB alignment, and matched the release rootfs metadata. The diagnostic launcher and assets are absent. Signed APK SHA-256: `1cf12aa6fcbf85eb720224e4cde68731d855d43b669f8d570d6f4f61e97e9ae4`.
+
+**Official handset acceptance (owner report, 2026-11-23):** Samsung `SM-S731B`, Android API 37 (model confirmed by the owner on 2026-11-23). The owner confirmed all four acceptance scenario groups on signed `v0.4.1`:
+
+- In-place upgrade from signed `v0.3.1` without uninstalling or clearing data retained chats, files, local packages, logs, old previews, and provider access.
+- Two chats in one project shared files and packages without sharing history or logs. Another project and ordinary chat could not read the files.
+- An approved pending task kept its original instructions; a fresh task received the updated instructions.
+- Deleting a chat retained project files. The project deletion was interrupted, resumed with **Resume deletion**, and left the other project unaffected.
+
+The handset report is complemented by the recorded Room, runtime and preview fixture checks. The current behavior after **Decline** is separate from this acceptance and is tracked as Story 2.13.

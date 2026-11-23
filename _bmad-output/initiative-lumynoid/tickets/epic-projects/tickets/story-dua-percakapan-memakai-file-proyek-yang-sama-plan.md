@@ -3,7 +3,7 @@ title: 'Dua percakapan memakai file proyek yang sama'
 type: feature
 ticket: '1'
 created: '2026-11-22'
-status: built
+status: done
 baseline_revision: '37ef6bcb6839b450d6ea91d4ac954ab9aeae142e'
 route: full
 route_source: auto
@@ -84,6 +84,6 @@ context: []
 
 A second Redroid UI smoke sent two independent prompts through Compose into the same named project, reopened one without the other's text, and confirmed a plain send appeared only in the ordinary conversation list. It used the reserved `.invalid` fixture provider; it verifies persisted chat routing, not live model responses. `ProjectChatSubmissionTest` subsequently passed on the rebuilt APK (1/1).
 
-**Handset handoff:** `app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `c3e58879ef2ee7cb23834772831a242159dd5f217d7a6e743d0878ae6eba7427`. Physical handset acceptance is still pending; this is not a release.
+**Initial debug handoff (superseded):** `app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `c3e58879ef2ee7cb23834772831a242159dd5f217d7a6e743d0878ae6eba7427`.
 
-**Updated handset schedule:** Run the live tracer on a newly created project during the signed 2.12 → Projects upgrade session in Story 8.8. This replaces the separate clean debug install above, not the file/package, relaunch, log, or isolation checks. See [handset acceptance](../../../../../docs/release.md#projects-handset-acceptance-story-88).
+**Handset acceptance:** The owner confirmed the two-chat tracer on signed `v0.4.1` in [Story 8.8](story-apk-projects-bertanda-tangan-lulus-uji-upgrade-dan-dua-perca-plan.md#verification), replacing the separate clean debug install.

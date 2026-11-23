@@ -1,0 +1,81 @@
+# Epic 4 — Hemat kuota, urutan build yang disetujui 2026-11-23.
+# Paralel dengan Epic 3; 4.1 memiliki seluruh migrasi Room Epic 4.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Tugas pindah ke provider cadangan saat key pertama kena limit"
+description = "Tracer: satu migrasi Room membawa urutan cadangan dan model cadangan per provider serta kolom batas konteks model (diisi 4.2). Layar provider mengatur urutan dan model tiap provider. `LlmRouter` mencoba model aktif lebih dulu, lalu provider lain menurut urutan cadangan; pada `RateLimited`, `QuotaExhausted`, atau `AuthFailed` sebelum delta pertama ia mencatat status di `RouterState` (memori, `Flow`) lalu pindah ke provider berikutnya dan memancarkan `Routed`. Cooldown 429 memakai `Retry-After` atau 60 detik; 402 dan 401 melewati provider itu sampai app restart atau konfigurasinya diubah. Semua provider habis berakhir dengan alasan gagal baru yang terlihat, yang juga dipakai notifikasi gagal 3.5. Runner mencatat `ProviderSwitched` hanya bila provider yang menjawab berbeda dari awal rantai, dan chat menampilkannya sebagai baris aktivitas berisi asal, tujuan, dan alasan."
+verify = "Dua provider fixture: yang pertama membalas 429 dengan `Retry-After`, yang kedua menjawab. Kirim chat: jawaban datang dari provider kedua, chat menampilkan baris perpindahan, dan request berikutnya selama cooldown langsung ke provider kedua. Error setelah delta pertama tidak memicu rotasi. Tes JVM mencakup migrasi 7→8 (atau versi berikutnya), urutan rantai, dan semua provider habis menjadi kegagalan yang terlihat."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-12--rotasi-dan-filter-model-sebagai-decorator-llmport"]
+covers = ["R1"]
+after = ["2.3"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Tugas bertool hanya memakai model yang mendukung tools"
+description = "Baca `supported_parameters` dan `context_length` dari daftar model OpenRouter ke `ModelProfile`. Adapter memetakan penolakan tools dari provider ke `ToolsUnsupported`; router menandai model itu `supportsTools = false` dan melanjutkan rantai. Untuk request yang membawa tool, router melewati model yang ditandai tidak mendukung; model yang belum diketahui dicoba. Bila tidak ada model pendukung tools di rantai, router mengirim request tanpa tool dan chat menampilkan baris bahwa model menjawab tanpa tool; rilis 3.9 bergantung pada fallback ini. Request tanpa tool tidak difilter. Kolom `context_length` berasal dari migrasi 4.1; nilainya dipakai budget konteks 4.4."
+verify = "Fixture OpenRouter mengembalikan daftar model dengan dan tanpa `tools`: request bertool melewati model tanpa tools, request tanpa tool tidak. Provider fixture yang membalas error 'no endpoints support tool use' membuat model ditandai dan request bertool berikutnya langsung ke cadangan. Rantai yang hanya berisi model tanpa tools menjawab sebagai teks dengan baris pemberitahuan. `context_length` tersimpan setelah daftar model dimuat."
+covers = ["R2"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Status provider dan sisa kuota terlihat di layar provider"
+description = "Tambahkan `ProviderAdminPort.fetchQuota` untuk OpenRouter (`/api/v1/key`), dipanggil saat layar provider dibuka, dan baca header rate-limit dari provider yang mengirimnya ke `RouterState`. Layar provider menampilkan status tiap provider dari `RouterState`: siap, kena limit sampai jam tertentu, kuota habis, atau key ditolak, ditambah sisa kuota bila tersedia. Key tidak pernah tampil."
+verify = "Fixture OpenRouter `/api/v1/key` mengembalikan sisa kredit dan limit: layar menampilkannya. Fixture yang membalas 429, 402, dan 401 membuat status masing-masing tampil dengan jam berakhirnya cooldown untuk 429. Provider tanpa endpoint kuota hanya menampilkan status. Tes memastikan key tidak ada di state UI atau log."
+covers = ["R3"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Konteks dipangkas per giliran utuh tanpa kehilangan instruksi proyek"
+description = "Ubah `ContextAssembler` menjadi penyusun dari `ContextContributor` berkelas `Pinned` (snapshot instruksi proyek) dan `Trimmable` (riwayat). Budget memakai `context_length` terkecil di rantai rotasi (dari 4.2) atau 32k token, estimasi karakter dibagi 4 dengan cadangan 20%, dan definisi tool ikut dihitung. Pemangkasan berlaku pada setiap panggilan LLM dalam tugas, termasuk setelah putaran tool dan resume approval. Giliran tertua dibuang utuh bersama pasangan tool call dan hasilnya; event log tidak berubah. Jalur `Trimmable` ini dipakai `TruncationPolicy` di 4.5."
+verify = "Tes JVM: riwayat panjang di chat proyek dipangkas sampai muat budget, instruksi proyek tetap ada, panggilan ke-N dalam tugas multi-putaran tetap muat budget, tidak ada tool call tanpa hasil pasangannya, dan giliran terbaru selalu ada. Provider fixture menerima request yang muat budget; log aksi tetap membuka output lengkap. Riwayat chat lain tidak pernah masuk."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-13--penyusunan-konteks-lewat-contributor"]
+covers = ["R4"]
+after = [2, "8.4"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Output tool panjang dipotong di konteks menurut petunjuk tool"
+description = "Tetapkan nilai `truncationHint` yang terstruktur beserta arti `null`, lalu tambahkan `TruncationPolicy` per hint di jalur `Trimmable` dari 4.4 sehingga output tool panjang dipotong sebelum giliran lama dibuang, dengan penanda bahwa output dipotong. Dokumentasikan titik sambung untuk Epic 5 (output web) dan slot `Pinned` instruksi skill untuk Epic 6 di `docs/`."
+verify = "Tes JVM: output `shell_read_file` 200 KB dipotong di konteks sesuai hint dengan penanda, event log dan log aksi tetap menyimpan 200 KB. Contributor contoh `Pinned` di tes tidak pernah dipotong. Dokumen titik sambung ada di `docs/`."
+covers = ["R5"]
+after = [4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Refactor sweep"
+description = "Rapikan hasil Epic 4 dari plan dan temuan review yang ditunda; cakupan ditetapkan saat story ini dimulai dan hanya cleanup."
+verify = "Suite JVM dan build debug lulus tanpa perubahan perilaku; daftar temuan yang ditunda tercatat selesai atau dipindah ke ticket baru."
+covers = []
+after = [1, 2, 3, 4, 5]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 7
+type = "story"
+title = "APK Epic 4 bertanda tangan lolos uji dua key gratis di HP"
+description = "Terbitkan APK bertanda tangan dari tag `main`, satu rilis bersama 3.9, dan jalankan penerimaan pemilik di Samsung `SM-S731B` dengan dua key gratis."
+verify = "Pemilik menyiapkan dua key gratis; key pertama dibuat habis (mis. key OpenRouter dengan batas kredit 0 yang membalas 402). Tugas agent di chat proyek selesai di provider kedua dengan baris perpindahan terlihat, model tanpa tools tidak dipakai, layar provider menampilkan status dan sisa kuota, dan percakapan panjang tetap terjawab. Hasil dicatat di plan dengan versi APK."
+covers = ["R1", "R2", "R3", "R4"]
+after = [6]
+hitl = true
+risk = "medium"

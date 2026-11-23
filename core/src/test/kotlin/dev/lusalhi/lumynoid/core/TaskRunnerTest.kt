@@ -909,12 +909,118 @@ class TaskRunnerTest {
     }
 
     @Test
+    fun declineKeepsCompletedResultsAndRequestsOnlyOneTextAlternative() = runnerTest { scope ->
+        val log = InMemoryEvents()
+        val read = FixtureTool("shell_read_fixture") { _, _ -> ToolOutcome("original contents") }
+        val replace = FixtureTool("shell_replace_fixture", RiskAssessment.DESTRUCTIVE) { _, _ ->
+            error("Declined tool executed")
+        }
+        val skipped = FixtureTool("shell_skip_fixture") { _, _ -> error("Later tool executed") }
+        val requests = mutableListOf<LlmRequest>()
+        val llm = LlmPort { req ->
+            requests += req
+            if (requests.size == 1) {
+                flowOf(
+                    LlmChunk.ToolCallDelta(0, read.name, "{}"),
+                    LlmChunk.ToolCallDelta(1, replace.name, "{}"),
+                    LlmChunk.ToolCallDelta(2, skipped.name, "{}"),
+                    LlmChunk.Done,
+                )
+            } else {
+                assertEquals(ApprovalResolution.DENIED, log.state.value.filterIsInstance<TaskEvent.ApprovalResolved>().single().decision)
+                flowOf(LlmChunk.TextDelta("I can write a separate draft."), LlmChunk.Done)
+            }
+        }
+        val runner = runnerFor(llm, log, scope, ToolRegistry(listOf(ToolProvider { listOf(read, replace, skipped) })))
+        runner.submit(request)
+        runCurrent()
+        val approval = log.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval
+        assertTrue(runner.resolve(approval.id, ApprovalDecision.DENY))
+        assertFalse(runner.resolve(approval.id, ApprovalDecision.DENY))
+        runCurrent()
+
+        assertEquals(2, requests.size)
+        val followUp = requests.last()
+        assertTrue(followUp.tools.isEmpty())
+        val callIds = followUp.messages.single { it.toolCalls.isNotEmpty() }.toolCalls.map { it.id }
+        val outcomes = followUp.messages.filter { it.role == Role.TOOL }
+        assertEquals(callIds, outcomes.map { it.toolCallId })
+        assertEquals("original contents", outcomes[0].content)
+        assertTrue(outcomes[1].content.contains("declined") && outcomes[1].content.contains("not executed"))
+        assertTrue(outcomes[2].content.contains("skipped") && outcomes[2].content.contains("not executed"))
+        assertEquals(callIds[0], log.state.value.filterIsInstance<TaskEvent.ToolResult>().single().callId)
+        assertEquals(1, log.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().size)
+        assertEquals("I can write a separate draft.", log.state.value.filterIsInstance<TaskEvent.AssistantMessage>().single().text)
+        assertIs<TaskEvent.TaskFinished>(log.state.value.last())
+    }
+
+    @Test
+    fun unusableDeclineRepliesKeepTheDeclineNoticeWithoutRetry() = runnerTest { scope ->
+        val partial = LlmChunk.TextDelta("Unconfirmed text")
+        val unusableReplies = listOf(
+            listOf(LlmChunk.TextDelta(" "), LlmChunk.Done),
+            listOf(partial),
+            listOf(partial, LlmChunk.Failed(LlmError.Network)),
+            listOf(partial, LlmChunk.ToolCallDelta(0, "web_fixture_lookup", "{}"), LlmChunk.Done),
+        )
+        for (reply in unusableReplies) {
+            val log = InMemoryEvents()
+            val tool = FixtureTool(risk = RiskAssessment.DESTRUCTIVE) { _, _ -> error("Unexpected dispatch") }
+            var modelCalls = 0
+            val llm = LlmPort { req ->
+                modelCalls++
+                if (req.tools.isEmpty()) flow { reply.forEach { emit(it) } } else toolReply(tool).stream(req)
+            }
+            val runner = runnerFor(llm, log, scope, registryFor(tool))
+            runner.submit(request)
+            runCurrent()
+            val approval = log.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval
+            assertTrue(runner.resolve(approval.id, ApprovalDecision.DENY))
+            runCurrent()
+
+            assertEquals(2, modelCalls)
+            assertEquals(1, log.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().size)
+            assertTrue(log.state.value.none { it is TaskEvent.AssistantMessage || it is TaskEvent.LlmRetry || it is TaskEvent.ToolResult })
+            assertEquals(FailureReason.APPROVAL_DENIED, assertIs<TaskEvent.TaskFailed>(log.state.value.last()).reason)
+        }
+    }
+
+    @Test
+    fun stopCancelsAnInFlightDeclineReplyWithoutExposingPartialText() = runnerTest { scope ->
+        val log = InMemoryEvents()
+        val tool = FixtureTool(risk = RiskAssessment.DESTRUCTIVE) { _, _ -> error("Unexpected dispatch") }
+        val textReceived = CompletableDeferred<Unit>()
+        val llm = LlmPort { req ->
+            if (req.tools.isNotEmpty()) toolReply(tool).stream(req) else flow {
+                emit(LlmChunk.TextDelta("Unconfirmed text"))
+                textReceived.complete(Unit)
+                awaitCancellation()
+            }
+        }
+        val runner = runnerFor(llm, log, scope, registryFor(tool))
+        val id = runner.submit(request)
+        runCurrent()
+        val approval = log.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval
+        assertTrue(runner.resolve(approval.id, ApprovalDecision.DENY))
+        runCurrent()
+        assertTrue(textReceived.isCompleted)
+        assertEquals(null, runner.live.value)
+        runner.cancel(id)
+        runCurrent()
+
+        assertIs<TaskEvent.TaskCancelled>(log.state.value.last())
+        assertTrue(log.state.value.none { it is TaskEvent.AssistantMessage || it is TaskEvent.ToolResult })
+    }
+
+    @Test
     fun denialExpiryAndCancellationResolvePendingRequestsExactlyOnceAcrossWallClockChanges() = runnerTest { scope ->
         val events = InMemoryEvents()
         val tool = FixtureTool(risk = RiskAssessment.EGRESS) { _, _ -> error("Unexpected dispatch") }
         var wallTime = 2_000L
+        var modelCalls = 0
+        val llm = LlmPort { req -> modelCalls++; toolReply(tool).stream(req) }
         val runner = TaskRunner(
-            toolReply(tool), events, scope, Clock { wallTime }, Counter(), registryFor(tool),
+            llm, events, scope, Clock { wallTime }, Counter(), registryFor(tool),
             elapsedMillis = { testScheduler.currentTime },
             resolveWorkspace = fixtureWorkspace,
         )
@@ -950,8 +1056,11 @@ class TaskRunnerTest {
         assertTrue(runner.pendingApprovals.value.isEmpty())
         assertEquals(listOf(ApprovalResolution.DENIED, ApprovalResolution.CANCELLED, ApprovalResolution.EXPIRED), decisions.map { it.decision })
         assertEquals(listOf(deniedId, cancelledId, expiredId), decisions.map { it.approvalId })
-        val failures = events.state.value.filterIsInstance<TaskEvent.TaskFailed>()
-        assertEquals(listOf(FailureReason.APPROVAL_DENIED, FailureReason.APPROVAL_EXPIRED), failures.map { it.reason })
+        val failure = events.state.value.filterIsInstance<TaskEvent.TaskFailed>().single()
+        assertEquals(expired, failure.taskId)
+        assertEquals(FailureReason.APPROVAL_EXPIRED, failure.reason)
+        assertEquals(denied, events.state.value.filterIsInstance<TaskEvent.AssistantMessage>().single().taskId)
+        assertEquals(4, modelCalls)
         assertEquals(cancelled, events.state.value.filterIsInstance<TaskEvent.TaskCancelled>().single().taskId)
         assertEquals(emptySet(), runner.pendingConversations.value)
         assertTrue(events.state.value.none { it is TaskEvent.ToolResult })
@@ -1009,7 +1118,12 @@ class TaskRunnerTest {
             }
         }
         val tool = FixtureTool(risk = RiskAssessment.EGRESS) { _, _ -> error("Unexpected dispatch") }
-        val runner = TaskRunner(toolReply(tool), events, scope, Clock { 1L }, Counter(), registryFor(tool), resolveWorkspace = fixtureWorkspace)
+        var modelCalls = 0
+        val llm = LlmPort { req -> modelCalls++; toolReply(tool).stream(req) }
+        val runner = TaskRunner(
+            llm, events, scope, Clock { 1L }, Counter(), registryFor(tool),
+            maxLlmCalls = { 1 }, resolveWorkspace = fixtureWorkspace,
+        )
         runner.submit(request)
         runCurrent()
         val approvalId = log.state.value.filterIsInstance<TaskEvent.ApprovalRequested>().single().approval.id
@@ -1021,6 +1135,7 @@ class TaskRunnerTest {
         advanceTimeBy(1_000L)
         runCurrent()
 
+        assertEquals(1, modelCalls)
         assertEquals(2, terminalAttempts)
         assertEquals(emptySet(), runner.pendingConversations.value)
         assertEquals(ApprovalResolution.DENIED, log.state.value.filterIsInstance<TaskEvent.ApprovalResolved>().single().decision)
@@ -1497,6 +1612,10 @@ class TaskRunnerTest {
         )
         events.seed("requested", user("requested"), toolRequest("requested"))
         events.seed(
+            "decline", user("decline"), toolRequest("decline"),
+            TaskEvent.ApprovalResolved("declined", "decline", 0L, "approval", call.id, ApprovalResolution.DENIED),
+        )
+        events.seed(
             "result", user("result"), toolRequest("result"),
             TaskEvent.ToolResult("tool-result", "result", 0L, call.id, ToolOutcome("stored")),
         )
@@ -1518,8 +1637,11 @@ class TaskRunnerTest {
 
         val added = events.state.value.drop(before)
         assertTrue(added.all { it is TaskEvent.TaskFailed && it.reason == FailureReason.INTERRUPTED })
-        assertEquals(setOf("queued-only", "user-only", "answered", "requested", "result", "no-events"), added.map { it.taskId }.toSet())
-        assertEquals(6, added.size)
+        assertEquals(7, added.size)
+        assertEquals(
+            setOf("queued-only", "user-only", "answered", "requested", "decline", "result", "no-events"),
+            added.map { it.taskId }.toSet(),
+        )
         assertEquals(0, modelCalls)
         assertEquals(0, toolCalls)
     }

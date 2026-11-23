@@ -25,17 +25,6 @@ covers = ["R13"]
 after = [{ epic = 2, needs = "workspace, artefak/log, dan APK bertanda tangan Epic 2 sebagai baseline migrasi" }]
 
 [[epic]]
-id = 3
-slug = "epic-tugas-terjadwal"
-title = "Tugas terjadwal jalan tepat waktu saat app tertutup"
-description = "Pengguna membuat tugas sekali atau berulang lewat chat atau layar tugas; exact alarm memanggil TaskRunner tanpa mengubah loop-nya. Hasil muncul sebagai notifikasi dan di percakapan. Epic ini mengikat jadwal serta hasilnya ke proyek asal dan memasang pembatalan ketika proyek dihapus. Onboarding pengecualian baterai dan panduan autostart tersedia; uji 7 hari di Xiaomi dan Samsung lulus."
-covers = ["R6"]
-after = [
-  { epic = 2, needs = "loop tool call dan gerbang konfirmasi di TaskRunner, agar tugas agent berjalan di AgentService tanpa layar chat terbuka" },
-  { epic = 8, needs = "keanggotaan proyek dan batas penghapusan untuk tugas terjadwal" },
-]
-
-[[epic]]
 id = 4
 slug = "epic-hemat-kuota"
 title = "Tugas tetap selesai dengan kuota API gratis"
@@ -44,6 +33,18 @@ covers = ["R12"]
 after = [
   { epic = 2, needs = "loop agent tempat rotasi, filter model, dan pemangkasan konteks dipasang" },
   { epic = 8, needs = "sumber instruksi proyek dan batas riwayat per percakapan untuk pemangkasan" },
+]
+
+[[epic]]
+id = 3
+slug = "epic-tugas-terjadwal"
+title = "Tugas terjadwal jalan tepat waktu saat app tertutup"
+description = "Pengguna membuat tugas sekali atau berulang lewat chat atau layar tugas; exact alarm memanggil TaskRunner tanpa mengubah loop-nya. Hasil muncul sebagai notifikasi dan di percakapan. Epic ini mengikat jadwal serta hasilnya ke proyek asal dan memasang pembatalan ketika proyek dihapus. Onboarding pengecualian baterai dan panduan autostart tersedia; satu tugas berjalan tepat waktu dengan app tertutup di HP pemilik."
+covers = ["R6"]
+after = [
+  { epic = 2, needs = "loop tool call dan gerbang konfirmasi di TaskRunner, termasuk balasan teks setelah Decline (2.13), agar tugas agent memakai perilaku yang sama tanpa layar chat terbuka" },
+  { epic = 8, needs = "keanggotaan proyek dan batas penghapusan untuk tugas terjadwal" },
+  { epic = 4, needs = "fallback tanpa tool (4.2) sebelum rilis 3.9, karena chat biasa membawa tool schedule_*" },
 ]
 
 [[epic]]
@@ -76,7 +77,7 @@ description = "Penguji awam menyelesaikan chat, tugas lewat tool coding di proye
 covers = ["R1"]
 after = [
   { epic = 8, needs = "Projects lulus uji migrasi dan alur dua chat untuk sesi penguji awam" },
-  { epic = 3, needs = "tugas terjadwal yang lulus uji 7 hari, untuk sesi penguji awam" },
+  { epic = 3, needs = "tugas terjadwal yang berjalan dengan app tertutup, untuk sesi penguji awam" },
   { epic = 4, needs = "rotasi kuota, agar penguji awam bisa memakai key gratis" },
   { epic = 5, needs = "browsing web, untuk sesi penguji awam" },
   { epic = 6, needs = "skill pihak ketiga, untuk set fitur v1 yang lengkap sebelum rilis v1" },

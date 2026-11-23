@@ -2,7 +2,7 @@
 
 Lumynoid is an Android app for chatting with an AI model using your own API key. There is no Lumynoid account and no Lumynoid server: the app talks directly to the endpoint you choose (an OpenAI-compatible provider or Anthropic).
 
-> Status: early development. The first releases are pre-releases (`v0.x`).
+> Status: early development. Releases are pre-releases (`v0.x`); the latest is `v0.4.1` (Projects). Scheduled tasks and quota saving (provider fallback, context trimming) are in progress and will ship together in one release.
 
 ## Install
 
@@ -24,13 +24,15 @@ On Android 13+, Lumynoid asks for notification permission the first time you ope
 
 On arm64, coding chat can create and read workspace files, install the bundled npm package offline, and run the built-in JSON formatter. Activity cards show each operation and its result.
 
-Open **Conversations → Projects → New Project**. Chats in the same project share files and installed packages, but not history or logs. **New Chat** outside Projects still answers without coding tools. The in-place upgrade from signed `v0.3.1` still awaits a physical handset check. If you are testing that upgrade, install the new signed APK over `v0.3.1` without clearing app data. Chats with workspace files or installed packages should become separate projects; other chats should stay ordinary.
+Open **Conversations → Projects → New Project**. Chats in the same project share files and installed packages, but not history or logs. **New Chat** outside Projects still answers without coding tools. The in-place upgrade from signed `v0.3.1` to signed `v0.4.1` passed on a physical handset. For that upgrade, install the new signed APK over `v0.3.1` without clearing app data. Chats with workspace files or installed packages become separate projects; other chats stay ordinary.
 
 Open **Instructions** on a project to set or clear shared instructions (up to 2,000 Unicode characters). Running tasks keep the instructions they started with, including after approval or retry. Changes apply when the next task starts. Ordinary chats do not use project instructions.
 
 The configured model must support structured tool calls on arm64; the provider connection test only verifies text chat.
 
 The first Linux runtime download and each file replacement require approval in chat. If you enabled notifications, tapping the approval notification takes you to its card; it cannot approve or decline the action. Leaving chat without killing the process keeps the request available. After process death, unfinished work is marked interrupted and is not replayed.
+
+**Decline** blocks the requested action and any remaining actions in the same batch. The agent can make one text-only reply to suggest an alternative; the decision stays visible in **Log** even if no reply is available. **Stop** cancels the task without asking for an alternative.
 
 Open **Log** in chat to see tool targets, approvals and the full stored output, including after relaunch. A tool's own capture limit still applies.
 
@@ -78,7 +80,7 @@ The official signed upgrade is still a separate check in the
 
 ## Checks that gate every change
 
-CI runs on every push and pull request, and these gates fail the build:
+CI runs on every pull request and on pushes to `main`, and these gates fail the build:
 
 | Gate | What it enforces | Run it locally |
 | --- | --- | --- |
@@ -87,6 +89,15 @@ CI runs on every push and pull request, and these gates fail the build:
 | Schema versions | A pull request may not edit an exported Room schema, reuse a version already on the base branch, or claim a version another open pull request claims (AD-19) | `python3 .github/scripts/check_schema_claims.py --base origin/main` |
 | Release tags | A `v*` tag must be on `main`, equal `versionName`, raise `versionCode` over every earlier tag and keep Room schemas on main's migration line; the signed APK must match the committed certificate fingerprint (AD-25) | `python3 .github/scripts/check_release.py --self-test` |
 | Persisted names | Every persisted subtype and enum entry has an explicit snake_case `@SerialName` (AD-19) | `./gradlew :core:test` |
+
+## Contributing
+
+Work is planned as tickets under `_bmad-output/initiative-lumynoid/tickets/`: each epic folder has a `tickets/tickets.toml` listing its stories in build order, and each story's plan file carries its status. Several people can build different epics at the same time:
+
+- Branch from the latest `main`, one short-lived branch per story, and open a pull request to `main`. CI must pass before merging.
+- Rebase on `main` often and right before merging. Parallel epics touch the same core files (`TaskRunner.kt`, `Ports.kt`, `TaskEvent.kt`, `LumynoidApp.kt`), so small pull requests keep conflicts small.
+- Room migrations: the first pull request to merge takes the next database version; the other rebases and renumbers its migration. The schema-version gate rejects a pull request that claims a version already on `main` or claimed by another open pull request.
+- Merging to `main` does not release anything. Signed APKs are built only from `v*` tags on `main` by the maintainer (see [docs/release.md](docs/release.md)).
 
 ## License
 

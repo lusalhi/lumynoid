@@ -8,6 +8,7 @@ companions:
   - _bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md
 after: []
 refined: true
+status: done
 risk: high
 ---
 
@@ -60,3 +61,4 @@ Pengguna bisa memulai chat baru untuk melanjutkan proyek yang sama, serta member
 - Decision: 2026-11-22 — AD-27 menetapkan kepemilikan, isolasi konteks, penghapusan yang bisa dilanjutkan, dan upgrade. Epic 8 tidak menunggu penjadwalan atau pemangkasan; kedua epic itu mengadopsi kontrak saat gilirannya.
 - Decision: 2026-11-22 — Story yang menguji upgrade bergantung pada Story 2.12 sebagai baseline rilis, bukan pada penuntasan seluruh spike isolasi Epic 2.
 - Decision: 2026-11-22 — Breakdown 8.1–8.8 disetujui. Tracer 8.1 membuktikan dua chat berbagi file dan paket tanpa mencampur riwayat; proyek lain dan chat biasa tidak mendapat akses. Migrasi 8.2 menyusul untuk membuktikan upgrade. Preview dan instruksi (8.3–8.4) dapat berjalan paralel setelah 8.2. Refactor sweep (8.7) mendahului penerimaan APK bertanda tangan (8.8).
+- Decision: 2026-11-23 — Epic Projects ditutup setelah [APK resmi v0.4.1](https://github.com/lusalhi/lumynoid/releases/tag/v0.4.1) terbit dan pemilik melaporkan empat skenario penerimaan 8.8 lulus di Samsung API 37: upgrade tanpa reset, dua chat dengan scope terpisah, snapshot instruksi saat approval, dan pemulihan penghapusan proyek. [Bukti penerimaan](tickets/story-apk-projects-bertanda-tangan-lulus-uji-upgrade-dan-dua-perca-plan.md#verification). Perubahan perilaku Decline tetap menjadi Story 2.13 di Epic 2, bukan syarat tambahan bagi Projects.

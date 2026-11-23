@@ -368,20 +368,26 @@ class TaskRunner(
         waiting.expiryJob?.cancel()
         val decision = resolution.decision
         when (decision) {
-            ApprovalResolution.APPROVED -> {
-                synchronized(stateLock) {
-                    task.waiting = null
-                    approved.addLast(Work(task, waiting))
-                    runnable++
-                    updatePending()
-                }
-                wake.trySend(Unit)
+            ApprovalResolution.APPROVED -> enqueueContinuation(waiting, approved)
+            ApprovalResolution.DENIED -> {
+                if (task.llmCalls < task.maxLlmCalls) enqueueContinuation(waiting, queue)
+                else closeWaiting(task, failedEvent(task, FailureReason.APPROVAL_DENIED))
             }
-            ApprovalResolution.DENIED -> closeWaiting(task, failedEvent(task, FailureReason.APPROVAL_DENIED))
             ApprovalResolution.EXPIRED -> closeWaiting(task, failedEvent(task, FailureReason.APPROVAL_EXPIRED))
             ApprovalResolution.CANCELLED -> closeWaiting(task, cancelledEvent(task))
         }
         decision
+    }
+
+    private fun enqueueContinuation(waiting: WaitingApproval, destination: ArrayDeque<Work>) {
+        val task = waiting.task
+        synchronized(stateLock) {
+            task.waiting = null
+            destination.addLast(Work(task, waiting))
+            runnable++
+            updatePending()
+        }
+        wake.trySend(Unit)
     }
 
     private suspend fun closeWaiting(task: Task, event: TaskEvent) {
@@ -425,9 +431,12 @@ class TaskRunner(
             when (chunk) {
                 is LlmChunk.TextDelta -> {
                     text.append(chunk.text)
-                    _live.value = LiveAnswer(task.taskId, task.request.conversationId, text.toString())
+                    if (!request.requireCompleteText) {
+                        _live.value = LiveAnswer(task.taskId, task.request.conversationId, text.toString())
+                    }
                 }
                 is LlmChunk.ToolCallDelta -> {
+                    if (request.requireCompleteText) return@firstOrNull true
                     val calls = fragments ?: TreeMap<Int, ToolFragments>().also { fragments = it }
                     val call = calls.getOrPut(chunk.index, ::ToolFragments)
                     chunk.nameFragment?.let(call.name::append)
@@ -488,10 +497,15 @@ class TaskRunner(
 
     private suspend fun runSlice(work: Work): SliceResult {
         val task = work.task
-        val resumed = work.resumed?.continuation
-        if (resumed != null && resolveWorkspace(task.request.conversationId) != task.workspace) {
-            return SliceResult.Failed(FailureReason.TOOL_DENIED)
+        val waiting = work.resumed
+        if (waiting != null) {
+            val declined = waiting.resolution?.decision == ApprovalResolution.DENIED
+            if (resolveWorkspace(task.request.conversationId) != task.workspace) {
+                return SliceResult.Failed(if (declined) FailureReason.APPROVAL_DENIED else FailureReason.TOOL_DENIED)
+            }
+            if (declined) return replyAfterDecline(task, waiting.continuation.round)
         }
+        val resumed = waiting?.continuation
         val registry = resumed?.registry ?: tools.snapshot(hasWorkspace = task.context.workspaceId != null)
         var request = resumed?.request ?: ContextAssembler.assemble(
             events.history(task.request.conversationId),
@@ -593,6 +607,35 @@ class TaskRunner(
         }
     }
 
+    private suspend fun replyAfterDecline(task: Task, round: ToolRound): SliceResult {
+        val messages = buildList(1 + round.messages.size + round.calls.size - round.nextCall) {
+            add(DECLINE_INSTRUCTION)
+            addAll(round.messages)
+            for (index in round.nextCall until round.calls.size) {
+                val outcome = if (index == round.nextCall) {
+                    "The user declined this action. It was not executed."
+                } else {
+                    "This action was skipped after the user declined an earlier action in this batch. It was not executed."
+                }
+                add(LlmMessage(Role.TOOL, outcome, toolCallId = round.calls[index].call.id))
+            }
+        }
+        ensureRunnable(task)
+        task.llmCalls++
+        val reply = try {
+            readReply(task, LlmRequest(messages, requireCompleteText = true))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return SliceResult.Failed(FailureReason.APPROVAL_DENIED)
+        }
+        return if (reply.terminal == LlmChunk.Done && reply.text.isNotBlank()) {
+            SliceResult.Finished(reply.text)
+        } else {
+            SliceResult.Failed(FailureReason.APPROVAL_DENIED)
+        }
+    }
+
     private suspend fun recordToolDenial(task: Task, callId: String) =
         append(task, TaskEvent.ToolExecutionDenied(ids.next(), task.taskId, clock.nowMillis(), callId))
 
@@ -634,6 +677,11 @@ class TaskRunner(
             Role.SYSTEM,
             "Your previous tool call reply was malformed. Reply with complete calls to the available tools " +
                 "using valid JSON objects for every call's arguments, or answer in plain text.",
+        )
+        val DECLINE_INSTRUCTION = LlmMessage(
+            Role.SYSTEM,
+            "The user declined an action. Acknowledge that it was not executed and suggest a safe alternative " +
+                "in plain text. Do not call tools or claim the declined or skipped actions were performed.",
         )
     }
 }

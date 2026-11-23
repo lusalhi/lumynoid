@@ -11,7 +11,17 @@ data class LlmMessage(
     val toolCallId: String? = null,
 )
 
-data class LlmRequest(val messages: List<LlmMessage>, val tools: List<ToolDefinition> = emptyList())
+data class LlmRequest(
+    val messages: List<LlmMessage>,
+    val tools: List<ToolDefinition> = emptyList(),
+    /**
+     * Marks a text-only follow-up (the reply after Decline). The runner then suppresses live text and treats any
+     * tool-call delta as a failed reply, and adapters fail a reply the provider cut short instead of returning it.
+     * Turning earlier tool history into text for providers that reject it without tool definitions keys on an
+     * empty [tools] list, not on this flag.
+     */
+    val requireCompleteText: Boolean = false,
+)
 
 /** Errors normalised by the adapters (AD-11). They travel as [LlmChunk.Failed], never as exceptions. */
 sealed interface LlmError {

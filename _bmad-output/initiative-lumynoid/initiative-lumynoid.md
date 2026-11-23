@@ -56,7 +56,6 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 ## Done when
 
 - Penguji awam yang belum pernah melihat Lumynoid memasang APK dari GitHub Releases di HP sungguhan, mengisi API key-nya sendiri, lalu menyelesaikan satu chat biasa, satu tugas lewat tool coding di proyek, satu jawaban dari pencarian web, dan satu tugas terjadwal, tanpa melihat terminal dan tanpa membaca dokumentasi.
-- Tugas terjadwal harian berjalan tepat waktu dengan app tertutup dan layar mati, setiap hari selama 7 hari, di satu HP Xiaomi dan satu HP Samsung yang disiapkan lewat panduan di app.
 - Pada skenario uji, setiap aksi merusak, keuangan, atau pengiriman data keluar menunggu kartu konfirmasi dan tercatat di log aksi; halaman web uji berisi prompt injection tidak bisa memicu aksi tanpa konfirmasi.
 - Skill pihak ketiga berformat `SKILL.md` (acuan: Binance Agentic Wallet) terpasang dan dipakai agent sampai langkah transaksi `preview`, dan `execute` hanya jalan setelah konfirmasi.
 - Dengan dua key/provider gratis yang dikonfigurasi, tugas tetap selesai saat key pertama kena limit, dan app menampilkan sisa kuotanya.
@@ -103,7 +102,6 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Assumption: v1 dan MVP di catatan keputusan adalah rilis yang sama.
 - Assumption: Onboarding pengecualian baterai dan panduan autostart per merek (riset Rek 2) masuk v1, karena tugas terjadwal (K2) bergantung padanya.
 - Assumption: Model lokal untuk routing intent (riset Rek 5) tidak masuk v1; catatan keputusan tidak menyebutnya.
-- Assumption: Uji daya tahan tugas terjadwal 7 hari berturut-turut; riset hanya menyatakan daya tahan di Xiaomi/Samsung harus diuji sendiri, angka 7 hari usulan PO.
 - Assumption: minSdk 29, targetSdk 37, ABI rilis arm64-v8a (architecture, Stack); dikonfirmasi di story 1.3 (rilis bertanda tangan) sebelum rilis pertama.
 - Open question: Ukuran rootfs rilis, sumber unduhan, dan siklus hidup PRoot produksi di HP target. Menunggu Story 2.5. Spike 2.1 sudah membuktikan instalasi paket npm lokal di Samsung API 37.
 - Open question: Model gratis mana yang andal untuk tool calling? Belum ada benchmark; perlu uji sendiri. Angka free tier Groq/Gemini hanya terlihat di console [38][61]. Menunggu: R12 dan preset provider di R2.
@@ -130,3 +128,5 @@ Orang awam bisa menyuruh asisten AI di HP-nya sendiri, memakai kuota API milikny
 - Decision: 2026-11-21 — Replan Epic 2 setelah PRoot lulus di Samsung API 37. Tahap awal R4 memakai satu APK dengan folder proyek biasa dan tool coding yang ditentukan aplikasi. Eksekusi kode pihak ketiga menunggu bukti perlindungan data privat dan egress. Epic skill memakai lifecycle userland dan gerbang tool dari Epic 2, lalu membuktikan perlindungan CLI skill sebelum mengaktifkannya. [Epic 2](tickets/epic-agent-shell/epic-agent-shell.md)
 - Decision: 2026-11-21 — Desain fitur Projects disetujui: Project memiliki workspace dan instruksi bersama, Conversation memiliki konteks dan log sendiri. Chat biasa tetap ada. Implementasi terpisah dari penerimaan APK Epic 2 di Story 2.12.
 - Decision: 2026-11-22 — Replan memasukkan Projects ke v1 sebagai R13 (K13). Pemilik menyetujui Epic 8 setelah rilis Epic 2 dan sebelum Tugas Terjadwal, Hemat Kuota, dan Rilis Publik. R1–R12, ID epic yang lama, dan Story 2.12 tetap.
+- Decision: 2026-11-23 — Pemilik menghapus uji daya tahan 7 hari tugas terjadwal di Xiaomi dan Samsung dari Done when (sebelumnya Assumption usulan PO). Ketepatan waktu di HP yang agresif mematikan app tidak dibuktikan di v1; Epic 3 cukup membuktikan satu tugas tepat waktu dengan app tertutup di HP pemilik. Epic 3 dan Epic 4 dikerjakan paralel. [Epic 3](tickets/epic-tugas-terjadwal/epic-tugas-terjadwal.md)
+- Decision: 2026-11-23 — Epic 3 dan Epic 4 dipecah jadi story (3.1–3.9, 4.1–4.7) dan keduanya `refined`. Di urutan build Epic 4 kini sebelum Epic 3 karena rilis 3.9 menunggu fallback tanpa tool dari 4.2; keduanya tetap dikerjakan paralel dan dirilis dalam satu APK (3.9 bersama 4.7).

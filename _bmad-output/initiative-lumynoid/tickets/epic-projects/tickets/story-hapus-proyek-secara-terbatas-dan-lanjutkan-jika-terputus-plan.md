@@ -3,7 +3,7 @@ title: 'Hapus proyek secara terbatas dan lanjutkan jika terputus'
 type: feature
 ticket: '6'
 created: '2026-11-22'
-status: built
+status: done
 baseline_revision: 'bbca0459ba482bd1de78c7d04294bcaa96ab49fb'
 route: full
 route_source: auto
