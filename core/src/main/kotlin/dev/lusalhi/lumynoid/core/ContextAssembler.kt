@@ -2,10 +2,11 @@ package dev.lusalhi.lumynoid.core
 
 /**
  * Naive context (AD-13): earlier answered turns, then the current turn. Tool rounds contribute
- * only as complete assistant/result groups. No trimming, budget or system prompt.
+ * only as complete assistant/result groups. No trimming or budget; nonblank project instructions
+ * lead as one system message, sent verbatim.
  */
 object ContextAssembler {
-    fun assemble(history: List<TaskEvent>, taskId: String): LlmRequest {
+    fun assemble(history: List<TaskEvent>, taskId: String, instructions: String? = null): LlmRequest {
         val turns = linkedMapOf<String, Turn>()
         var reachedCurrent = false
         for (event in history) {
@@ -18,6 +19,7 @@ object ContextAssembler {
             }
         }
         val messages = buildList {
+            instructions?.takeIf { it.isNotBlank() }?.let { add(LlmMessage(Role.SYSTEM, it)) }
             for ((id, turn) in turns) {
                 val current = id == taskId
                 val answer = turn.answer

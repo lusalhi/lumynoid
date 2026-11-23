@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="projects_check_name">Lumynoid Projects Test</string>
+    <string name="projects_check_kicker">EPIC 8 / DIAGNOSTIK OFFLINE</string>
+    <string name="projects_check_intro">Uji Projects dengan data sementara. Tidak perlu API key dan tidak menyentuh data Lumynoid utama.</string>
+    <string name="projects_check_run">Jalankan semua tes</string>
+    <string name="projects_check_summary">%1$d lulus · %2$d gagal · %3$d skenario</string>
+    <string name="projects_check_waiting">Menunggu</string>
+    <string name="projects_check_running">Sedang diuji</string>
+    <string name="projects_check_passed">Lulus</string>
+    <string name="projects_check_failed">Gagal</string>
+    <string name="projects_check_manual">Perlu uji manual</string>
+    <string name="projects_check_shared">8.1 · File dan paket lintas chat</string>
+    <string name="projects_check_upgrade">8.2 · Migrasi data Epic 2</string>
+    <string name="projects_check_preview">8.3 · Pratinjau offline dan batas akses</string>
+    <string name="projects_check_instructions">8.4 · Instruksi saat persetujuan</string>
+    <string name="projects_check_chat_delete">8.5 · Hapus satu percakapan</string>
+    <string name="projects_check_project_delete">8.6 · Hapus dan pulihkan proyek</string>
+    <string name="projects_check_regression">8.7 · Regresi 8.1–8.6</string>
+    <string name="projects_check_integration">8.8 · Alur upgrade dan Projects</string>
+    <string name="projects_check_fixture_only">Ringkasan suite fixture, bukan uji APK rilis.</string>
+    <string name="projects_check_signed">8.8 · Upgrade APK resmi</string>
+    <string name="projects_check_signed_note">Pasang APK Projects bertanda tangan di atas v0.3.1 resmi tanpa menghapus data, lalu uji di HP fisik.</string>
+</resources>

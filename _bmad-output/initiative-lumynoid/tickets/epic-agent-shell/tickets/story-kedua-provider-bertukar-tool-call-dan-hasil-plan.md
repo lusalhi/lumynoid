@@ -3,7 +3,7 @@ title: 'Kedua provider bertukar tool call dan hasil'
 type: feature
 ticket: 3
 created: '2026-11-20'
-status: built
+status: done
 baseline_revision: '6e2aadfc0116f6447bc23a0187ffa26fa839db26'
 route: full
 route_source: auto

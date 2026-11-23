@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        (application as LumynoidApp).graph.adoptLegacyWorkspaces()
         viewModel.connectAgent()
     }
 
@@ -148,15 +149,15 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
             // The chat's saveable state (its unsent draft) survives a trip to the action log and back.
             val chatSaveable = rememberSaveableStateHolder()
             var selected by remember(state.conversationId, state.screen, state.approvalFocus) {
-                mutableStateOf<ArtifactIdentity?>(null)
+                mutableStateOf<IndexedValue<ArtifactIdentity>?>(null)
             }
             val openArtifact: (ArtifactIdentity) -> Unit = { artifact ->
-                if (artifact.isHtml()) {
-                    artifact.publishedIndex(state.conversationId, state.events)?.let { index ->
+                artifact.publishedIndex(state.conversationId, state.events)?.let { index ->
+                    if (artifact.isHtml()) {
                         context.startActivity(ArtifactHtmlActivity.intent(context, artifact, index))
+                    } else {
+                        selected = IndexedValue(index, artifact)
                     }
-                } else if (artifact.belongsTo(state.conversationId, state.events)) {
-                    selected = artifact
                 }
             }
             if (state.screen == Screen.CHAT) {
@@ -184,16 +185,16 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
                     )
                 }
             }
-            val artifact = selected
-            val stillPublished = remember(artifact, state.conversationId, state.events) {
-                artifact?.belongsTo(state.conversationId, state.events) == true
+            val selection = selected
+            val stillPublished = remember(selection, state.conversationId, state.events) {
+                selection?.let { it.value.publishedIndex(state.conversationId, state.events) == it.index } == true
             }
-            if (artifact != null && stillPublished) {
-                ArtifactTextDialog(artifact, onClose = { selected = null })
+            if (selection != null && stillPublished) {
+                ArtifactTextDialog(selection.value, selection.index, onClose = { selected = null })
             }
         }
         Screen.CONVERSATIONS -> ConversationListScreen(
-            conversations = state.conversations,
+            conversations = remember(state.conversations) { state.conversations.filter { it.projectId == null } },
             openId = state.conversationId,
             pendingIds = state.pendingConversationIds,
             providerConfigured = state.providerConfigured,
@@ -203,7 +204,44 @@ private fun Screens(state: ChatState, viewModel: ChatViewModel, providers: Provi
             onRename = viewModel::renameConversation,
             onDelete = viewModel::deleteConversation,
             onBack = viewModel::closeConversations,
+            onProjects = viewModel::openProjects,
         )
+        Screen.PROJECTS -> ProjectsScreen(
+            projects = state.projects,
+            conversations = state.conversations,
+            pendingIds = state.pendingConversationIds,
+            deletingIds = state.deletingProjectIds,
+            onOpen = viewModel::openProject,
+            onCreate = viewModel::createProject,
+            onDelete = viewModel::deleteProject,
+            onBack = viewModel::openConversations,
+        )
+        Screen.PROJECT -> {
+            val project = state.projectPage
+            if (project == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else {
+                ConversationListScreen(
+                    conversations = remember(state.conversations, project.id) {
+                        state.conversations.filter { it.projectId == project.id }
+                    },
+                    openId = state.conversationId,
+                    pendingIds = state.pendingConversationIds,
+                    providerConfigured = state.providerConfigured,
+                    onOpenProvider = viewModel::openProvider,
+                    onOpen = viewModel::openConversation,
+                    onNew = { viewModel.newProjectConversation(project.id) },
+                    onRename = viewModel::renameConversation,
+                    onDelete = viewModel::deleteConversation,
+                    onBack = viewModel::openProjects,
+                    projectName = project.name,
+                    projectInstructions = project.instructions,
+                    onSaveInstructions = { instructions, onComplete ->
+                        viewModel.saveProjectInstructions(project.id, instructions, onComplete)
+                    },
+                )
+            }
+        }
     }
 }
 

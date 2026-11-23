@@ -3,7 +3,7 @@ title: 'TaskRunner menuntaskan giliran dengan tool terstruktur'
 type: feature
 ticket: 2
 created: '2026-11-20'
-status: built
+status: done
 baseline_revision: 9a8bf036e8e8c4d945e58c1bf2a397cc2d1b5292
 route: full
 route_source: auto

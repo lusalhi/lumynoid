@@ -2,6 +2,7 @@ package dev.lusalhi.lumynoid.app
 
 import android.content.ClipboardManager
 import android.content.Intent
+import android.database.sqlite.SQLiteDatabase
 import android.os.Build
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
@@ -16,6 +17,7 @@ import dev.lusalhi.lumynoid.core.ToolArtifact
 import dev.lusalhi.lumynoid.core.ToolCall
 import dev.lusalhi.lumynoid.core.ToolOutcome
 import dev.lusalhi.lumynoid.core.UiText
+import dev.lusalhi.lumynoid.userland.UserlandRuntime
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.SocketTimeoutException
@@ -41,7 +43,7 @@ class PreviewNavigationTest {
         val graph = app.graph
         val data = graph.data
         val notes = "Native preview text marker\n" + "αbeta".repeat(2000) + "\nEnd marker"
-        val conversationId = runBlocking {
+        val (html, otherConversation, otherWorkspace) = runBlocking {
             // The connected test runs on a disposable install. No LLM request is sent.
             if (graph.providerAdmin.overview().active == null) {
                 assertEquals(ProviderSaveResult.SAVED, graph.providerAdmin.save(ProviderDraft(
@@ -49,13 +51,24 @@ class PreviewNavigationTest {
                     apiKey = "local-fixture", model = "preview-fixture", makeActive = true,
                 )))
             }
+            val other = checkNotNull(data.projects.create("Unrelated preview project"))
+            val otherId = data.conversations.create("Unrelated preview chat", other.id).id
+            app.filesDir.resolve("workspaces/${other.workspaceId}").apply {
+                mkdirs()
+                resolve("index.html").writeText("<h1>Unrelated workspace marker</h1>")
+            }
             val id = data.conversations.create("Offline preview fixture").id
+            val resultId = UUID.randomUUID().toString()
             val taskId = UUID.randomUUID().toString()
             val at = System.currentTimeMillis()
             fun eventId() = UUID.randomUUID().toString()
             val intro = "Published two preview files."
             val call = TaskEvent.RequestedToolCall(ToolCall("publish", "shell_create_file", "{}"), UiText("shell_create_file"))
-            val files = listOf(ToolArtifact("notes.txt", "text/plain"), ToolArtifact("index.html", "text/html"))
+            val files = listOf(
+                ToolArtifact("notes.txt", "text/plain"),
+                ToolArtifact("index.html", "text/html"),
+                ToolArtifact("../$id-outside.html", "text/html"),
+            )
             val directory = app.filesDir.resolve("workspaces/$id")
             directory.mkdirs()
             directory.resolve("notes.txt").writeText(notes)
@@ -69,14 +82,26 @@ class PreviewNavigationTest {
                     fetch('$remote/request').catch(() => {});
                 </script>
             """.trimIndent())
-            data.events.createTask(taskId, TaskRequest(Origin.User, id, id, intro), at)
+            directory.parentFile!!.resolve("$id-outside.html").writeText("<h1>Outside workspace marker</h1>")
+            data.events.createTask(taskId, TaskRequest(Origin.User, id, intro), at, id)
             data.events.append(id, TaskEvent.ToolCallRequested(eventId(), taskId, at, "", listOf(call)))
-            data.events.append(id, TaskEvent.ToolResult(eventId(), taskId, at + 1, "publish", ToolOutcome(intro, artifacts = files, succeeded = true)))
+            data.events.append(id, TaskEvent.ToolResult(resultId, taskId, at + 1, "publish", ToolOutcome(intro, artifacts = files, succeeded = true)))
             data.events.append(id, TaskEvent.TaskFinished(eventId(), taskId, at + 2))
-            id
+            // Seed the persisted state left by the Epic 2 schema migration before filesystem adoption.
+            SQLiteDatabase.openDatabase(app.getDatabasePath("lumynoid.db").path, null, SQLiteDatabase.OPEN_READWRITE).use {
+                it.execSQL("UPDATE conversation SET legacy_workspace_pending = 1 WHERE id = ?", arrayOf(id))
+            }
+            Triple(ArtifactIdentity(id, resultId, files[1].path, files[1].mediaType), otherId, other.workspaceId)
+        }
+        assertUnavailable(html, 1)
+        runBlocking {
+            data.adoptLegacyWorkspaces("Untitled Project") { UserlandRuntime.legacyWorkspaceHasData(app, it) }
         }
         val activity = instrumentation.startActivitySync(Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         try {
+            assertUnavailable(html.copy(conversationId = otherConversation), 1)
+            await("notes.txt")
+            assertUnavailable(html, 2)
             tap("notes.txt")
             await("Native preview text marker")
             tap(app.getString(R.string.preview_copy_file))
@@ -115,9 +140,22 @@ class PreviewNavigationTest {
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             if (InstrumentationRegistry.getArguments().getString("keepPreviewFixture") != "true") {
-                runBlocking { data.conversations.delete(conversationId) }
+                runBlocking {
+                    data.conversations.delete(html.conversationId)
+                    data.conversations.delete(otherConversation)
+                    UserlandRuntime.deleteWorkspace(app, html.conversationId)
+                    UserlandRuntime.deleteWorkspace(app, otherWorkspace)
+                    app.filesDir.resolve("workspaces/${html.conversationId}-outside.html").delete()
+                }
             }
         }
+    }
+
+    private fun assertUnavailable(artifact: ArtifactIdentity, index: Int) {
+        app.startActivity(ArtifactHtmlActivity.intent(app, artifact, index).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        await(app.getString(R.string.preview_unavailable))
+        tap("Close")
+        instrumentation.waitForIdleSync()
     }
 
     private fun tap(text: String) {

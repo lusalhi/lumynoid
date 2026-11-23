@@ -22,13 +22,21 @@ On Android 13+, Lumynoid asks for notification permission the first time you ope
 
 ## Coding in chat
 
-On arm64, chat can create and read private project files, install the bundled npm package offline, and run the built-in JSON formatter. Each conversation has its own workspace, reused by later messages. Activity cards show the operation and its result.
+On arm64, coding chat can create and read workspace files, install the bundled npm package offline, and run the built-in JSON formatter. Activity cards show each operation and its result.
+
+In the Projects debug build, open **Conversations → Projects → New Project**. Chats created inside the project share files and installed packages, but their histories and logs stay separate. **New Chat** outside Projects still answers without coding tools. The signed Epic 2 baseline (`v0.3.1`) uses per-chat workspaces; use a clean debug install to try Projects until upgrade support is ready.
+
+Open **Instructions** on a project to set or clear shared instructions (up to 2,000 Unicode characters). Running tasks keep the instructions they started with, including after approval or retry. Changes apply when the next task starts. Ordinary chats do not use project instructions.
 
 The configured model must support structured tool calls on arm64; the provider connection test only verifies text chat.
 
 The first Linux runtime download and each file replacement require approval in chat. If you enabled notifications, tapping the approval notification takes you to its card; it cannot approve or decline the action. Leaving chat without killing the process keeps the request available. After process death, unfinished work is marked interrupted and is not replayed.
 
-Open **Log** in chat to see tool targets, approvals and the full stored output, including after relaunch. A tool's own capture limit still applies. Deleting a conversation removes its log and private workspace, including its bundled package install. You can delete it once its queued, running or approval-waiting tasks have ended.
+Open **Log** in chat to see tool targets, approvals and the full stored output, including after relaunch. A tool's own capture limit still applies.
+
+To delete a chat, open **More actions → Delete** in its conversation list and confirm. Delete is unavailable while the chat has work that is being submitted, queued, running, or waiting for approval. Deleting a project chat removes only that chat's messages, action log and stored outputs. Other chats and the project's files and installed packages stay available.
+
+To delete an entire project, open **Conversations → Projects → More actions → Delete project** and confirm. Finish or stop any pending work in that project first. If deletion is interrupted, choose **Resume deletion** on the project row. While deletion is unfinished, the project cannot receive new chats or tasks or open new previews. Other projects, provider settings, and the shared Linux runtime stay available.
 
 Tap **Offline preview** on a published artifact in chat or in an action's **Log** details. Text and JSON are selectable; **Copy file** copies the entire file unchanged. HTML opens in a separate Android process without Internet permission. JavaScript is off each time you open a page. **Enable JavaScript** reloads that page with scripting enabled but does not allow network or external navigation. Preview shows the current workspace file, not a copy retained in the log. If Android cannot deny network access to the preview process (including Android 10), HTML preview is unavailable; text preview still works.
 
@@ -57,6 +65,15 @@ adb shell am instrument -w dev.lusalhi.lumynoid.userland.test/androidx.test.runn
 ```
 
 For a phone-only check, build `./gradlew :userland-check:assembleDebug`. Install `tools/userland-check/build/outputs/apk/debug/userland-check-debug.apk`, open **Lumynoid Test**, and tap **Jalankan tes**. It runs the eight offline runtime and coding checks; run the instrumentation suite above for workspace deletion. **Hapus fixture lama** opens Android's uninstall confirmation for the instrumentation APK, not for the main Lumynoid app.
+
+### Projects: one-tap handset checks
+
+Build `./gradlew :app:assembleProjectsCheck` and install
+`app/build/outputs/apk/projectsCheck/app-projectsCheck.apk` on an arm64 phone.
+Open **Lumynoid Projects Test**, then tap **Jalankan semua tes**. The APK ships its fixture data and
+runtime, needs no provider credentials, and runs under a separate package without changing Lumynoid's data.
+The report covers Stories 8.1–8.8 with fixtures; the official signed upgrade still follows
+the [Projects handset acceptance runbook](docs/release.md#projects-handset-acceptance-story-88).
 
 ## Checks that gate every change
 

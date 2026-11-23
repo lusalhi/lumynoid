@@ -36,7 +36,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import dev.lusalhi.lumynoid.userland.WorkspacePreview
 import java.nio.charset.CharacterCodingException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -57,9 +56,8 @@ internal fun PreviewCard(artifact: ArtifactIdentity, onOpen: (ArtifactIdentity) 
 }
 
 @Composable
-internal fun ArtifactTextDialog(artifact: ArtifactIdentity, onClose: () -> Unit) {
-    val context = LocalContext.current
-    val workspace = remember(artifact.conversationId) { WorkspacePreview(context, artifact.conversationId) }
+internal fun ArtifactTextDialog(artifact: ArtifactIdentity, index: Int, onClose: () -> Unit) {
+    val graph = (LocalContext.current.applicationContext as LumynoidApp).graph
     Dialog(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
@@ -69,7 +67,7 @@ internal fun ArtifactTextDialog(artifact: ArtifactIdentity, onClose: () -> Unit)
                 PreviewHeader(artifact.path, onClose)
                 HorizontalDivider()
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    TextFilePreview(workspace, artifact.path)
+                    TextFilePreview(graph, artifact, index)
                 }
             }
         }
@@ -91,12 +89,15 @@ internal fun PreviewHeader(path: String, onClose: () -> Unit) {
 }
 
 @Composable
-private fun TextFilePreview(workspace: WorkspacePreview, path: String) {
-    var loaded by remember(workspace, path) { mutableStateOf(false) }
-    val text by produceState<String?>(null, workspace, path) {
+private fun TextFilePreview(graph: AppGraph, artifact: ArtifactIdentity, index: Int) {
+    var loaded by remember(artifact, index) { mutableStateOf(false) }
+    val text by produceState<String?>(null, graph, artifact, index) {
         value = withContext(Dispatchers.IO) {
             try {
-                workspace.read(path)?.decodeToString(throwOnInvalidSequence = true)
+                val published = graph.previewArtifact(artifact.conversationId, artifact.resultEventId, index)
+                published?.takeIf { it.artifact == artifact }?.let {
+                    it.workspace.read(it.artifact.path)?.decodeToString(throwOnInvalidSequence = true)
+                }
             } catch (_: CharacterCodingException) {
                 null
             }
@@ -112,7 +113,7 @@ private fun TextFilePreview(workspace: WorkspacePreview, path: String) {
             val clipboard = LocalContext.current.getSystemService(ClipboardManager::class.java)
             Column(Modifier.fillMaxSize()) {
                 TextButton(
-                    onClick = { clipboard?.setPrimaryClip(ClipData.newPlainText(path, content)) },
+                    onClick = { clipboard?.setPrimaryClip(ClipData.newPlainText(artifact.path, content)) },
                     modifier = Modifier.align(Alignment.End).padding(horizontal = 8.dp),
                 ) { Text(stringResource(R.string.preview_copy_file)) }
                 val chunks = remember(content) { outputChunks(content) }

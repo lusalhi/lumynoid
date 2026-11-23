@@ -43,6 +43,24 @@ class ContextAssemblerTest {
     }
 
     @Test
+    fun nonblankInstructionsLeadTheContextVerbatim() {
+        val history = listOf(user("t1", "one"), answer("t1", "A1"), user("t2", "two"))
+        val instructions = "  Keep answers short.\nUse metric units.  "
+        assertEquals(
+            listOf(LlmMessage(Role.SYSTEM, instructions), u("one"), a("A1"), u("two")),
+            ContextAssembler.assemble(history, "t2", instructions).messages,
+        )
+    }
+
+    @Test
+    fun blankOrMissingInstructionsAddNoSystemMessage() {
+        val history = listOf(user("t1", "one"))
+        for (instructions in listOf(null, "", " \n\t ")) {
+            assertEquals(listOf(u("one")), ContextAssembler.assemble(history, "t1", instructions).messages)
+        }
+    }
+
+    @Test
     fun onlyCompleteSameTaskToolRoundsEnterTheContext() {
         val old = ToolCall("old-call", "web_fixture_lookup", "{}")
         val failedCall = ToolCall("failed-call", old.name, "{}")

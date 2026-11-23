@@ -50,9 +50,17 @@ class TaskRunner(
     private val toolSessions: ToolSessionRelease = ToolSessionRelease {},
     private val elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000L },
     private val maxLlmCalls: suspend () -> Int = { DEFAULT_MAX_LLM_CALLS },
+    private val resolveWorkspace: suspend (String) -> ConversationWorkspace?,
+    /** Read once per fresh request; repair and approval continuations keep the captured instructions. */
+    private val instructionsForWorkspace: suspend (String) -> String? = { null },
 ) : ApprovalPort {
-    private class Task(val taskId: String, val request: TaskRequest, val maxLlmCalls: Int) {
-        val context = ToolContext(taskId, request.conversationId, request.workspaceId)
+    private class Task(
+        val taskId: String,
+        val request: TaskRequest,
+        val maxLlmCalls: Int,
+        val workspace: ConversationWorkspace,
+    ) {
+        val context = ToolContext(taskId, request.conversationId, (workspace as? ConversationWorkspace.Project)?.workspaceId)
         var llmCalls = 0
         var repaired = false
         var cancelled = false
@@ -165,17 +173,19 @@ class TaskRunner(
         val limit = maxLlmCalls()
         require(limit > 0) { "The LLM call limit must be positive" }
         recovered.await()
-        val task = Task(ids.next(), request, limit)
         val now = clock.nowMillis()
-        admissionLock.withLock {
+        val task = admissionLock.withLock {
+            val workspace = checkNotNull(resolveWorkspace(request.conversationId)) { "Conversation workspace unavailable" }
+            val task = Task(ids.next(), request, limit, workspace)
             synchronized(stateLock) {
                 tasks[task.taskId] = task
                 runnable++
                 updatePending()
             }
+            task
         }
         try {
-            events.createTask(task.taskId, request, now)
+            events.createTask(task.taskId, request, now, task.context.workspaceId)
             append(task, TaskEvent.TaskQueued(ids.next(), task.taskId, now))
             append(task, TaskEvent.UserMessage(ids.next(), task.taskId, now, request.origin, request.input))
             synchronized(stateLock) { queue.addLast(Work(task)) }
@@ -191,15 +201,19 @@ class TaskRunner(
         return task.taskId
     }
 
-    /** Keeps new submissions out through cleanup; existing work must have released its resources. */
-    suspend fun deleteWhenIdle(conversationId: String, delete: suspend () -> Unit): Boolean {
+    /** Serializes membership changes and project deletion intent against task admission. */
+    suspend fun <T> withConversationLifecycle(action: suspend (Set<String>) -> T): T {
         recovered.await()
-        return admissionLock.withLock {
-            if (conversationId in checkNotNull(_pendingConversations.value)) return@withLock false
+        return admissionLock.withLock { action(checkNotNull(_pendingConversations.value)) }
+    }
+
+    /** Keeps new submissions out through cleanup; existing work must have released its resources. */
+    suspend fun deleteWhenIdle(conversationId: String, delete: suspend () -> Unit): Boolean =
+        withConversationLifecycle { pending ->
+            if (conversationId in pending) return@withConversationLifecycle false
             withContext(NonCancellable) { delete() }
             true
         }
-    }
 
     /** The only cancellation path (AD-22). */
     fun cancel(taskId: String) {
@@ -475,9 +489,15 @@ class TaskRunner(
     private suspend fun runSlice(work: Work): SliceResult {
         val task = work.task
         val resumed = work.resumed?.continuation
-        val registry = resumed?.registry ?: tools.snapshot()
-        var request = resumed?.request ?: ContextAssembler.assemble(events.history(task.request.conversationId), task.taskId)
-            .copy(tools = registry.values.map { it.definition })
+        if (resumed != null && resolveWorkspace(task.request.conversationId) != task.workspace) {
+            return SliceResult.Failed(FailureReason.TOOL_DENIED)
+        }
+        val registry = resumed?.registry ?: tools.snapshot(hasWorkspace = task.context.workspaceId != null)
+        var request = resumed?.request ?: ContextAssembler.assemble(
+            events.history(task.request.conversationId),
+            task.taskId,
+            task.context.workspaceId?.let { instructionsForWorkspace(it) },
+        ).copy(tools = registry.values.map { it.definition })
         var round = resumed?.round
         var resumedApproval = work.resumed
         // Changes during the wait can invalidate later calls. Check them before running the approved call.

@@ -9,6 +9,7 @@ import dev.lusalhi.lumynoid.core.ConversationPort
 import dev.lusalhi.lumynoid.core.DEFAULT_MAX_LLM_CALLS
 import dev.lusalhi.lumynoid.core.EventRepository
 import dev.lusalhi.lumynoid.core.IdGenerator
+import dev.lusalhi.lumynoid.core.ProjectPort
 import dev.lusalhi.lumynoid.core.ProviderConfigStore
 import dev.lusalhi.lumynoid.core.SecretPort
 import dev.lusalhi.lumynoid.core.SystemClock
@@ -24,36 +25,41 @@ import java.io.File
 /**
  * Entry point of `:data`: opens the single database and exposes its ports.
  *
- * [deleteWhenIdle] gates conversation deletion against unfinished work and keeps the gate through
- * cleanup; production passes `TaskRunner::deleteWhenIdle`. The default deletes immediately.
- * [deleteWorkspace] reclaims the conversation's scoped workspace and bundled-package install;
- * production passes the userland cleanup. The default owns no files.
+ * Both lifecycle callbacks share the runner's admission gate. Workspace cleanup is supplied by userland.
  */
 class LumynoidData(
     context: Context,
     ids: IdGenerator = UuidV7,
     clock: Clock = SystemClock,
-    deleteWhenIdle: suspend (String, suspend () -> Unit) -> Boolean = { _, delete -> delete(); true },
-    deleteWorkspace: suspend (String) -> Unit = {},
-) {
+    deleteWhenIdle: suspend (String, suspend () -> Unit) -> Boolean,
+    withLifecycle: suspend (suspend (Set<String>) -> Unit) -> Unit,
+    deleteWorkspace: suspend (String) -> Unit,
+) : AutoCloseable {
     private val appContext = context.applicationContext
     private val database: LumynoidDatabase =
         Room.databaseBuilder(appContext, LumynoidDatabase::class.java, "lumynoid.db")
             .setDriver(AndroidSQLiteDriver())
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4) // no destructive fallback (AD-19)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
     private val blobs = EventBlobStore(File(appContext.filesDir, "event-blobs"))
 
     private val eventRepository = RoomEventRepository(database.dao(), blobs)
     val events: EventRepository = eventRepository
-    val conversations: ConversationPort =
-        RoomConversationPort(database.dao(), ids, clock, blobs, deleteWhenIdle, deleteWorkspace)
+    private val conversationRepository = RoomConversationPort(database.dao(), ids, clock, blobs, withLifecycle, deleteWhenIdle)
+    val conversations: ConversationPort = conversationRepository
+    val projects: ProjectPort = RoomProjectPort(database.dao(), ids, conversationRepository, withLifecycle, deleteWorkspace)
     val providerConfigs: ProviderConfigStore = RoomProviderConfigStore(database.dao())
     val secrets: SecretPort = KeystoreSecretStore(appContext)
     val taskSettings: TaskSettings = PreferenceTaskSettings(appContext.getSharedPreferences("task_settings", Context.MODE_PRIVATE))
 
+    /** Only the main process supplies the read-only probe. Null leaves that chat pending. */
+    suspend fun adoptLegacyWorkspaces(untitledProject: String, hasData: suspend (String) -> Boolean?) =
+        conversationRepository.adoptLegacyWorkspaces(untitledProject, hasData)
+
     /** Opens a single persisted event without reading unrelated conversation blobs. */
     suspend fun event(conversationId: String, eventId: String): TaskEvent? = eventRepository.event(conversationId, eventId)
+
+    override fun close() = database.close()
 }
 
 private class PreferenceTaskSettings(private val preferences: SharedPreferences) : TaskSettings {

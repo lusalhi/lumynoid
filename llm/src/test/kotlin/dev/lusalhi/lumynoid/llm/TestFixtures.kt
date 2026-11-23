@@ -1,6 +1,7 @@
 package dev.lusalhi.lumynoid.llm
 
 import dev.lusalhi.lumynoid.core.ActiveModel
+import dev.lusalhi.lumynoid.core.ConversationWorkspace
 import dev.lusalhi.lumynoid.core.EventRepository
 import dev.lusalhi.lumynoid.core.IdGenerator
 import dev.lusalhi.lumynoid.core.LlmMessage
@@ -88,7 +89,7 @@ internal suspend fun MockEngine.requestJson(index: Int): JsonObject =
 internal class ToolRunnerFixture(scope: CoroutineScope, llm: LlmPort) {
     private val events = MutableStateFlow<List<TaskEvent>>(emptyList())
     private val repository = object : EventRepository {
-        override suspend fun createTask(taskId: String, request: TaskRequest, at: Long) = Unit
+        override suspend fun createTask(taskId: String, request: TaskRequest, at: Long, workspaceId: String?) = Unit
         override suspend fun append(conversationId: String, event: TaskEvent) {
             events.value += event
         }
@@ -109,10 +110,13 @@ internal class ToolRunnerFixture(scope: CoroutineScope, llm: LlmPort) {
             """{"type":"object","properties":{"limit":{"type":"integer"}},"required":["limit"]}""",
         ) { "" },
     )
-    private val runner = TaskRunner(llm, repository, scope, ids = CountingIds(), tools = ToolRegistry(listOf(ToolProvider { tools })))
+    private val runner = TaskRunner(
+        llm, repository, scope, ids = CountingIds(), tools = ToolRegistry(listOf(ToolProvider { tools })),
+        resolveWorkspace = { ConversationWorkspace.Plain },
+    )
 
     suspend fun run(input: String): List<TaskEvent> {
-        val id = runner.submit(TaskRequest(Origin.User, "conversation", "workspace", input))
+        val id = runner.submit(TaskRequest(Origin.User, "conversation", input))
         return events.first { log -> log.any { it.taskId == id && !it.needsRecovery } }.filter { it.taskId == id }
     }
 

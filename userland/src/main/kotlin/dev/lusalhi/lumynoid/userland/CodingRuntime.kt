@@ -40,8 +40,8 @@ internal class CodingRuntime(
         if (verifiedInstall(target)) return ToolOutcome("$PACKAGE_ID is already installed.", target = PACKAGE_ID, succeeded = true)
 
         val parent = Files.createDirectories(target.parent)
-        Files.newDirectoryStream(parent, ".install-*").use { abandoned -> abandoned.forEach(::deleteTree) }
-        val stage = Files.createTempDirectory(parent, ".install-")
+        Files.newDirectoryStream(parent, "$INSTALL_STAGE_PREFIX*").use { abandoned -> abandoned.forEach(::deleteTree) }
+        val stage = Files.createTempDirectory(parent, INSTALL_STAGE_PREFIX)
         try {
             val archive = stage.resolve(BUNDLE_NAME)
             val encoded = assets.open(BUNDLE_ASSET).bufferedReader().use { it.readText() }
@@ -132,7 +132,7 @@ internal class CodingRuntime(
     }
 
     private fun installedDirectory(context: ToolContext): Path {
-        val id = workspace.directory(context.workspaceId).fileName
+        val id = workspace.directory(checkNotNull(context.workspaceId)).fileName
         return installRoot.resolve(id).resolve(BUNDLE_SHA256)
     }
 
@@ -155,6 +155,7 @@ internal class CodingRuntime(
     companion object {
         const val PACKAGE_ID = "@lumynoid/json-tools"
         const val SCRIPT_ID = "format_json"
+        const val INSTALL_STAGE_PREFIX = ".install-"
 
         // Regenerate with: npm pack in a copy of assets/coding/package, then base64 -w0 the
         // tarball into assets/coding/lumynoid-json-tools-1.0.0.tgz.b64 and update these pins.

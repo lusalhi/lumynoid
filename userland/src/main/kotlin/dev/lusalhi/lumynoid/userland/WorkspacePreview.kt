@@ -4,7 +4,7 @@ import android.content.Context
 import java.io.IOException
 
 /**
- * Read-only access to one conversation's existing workspace for the offline artifact preview.
+ * Read-only access to one project's existing workspace for the offline artifact preview.
  * Nothing is created: a missing workspace or file is simply unavailable. Every read reuses the
  * coding tools' workspace validation — component-wise resolution without following links,
  * single-linked regular files only, and the same bounded read — so preview cannot widen the

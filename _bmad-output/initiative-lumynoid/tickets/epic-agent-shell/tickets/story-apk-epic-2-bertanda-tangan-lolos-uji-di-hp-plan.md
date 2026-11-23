@@ -3,7 +3,7 @@ title: 'APK Epic 2 bertanda tangan lolos uji di HP'
 type: chore
 ticket: '12'
 created: '2026-11-22'
-status: built
+status: done
 baseline_revision: 'f17f3e744dd88b70719f2f5ac903fae605df3b45'
 route: oneshot
 route_source: auto
@@ -42,11 +42,14 @@ The retained TaskRunner report has 40 passing tests, including one audited repai
 ## Release and device checklist
 
 - [x] Bump app version; run the existing tag checker self-test and build/inspect the unsigned arm64 release candidate against its staged rootfs and native source assets.
-- [ ] With owner go-ahead, push, open/merge the release PR to `main`, and check/tag the merged revision. Push `v0.3.0`; owner approves the GitHub `release` environment. Download the official assets and verify checksums, certificate, package/version, ABI, 16 KiB alignment and matching rootfs. Check the native archives include the PRoot and talloc notices, the release assets include the patch and provenance, and the tag's source tree supplies `tools/userland/build-native.sh`, `tools/userland/supervisor.c`, and `tools/userland-spike/talloc-cross-answers.txt`.
-- [ ] On arm64 API 37, keep the installed `v0.2.1` and a saved chat. Install the verified `v0.3.0` APK over it without uninstalling or clearing data. Confirm old chat history, provider configuration, and a new streaming plain reply.
-- [ ] Approve the initial runtime download. Start coding work, verify it is still running, then turn off the screen and verify it finishes before turning the screen back on. Check workspace write/read, bundled offline npm and the built-in JSON formatter in activity cards and Log; read the same file in a later turn. Verify no runtime children remain after success, failure, cancellation, timeout, or while awaiting approval.
-- [ ] Check deny and approve on a file replacement; reject paths outside the workspace, arbitrary commands, and packages outside the allowlist. Verify project config/script fixtures do not change the operation and tool output containing a fake approval does not bypass the app's approval card. Separately, render an assistant Markdown reply that imitates a card and confirm no activity or approval card or approval controls appear. Confirm the log persists after relaunch; open text/HTML artifacts offline.
-- [ ] Record the existing TaskRunner fixture results for malformed tool calls and call budget in the release verification, and record every handset check with device/API, build, pass/fail, and evidence. Keep the ticket open until the owner confirms the signed-device run.
+- [x] With owner go-ahead, merge locally and push to `main`, tag `v0.3.1`, and obtain owner approval for the `release` environment. Verify the published checksums, certificate, package/version, ABI, alignment, rootfs, and corresponding native sources and notices.
+- [x] Upgrade from `v0.2.1` to the signed `v0.3.1` APK on the Samsung API 37 handset without uninstalling. Old chat and a new streaming plain reply still work.
+- [x] Approve the initial runtime download; run file creation, bundled offline npm install, and JSON formatting with the screen off. Check results in Log and read the output in a later turn.
+- [x] Decline and then approve an overwrite of the test file, checking that the contents change only after approval. Reopen the app and verify Log and HTML preview offline.
+- [x] On the handset, the diagnostic APK verifies no runtime children remain after success, failure, cancellation, timeout, or while awaiting approval.
+- [x] On the handset, the diagnostic APK rejects out-of-scope workspace, command, and npm package requests, ignores project config/scripts, and requires a real approval despite forged tool output.
+- [x] On signed `v0.3.1`, confirm assistant Markdown cannot create activity/approval cards, and a test file returned by a tool cannot authorize its own overwrite.
+- [x] Record the existing TaskRunner fixture results for malformed tool calls and call budget; see Implementation Notes. The tagged workflow also passed its JVM test job.
 
 Handset fixture: in a new coding chat, ask the model to create `acceptance-input.json` with `{"release":"epic-2","ok":true}`, install `@lumynoid/json-tools` offline, and format it as `acceptance-output.json`. Read the output in a later turn. Use only these fixture files for overwrite checks; keep the pre-upgrade chat untouched.
 
@@ -60,6 +63,12 @@ Local evidence: release checker self-test passed all 19 cases. The staged PRoot 
 
 The initial `assembleRelease` attempts reached the tool deadline. `./gradlew --offline --max-workers=2 :app:packageRelease :userland:buildUserlandRootfs` completed its packaging and lint-vital tasks. `aapt2` reported non-debuggable `dev.lusalhi.lumynoid` `v0.3.0` (code 4), target SDK 37, and only `arm64-v8a`. `zipalign -c -P 16 4` passed; all three runtime ELFs passed their segment checks and the staged rootfs matched the APK's digest and size. Unsigned APK SHA-256: `a58b71a3f884d0020bc3df92a69f60ba414534c382de68502d9e122be37170aa`.
 
-No remote write, signing, or handset acceptance was performed. Continue with the release PR, then the owner-gated tag workflow and in-place upgrade test.
+Release recovery: `v0.3.0` was tagged on `main`, but [GitHub Actions failed before signing](https://github.com/lusalhi/lumynoid/actions/runs/44993863107): the runner could not find `sdkmanager`. CI and both Android release jobs now provision the pinned SDK packages explicitly; rootfs jobs use Ubuntu 24.04 for `qemu-aarch64-static`. The original tag is unchanged. The replacement tag `v0.3.1` (code 5) was used for release and handset acceptance, still upgrading from `v0.2.1`.
 
-Release recovery: `v0.3.0` was tagged on `main`, but [GitHub Actions failed before signing](https://github.com/lusalhi/lumynoid/actions/runs/44993863107): the runner could not find `sdkmanager`. CI and both Android release jobs now provision the pinned SDK packages explicitly; rootfs jobs use Ubuntu 24.04 for `qemu-aarch64-static`. The original tag is unchanged. Use replacement tag `v0.3.1` (code 5) for the remaining release and handset checklist, still upgrading from `v0.2.1`.
+Published release: [GitHub Actions run 44994487467](https://github.com/lusalhi/lumynoid/actions/runs/44994487467) passed `verify`, `build`, and `publish`. All eight files listed in `SHA256SUMS` matched. Independently verified the registered certificate, package `dev.lusalhi.lumynoid`, `v0.3.1` (code 5), target API 37, arm64-only ABI, 16 KiB alignment, and the APK-pinned rootfs. The published native archives match their source hashes and contain their notices; the patch matches the tag, which contains the build script, supervisor source, and talloc cross-build answers. Signed APK SHA-256: `815c57331583028f860722e19a5ded6aed4da8d8b53a6f29385e6228ba39ba08`.
+
+Handset evidence (owner report): Samsung, Android API 37. All five requested checks passed on the signed `v0.3.1` APK: upgrade preserving old chat and plain streaming, runtime setup, screen-off coding and reading the formatted output in a later turn, deny/approve, and persistent Log with offline HTML preview. Exact Samsung model was not provided.
+
+Handset diagnostic evidence (owner report): Lumynoid Test `2.7.1`, debug APK SHA-256 `42c978d03d96d7dd67c1b02d8b7b5172941f2dc147a5b6b68b47798c247dd563`, passed 8/8 on the Samsung API 37 handset. The separate fixture covers runtime teardown, workspace and coding boundaries, and the current approval requirement with forged tool output. It does not exercise the signed app's Chat UI.
+
+Final handset evidence (owner report): both signed `v0.3.1` Chat checks passed on the same Samsung API 37 handset. Assistant Markdown stayed text; forged approval in file output did not bypass the real overwrite card, and declining preserved the fixture file. Story 2.12 acceptance is complete.

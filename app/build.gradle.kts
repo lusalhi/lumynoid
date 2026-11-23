@@ -19,8 +19,8 @@ android {
         applicationId = "dev.lusalhi.lumynoid"
         minSdk = 29
         targetSdk = 37
-        versionCode = 5
-        versionName = "v0.3.1"
+        versionCode = 6
+        versionName = "v0.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -47,6 +47,12 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
+        }
+        create("projectsCheck") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".projects.checks"
+            matchingFallbacks += "debug"
+            ndk { abiFilters += "arm64-v8a" }
         }
         release {
             signingConfigs.findByName("release")?.let { signingConfig = it }
@@ -77,6 +83,24 @@ android {
     }
 }
 
+abstract class StageProjectsCheckAssets : Sync() {
+    @get:OutputDirectory
+    abstract val assetDirectory: DirectoryProperty
+}
+
+val stageProjectsCheckAssets = tasks.register<StageProjectsCheckAssets>("stageProjectsCheckAssets") {
+    dependsOn(":userland:stageUserlandTestAssets")
+    from(project(":userland").layout.buildDirectory.dir("userland/test-assets"))
+    from(rootProject.file("data/schemas/dev.lusalhi.lumynoid.data.LumynoidDatabase/4.json")) {
+        rename { "legacy-schema-v4.json" }
+    }
+    assetDirectory.set(layout.buildDirectory.dir("projects-check-assets"))
+    into(assetDirectory)
+}
+androidComponents.onVariants(androidComponents.selector().withBuildType("projectsCheck")) { variant ->
+    variant.sources.assets?.addGeneratedSourceDirectory(stageProjectsCheckAssets, StageProjectsCheckAssets::assetDirectory)
+}
+
 kotlin {
     jvmToolchain(17)
 }
@@ -105,6 +129,8 @@ dependencies {
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    "projectsCheckImplementation"(libs.ktor.client.mock)
+    "projectsCheckImplementation"(libs.kotlinx.serialization.json)
 }
 
 // AD-17: the release classpath gate.

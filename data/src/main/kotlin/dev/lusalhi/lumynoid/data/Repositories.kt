@@ -5,10 +5,13 @@ import dev.lusalhi.lumynoid.core.Clock
 import dev.lusalhi.lumynoid.core.Conversation
 import dev.lusalhi.lumynoid.core.ConversationPort
 import dev.lusalhi.lumynoid.core.ConversationTitle
+import dev.lusalhi.lumynoid.core.ConversationWorkspace
 import dev.lusalhi.lumynoid.core.EventRepository
 import dev.lusalhi.lumynoid.core.IdGenerator
 import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.Origin
+import dev.lusalhi.lumynoid.core.Project
+import dev.lusalhi.lumynoid.core.ProjectPort
 import dev.lusalhi.lumynoid.core.ProviderConfig
 import dev.lusalhi.lumynoid.core.ProviderConfigStore
 import dev.lusalhi.lumynoid.core.ProviderKind
@@ -22,18 +25,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 internal class RoomEventRepository(
     private val dao: LumynoidDao,
     private val blobs: EventBlobStore,
 ) : EventRepository {
 
-    override suspend fun createTask(taskId: String, request: TaskRequest, at: Long) {
+    override suspend fun createTask(taskId: String, request: TaskRequest, at: Long, workspaceId: String?) {
         val rowId = dao.insertTaskIfConversationExists(
             id = taskId,
             conversationId = request.conversationId,
-            workspaceId = request.workspaceId,
+            workspaceId = workspaceId,
             origin = TaskEventJson.json.encodeToString(Origin.serializer(), request.origin),
             createdAt = at,
         )
@@ -133,20 +139,103 @@ internal class RoomEventRepository(
     }
 }
 
+internal class RoomProjectPort(
+    private val dao: LumynoidDao,
+    private val ids: IdGenerator,
+    private val conversations: RoomConversationPort,
+    private val withLifecycle: suspend (suspend (Set<String>) -> Unit) -> Unit,
+    private val deleteWorkspace: suspend (String) -> Unit,
+) : ProjectPort {
+    private val cleaning = ConcurrentHashMap.newKeySet<String>()
+
+    override suspend fun create(name: String): Project? {
+        val clean = name.trim()
+        if (clean.isEmpty()) return null
+        val id = ids.next()
+        val project = ProjectEntity(id, clean, id, "")
+        dao.insertProject(project)
+        return project.toProject()
+    }
+
+    override fun observeAll(): Flow<List<Project>> = dao.observeProjects().map { rows -> rows.map { it.toProject() } }
+
+    override suspend fun saveInstructions(id: String, instructions: String): Boolean {
+        if (instructions.codePointCount(0, instructions.length) > ProjectPort.MAX_INSTRUCTION_CODE_POINTS) return false
+        return dao.setProjectInstructions(id, instructions) > 0
+    }
+
+    override suspend fun instructionsForWorkspace(workspaceId: String): String? = dao.projectInstructions(workspaceId)
+
+    override suspend fun delete(id: String): Boolean {
+        if (!cleaning.add(id)) return false
+        try {
+            var target: ProjectEntity? = null
+            var busy = false
+            withLifecycle { pending ->
+                val project = dao.project(id) ?: return@withLifecycle
+                if (!project.deleting) {
+                    if (pending.isNotEmpty() && dao.projectConversationIds(id).any { it in pending }) {
+                        busy = true
+                        return@withLifecycle
+                    }
+                    dao.markProjectDeleting(id)
+                }
+                target = project
+            }
+            if (busy) return false
+            val project = target ?: return true
+            for (chatId in dao.projectConversationIds(id)) conversations.deleteOwnedData(chatId)
+            deleteWorkspace(project.workspaceId)
+            dao.deleteProject(id)
+            return true
+        } finally {
+            cleaning.remove(id)
+        }
+    }
+
+    private fun ProjectEntity.toProject() = Project(id, name, workspaceId, instructions, deleting)
+}
+
 internal class RoomConversationPort(
     private val dao: LumynoidDao,
     private val ids: IdGenerator,
     private val clock: Clock,
     private val blobs: EventBlobStore,
+    private val withLifecycle: suspend (suspend (Set<String>) -> Unit) -> Unit,
     private val deleteWhenIdle: suspend (String, suspend () -> Unit) -> Boolean,
-    private val deleteWorkspace: suspend (String) -> Unit,
 ) : ConversationPort {
 
-    override suspend fun create(firstMessage: String): Conversation {
+    private val legacyAdoption = Mutex()
+
+    suspend fun adoptLegacyWorkspaces(untitledProject: String, hasData: suspend (String) -> Boolean?) {
+        legacyAdoption.withLock {
+            for (id in dao.pendingLegacyConversations()) {
+                val result = hasData(id) ?: continue // Unreadable: leave pending and retry on next foreground entry.
+                withLifecycle { dao.adoptLegacyWorkspace(id, result, untitledProject) }
+            }
+        }
+    }
+
+    override suspend fun create(firstMessage: String, projectId: String?): Conversation {
         val now = clock.nowMillis()
-        val conversation = Conversation(ids.next(), ConversationTitle.from(firstMessage), now, now)
-        dao.insertConversation(ConversationEntity(conversation.id, conversation.createdAt, conversation.title))
+        val conversation = Conversation(ids.next(), ConversationTitle.from(firstMessage), now, now, projectId)
+        val row = ConversationEntity(conversation.id, conversation.createdAt, conversation.title, projectId)
+        if (projectId == null) {
+            dao.insertConversation(row)
+        } else {
+            withLifecycle {
+                check(dao.isProjectActive(projectId)) { "Project unavailable" }
+                dao.insertConversation(row)
+            }
+        }
         return conversation
+    }
+
+    override suspend fun workspace(id: String): ConversationWorkspace? {
+        val row = dao.conversationWorkspace(id) ?: return null
+        if (!row.hasResolvedScope()) return null
+        if (row.projectId == null) return ConversationWorkspace.Plain
+        return row.workspaceId?.let { ConversationWorkspace.Project(it) }
     }
 
     override suspend fun latest(): Conversation? = dao.latestConversation()?.toConversation()
@@ -161,18 +250,32 @@ internal class RoomConversationPort(
     }
 
     /**
-     * The gate keeps new submissions out through cleanup. Files go first and the row last, so a failed
-     * or interrupted cleanup leaves the conversation reachable for an idempotent retry; failures propagate.
+     * Removes only chat-owned data. Shared project workspaces and unadopted legacy files are not
+     * owned by this deletion. The idle gate keeps new submissions out through cleanup.
      */
-    override suspend fun delete(id: String): Boolean =
-        deleteWhenIdle(id) {
-            if (!dao.conversationExists(id)) return@deleteWhenIdle
-            deleteWorkspace(id)
-            withContext(Dispatchers.IO) { blobs.deleteConversation(id) }
-            dao.deleteConversation(id)
+    override suspend fun delete(id: String): Boolean {
+        var classified = true
+        val idle = deleteWhenIdle(id) {
+            val row = dao.conversationWorkspace(id) ?: return@deleteWhenIdle
+            if (!row.hasResolvedScope()) {
+                classified = false
+                return@deleteWhenIdle
+            }
+            deleteOwnedData(id)
         }
+        return idle && classified
+    }
 
-    private fun ConversationRow.toConversation() = Conversation(id, title, createdAt, lastActivityAt)
+    // Keep the row discoverable for retry until its on-disk blobs are gone.
+    suspend fun deleteOwnedData(id: String) {
+        withContext(Dispatchers.IO) { blobs.deleteConversation(id) }
+        dao.deleteConversation(id)
+    }
+
+    private fun ConversationWorkspaceRow.hasResolvedScope(): Boolean =
+        !legacyWorkspacePending && (projectId == null || workspaceId != null)
+
+    private fun ConversationRow.toConversation() = Conversation(id, title, createdAt, lastActivityAt, projectId)
 }
 
 internal class RoomProviderConfigStore(private val dao: LumynoidDao) : ProviderConfigStore {

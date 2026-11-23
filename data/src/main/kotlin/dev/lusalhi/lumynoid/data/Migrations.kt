@@ -62,3 +62,34 @@ internal val MIGRATION_3_4 = Migration(3, 4) { connection ->
         }
     }
 }
+
+/** Project membership starts empty; historical task workspace IDs are kept verbatim. */
+internal val MIGRATION_4_5 = Migration(4, 5) { connection ->
+    connection.execSQL(
+        "CREATE TABLE `project` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+            "`workspace_id` TEXT NOT NULL, `instructions` TEXT NOT NULL, PRIMARY KEY(`id`))",
+    )
+    connection.execSQL("CREATE UNIQUE INDEX `index_project_workspace_id` ON `project` (`workspace_id`)")
+    connection.execSQL("ALTER TABLE `conversation` ADD COLUMN `project_id` TEXT REFERENCES `project`(`id`)")
+    connection.execSQL("CREATE INDEX `index_conversation_project_id` ON `conversation` (`project_id`)")
+    connection.execSQL(
+        "CREATE TABLE `task_v5` (`id` TEXT NOT NULL, `conversation_id` TEXT NOT NULL, " +
+            "`workspace_id` TEXT, `origin` TEXT NOT NULL, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+    )
+    connection.execSQL(
+        "INSERT INTO `task_v5` (`id`, `conversation_id`, `workspace_id`, `origin`, `created_at`) " +
+            "SELECT `id`, `conversation_id`, `workspace_id`, `origin`, `created_at` FROM `task`",
+    )
+    connection.execSQL("DROP TABLE `task`")
+    connection.execSQL("ALTER TABLE `task_v5` RENAME TO `task`")
+}
+
+/** Existing chats without membership need a read-only filesystem decision before they can acquire scope. */
+internal val MIGRATION_5_6 = Migration(5, 6) { connection ->
+    connection.execSQL("ALTER TABLE `conversation` ADD COLUMN `legacy_workspace_pending` INTEGER NOT NULL DEFAULT 0")
+    connection.execSQL("UPDATE `conversation` SET `legacy_workspace_pending` = 1 WHERE `project_id` IS NULL")
+}
+
+internal val MIGRATION_6_7 = Migration(6, 7) { connection ->
+    connection.execSQL("ALTER TABLE `project` ADD COLUMN `deleting` INTEGER NOT NULL DEFAULT 0")
+}
