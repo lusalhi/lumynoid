@@ -3,7 +3,7 @@ title: 'Agent menawarkan alternatif setelah pengguna menolak aksi'
 type: feature
 ticket: 13
 created: '2026-11-23'
-status: built
+status: done
 baseline_revision: '90c04d5a249b9b78dfde9054d9eb291312686111'
 route: full
 route_source: auto
