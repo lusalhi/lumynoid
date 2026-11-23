@@ -31,7 +31,7 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
 
     override fun stream(baseUrl: String, model: String, apiKey: String, request: LlmRequest): Flow<LlmChunk> = flow {
         val turns = try {
-            request.messages.toTurns(request.requireCompleteText)
+            request.messages.toTurns(textOnly = request.tools.isEmpty())
         } catch (_: IllegalArgumentException) {
             emit(LlmChunk.Failed(LlmError.MalformedToolCall))
             return@flow

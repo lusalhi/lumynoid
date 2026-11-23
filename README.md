@@ -92,7 +92,7 @@ CI runs on every pull request and on pushes to `main`, and these gates fail the 
 
 ## Contributing
 
-Work is planned as tickets under `_bmad-output/initiative-lumynoid/tickets/`: each epic folder has a `tickets.toml` listing its stories in build order, and each story's plan file carries its status. Several people can build different epics at the same time:
+Work is planned as tickets under `_bmad-output/initiative-lumynoid/tickets/`: each epic folder has a `tickets/tickets.toml` listing its stories in build order, and each story's plan file carries its status. Several people can build different epics at the same time:
 
 - Branch from the latest `main`, one short-lived branch per story, and open a pull request to `main`. CI must pass before merging.
 - Rebase on `main` often and right before merging. Parallel epics touch the same core files (`TaskRunner.kt`, `Ports.kt`, `TaskEvent.kt`, `LumynoidApp.kt`), so small pull requests keep conflicts small.

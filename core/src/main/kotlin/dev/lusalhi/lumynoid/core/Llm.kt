@@ -14,7 +14,12 @@ data class LlmMessage(
 data class LlmRequest(
     val messages: List<LlmMessage>,
     val tools: List<ToolDefinition> = emptyList(),
-    /** A text-only follow-up must not accept a reply cut short by the provider. */
+    /**
+     * Marks a text-only follow-up (the reply after Decline). The runner then suppresses live text and treats any
+     * tool-call delta as a failed reply, and adapters fail a reply the provider cut short instead of returning it.
+     * Turning earlier tool history into text for providers that reject it without tool definitions keys on an
+     * empty [tools] list, not on this flag.
+     */
     val requireCompleteText: Boolean = false,
 )
 

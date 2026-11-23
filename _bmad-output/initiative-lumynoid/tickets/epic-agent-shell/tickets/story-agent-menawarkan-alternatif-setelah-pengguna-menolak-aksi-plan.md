@@ -71,6 +71,8 @@ context: []
 
 Quick review (inline): high 1, medium 0, low 0, false 0, maybe-false 0.
 
+Second review pass: the Cubic review on [PR #10](https://github.com/lusalhi/lumynoid/pull/10) covered this risk-high story in place of lens reviews. Its valid findings were fixed on that PR: Anthropic text transcripts now key on an empty tool list, the `requireCompleteText` contract is documented, and the adapter and runner tests assert exact outcomes. Keeping `APPROVAL_DENIED` when the follow-up reply fails is intended: a failed reply keeps the decline notice (see the outcome table above).
+
 | Finding | Verdict / route | Evidence and resolution |
 |---|---|---|
 | Anthropic rejects native tool blocks when there are no tool definitions. | High / patched before final verification | Anthropic confirmed the API rejects this combination. The adapter now sends correlated transcript data as text for the Decline-only request. The HTTP fixture proves plain-text bodies with no tool definitions and rejects tool-shaped replies. |
@@ -78,7 +80,7 @@ Quick review (inline): high 1, medium 0, low 0, false 0, maybe-false 0.
 ## Verification
 
 - `./gradlew --offline :core:test :llm:test` — approval/routing regression and both fixture HTTP exchanges pass.
-- Run the Decline/Stop acceptance in an Android fixture if a target is available; retain physical handset acceptance for the owner.
+- Outstanding: physical handset acceptance with a signed APK, owned by the combined 3.9 + 4.7 release.
 
 - Passed 69 core, 58 provider and 17 action-log JVM tests; assembled the debug fixture APK with a temporary local-only verification overlay (not a production manifest change).
 - On isolated arm64 Redroid API 34, the Compose Decline button yielded exactly one alternative. After force-stop and relaunch the answer and Declined log entry were still visible. The original file was unchanged; the skipped file was absent. In a separate active turn, tapping Stop showed Stopped and no alternative. This used a loopback OpenAI-compatible fixture, not a signed APK or live provider.

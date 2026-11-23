@@ -1637,6 +1637,7 @@ class TaskRunnerTest {
 
         val added = events.state.value.drop(before)
         assertTrue(added.all { it is TaskEvent.TaskFailed && it.reason == FailureReason.INTERRUPTED })
+        assertEquals(7, added.size)
         assertEquals(
             setOf("queued-only", "user-only", "answered", "requested", "decline", "result", "no-events"),
             added.map { it.taskId }.toSet(),

@@ -10,6 +10,7 @@ import dev.lusalhi.lumynoid.core.LlmRequest
 import dev.lusalhi.lumynoid.core.ModelListResult
 import dev.lusalhi.lumynoid.core.Role
 import dev.lusalhi.lumynoid.core.TaskEvent
+import dev.lusalhi.lumynoid.core.ToolCall
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -232,6 +233,27 @@ class AnthropicAdapterTest {
         }
     }
 
+    @Test
+    fun toolHistoryWithoutToolDefinitionsTravelsAsText() = runTest {
+        val engine = MockEngine { respond(events(start, delta("ok"), messageDelta, stop)) }
+        val history = LlmRequest(
+            listOf(
+                LlmMessage(Role.USER, "hi"),
+                LlmMessage(Role.ASSISTANT, "", toolCalls = listOf(ToolCall("local-1", "web_lookup", """{"key":"one"}"""))),
+                LlmMessage(Role.TOOL, "fixture:one", toolCallId = "local-1"),
+                LlmMessage(Role.USER, "again"),
+            ),
+        )
+
+        assertEquals(LlmChunk.Done, run(engine, history).last())
+        val body = engine.requestJson(0)
+        assertFalse("tools" in body)
+        val turns = body.getValue("messages").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("user", "assistant", "user", "user"), turns.map { it.getValue("role").jsonPrimitive.content })
+        assertTrue(turns.all { it.getValue("content") is JsonPrimitive })
+        assertEquals(turns[1].transcriptBlocks().map { it["id"] }, turns[2].transcriptBlocks().map { it["tool_use_id"] })
+    }
+
     private fun JsonObject.transcriptBlocks() =
         Json.parseToJsonElement(getValue("content").jsonPrimitive.content.substringAfter(": ")).jsonArray.map { it.jsonObject }
 
@@ -239,7 +261,7 @@ class AnthropicAdapterTest {
     fun completeTextRequestRejectsAnAnswerCutOffByTheProvider() = runTest {
         val engine = MockEngine { respond(events(start, delta("An unfinished"), stopReason("max_tokens"), stop)) }
         val chunks = adapter(engine).stream(BASE, MODEL, KEY, request.copy(requireCompleteText = true)).toList()
-        assertIs<LlmChunk.Failed>(chunks.last())
+        assertEquals(LlmChunk.Failed(LlmError.Server), chunks.last())
     }
 
     @Test
