@@ -31,7 +31,7 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
 
     override fun stream(baseUrl: String, model: String, apiKey: String, request: LlmRequest): Flow<LlmChunk> = flow {
         val turns = try {
-            request.messages.toTurns()
+            request.messages.toTurns(request.requireCompleteText)
         } catch (_: IllegalArgumentException) {
             emit(LlmChunk.Failed(LlmError.MalformedToolCall))
             return@flow
@@ -52,13 +52,13 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
             joinUrl(baseUrl, "/messages"),
             wireJson.encodeToString(MessagesRequest.serializer(), body),
             auth = { authenticate(apiKey) },
-        ) { readStream(it) }
+        ) { readStream(it, request.requireCompleteText) }
     }
 
     override suspend fun models(baseUrl: String, apiKey: String): ModelListResult =
         client.listModelIds(joinUrl(baseUrl, "/models?limit=$MODEL_LIST_LIMIT")) { authenticate(apiKey) }
 
-    private fun List<LlmMessage>.toTurns(): List<Turn> = buildList {
+    private fun List<LlmMessage>.toTurns(textOnly: Boolean): List<Turn> = buildList {
         val results = mutableListOf<JsonObject>()
         for (message in this@toTurns) {
             if (message.role == Role.SYSTEM) continue
@@ -72,23 +72,27 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
                 continue
             }
             if (results.isNotEmpty()) {
-                add(Turn("user", JsonArray(results.toList())))
+                add(Turn("user", JsonArray(results.toList()).toolResultsContent(textOnly)))
                 results.clear()
             }
             add(
                 if (message.role == Role.ASSISTANT) {
-                    Turn("assistant", message.assistantContent())
+                    Turn("assistant", message.assistantContent(textOnly))
                 } else {
                     Turn("user", JsonPrimitive(message.content))
                 },
             )
         }
-        if (results.isNotEmpty()) add(Turn("user", JsonArray(results)))
+        if (results.isNotEmpty()) add(Turn("user", JsonArray(results).toolResultsContent(textOnly)))
     }
 
-    private fun LlmMessage.assistantContent(): JsonElement {
+    // Anthropic rejects native tool blocks with no tool definitions. Keep their correlated data as text.
+    private fun JsonArray.toolResultsContent(textOnly: Boolean): JsonElement =
+        if (textOnly) JsonPrimitive("Application tool outcomes (transcript data only): $this") else this
+
+    private fun LlmMessage.assistantContent(textOnly: Boolean): JsonElement {
         if (toolCalls.isEmpty()) return JsonPrimitive(content)
-        return JsonArray(buildList {
+        val blocks = JsonArray(buildList {
             if (content.isNotEmpty()) {
                 add(buildJsonObject {
                     put("type", "text")
@@ -105,6 +109,7 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
                 })
             }
         })
+        return if (textOnly) JsonPrimitive("Earlier assistant tool requests (transcript data only): $blocks") else blocks
     }
 
     private fun callId(localId: String) = toolCallWireId("toolu_", localId)
@@ -114,7 +119,7 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
         header("anthropic-version", API_VERSION)
     }
 
-    private suspend fun FlowCollector<LlmChunk>.readStream(response: HttpResponse) {
+    private suspend fun FlowCollector<LlmChunk>.readStream(response: HttpResponse, requireCompleteText: Boolean) {
         var inputTokens = 0
         var outputTokens = 0
         var finished = false
@@ -190,12 +195,17 @@ class AnthropicAdapter(private val client: HttpClient) : WireAdapter {
             emit(LlmChunk.Failed(LlmError.Network))
             return
         }
+        val truncated = stopReason == "max_tokens" || stopReason == "model_context_window_exceeded"
         if (malformed ||
             (stopReason == "tool_use" && toolBlocks.isEmpty()) ||
-            (toolBlocks.isNotEmpty() && (stopReason == "max_tokens" || stopReason == "model_context_window_exceeded")) ||
+            (toolBlocks.isNotEmpty() && truncated) ||
             toolBlocks.values.any { !it.stopped || !it.hasValidArguments() }
         ) {
             emit(LlmChunk.Failed(LlmError.MalformedToolCall))
+            return
+        }
+        if (requireCompleteText && truncated) {
+            emit(LlmChunk.Failed(LlmError.Server))
             return
         }
         if (inputTokens > 0 || outputTokens > 0) emit(LlmChunk.Usage(inputTokens, outputTokens))

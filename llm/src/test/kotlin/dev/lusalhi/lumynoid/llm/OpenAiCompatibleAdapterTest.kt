@@ -1,5 +1,6 @@
 package dev.lusalhi.lumynoid.llm
 
+import dev.lusalhi.lumynoid.core.ApprovalResolution
 import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.LlmChunk
 import dev.lusalhi.lumynoid.core.LlmError
@@ -133,6 +134,45 @@ class OpenAiCompatibleAdapterTest {
         assertEquals(turns, history.take(turns.size))
         assertEquals(JsonPrimitive("ok"), history[4].jsonObject["content"])
         assertEquals(JsonPrimitive("Ask again"), history[5].jsonObject["content"])
+    }
+
+    @Test
+    fun declineSendsCorrelatedResultsWithoutToolsAndRejectsAnotherToolRequest() = runTest {
+        val responses = ArrayDeque(
+            listOf(
+                sse(firstCall, toolFrame(1, "web_read", """{"limit":2}"""), chatFinish("tool_calls")),
+                sse(firstCall, chatFinish("tool_calls")),
+            ),
+        )
+        val engine = MockEngine { respond(responses.removeFirst()) }
+        val adapter = adapterFor(engine)
+        val fixture = ToolRunnerFixture(backgroundScope, LlmPort { adapter.stream(TEST_URL, TEST_MODEL, SECRET, it) }, declineRead = true)
+
+        val log = fixture.run("Read the fixture")
+        assertEquals(2, engine.requestHistory.size)
+        val followUp = engine.requestJson(1)
+        assertFalse("tools" in followUp)
+        val turns = followUp.getValue("messages").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("system", "user", "assistant", "tool", "tool"), turns.map { it.getValue("role").jsonPrimitive.content })
+        val ids = turns[2].getValue("tool_calls").jsonArray.map { it.jsonObject.getValue("id") }
+        assertEquals(ids, turns.takeLast(2).map { it["tool_call_id"] })
+        assertEquals(JsonPrimitive("fixture:one"), turns[3]["content"])
+        val denied = turns[4].getValue("content").jsonPrimitive.content
+        assertTrue(denied.contains("declined") && denied.contains("not executed"))
+        assertEquals(ApprovalResolution.DENIED, log.filterIsInstance<TaskEvent.ApprovalResolved>().single().decision)
+        assertEquals(1, log.filterIsInstance<TaskEvent.ToolResult>().size)
+        assertEquals(1, log.filterIsInstance<TaskEvent.ApprovalRequested>().size)
+        assertTrue(log.none { it is TaskEvent.AssistantMessage })
+        assertEquals(FailureReason.APPROVAL_DENIED, assertIs<TaskEvent.TaskFailed>(log.last()).reason)
+    }
+
+    @Test
+    fun completeTextRequestRejectsAnAnswerCutOffByTheProvider() = runTest {
+        val engine = MockEngine {
+            respond(sse("""data: {"choices":[{"delta":{"content":"An unfinished"}}]}""", chatFinish("length")))
+        }
+        val chunks = adapterFor(engine).stream(TEST_URL, TEST_MODEL, SECRET, request.copy(requireCompleteText = true)).toList()
+        assertIs<LlmChunk.Failed>(chunks.last())
     }
 
     @Test

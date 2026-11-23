@@ -1,6 +1,7 @@
 package dev.lusalhi.lumynoid.llm
 
 import dev.lusalhi.lumynoid.core.ActiveModel
+import dev.lusalhi.lumynoid.core.ApprovalDecision
 import dev.lusalhi.lumynoid.core.ConversationWorkspace
 import dev.lusalhi.lumynoid.core.EventRepository
 import dev.lusalhi.lumynoid.core.IdGenerator
@@ -86,7 +87,7 @@ internal fun adaptersFor(engine: MockEngine) = ProviderAdapters(HttpClient(engin
 internal suspend fun MockEngine.requestJson(index: Int): JsonObject =
     wireJson.parseToJsonElement(requestHistory[index].body.toByteArray().decodeToString()).jsonObject
 
-internal class ToolRunnerFixture(scope: CoroutineScope, llm: LlmPort) {
+internal class ToolRunnerFixture(scope: CoroutineScope, llm: LlmPort, private val declineRead: Boolean = false) {
     private val events = MutableStateFlow<List<TaskEvent>>(emptyList())
     private val repository = object : EventRepository {
         override suspend fun createTask(taskId: String, request: TaskRequest, at: Long, workspaceId: String?) = Unit
@@ -108,6 +109,7 @@ internal class ToolRunnerFixture(scope: CoroutineScope, llm: LlmPort) {
             "web_read",
             "Read a fixture",
             """{"type":"object","properties":{"limit":{"type":"integer"}},"required":["limit"]}""",
+            if (declineRead) RiskAssessment.DESTRUCTIVE else RiskAssessment.READ_ONLY,
         ) { "" },
     )
     private val runner = TaskRunner(
@@ -117,6 +119,10 @@ internal class ToolRunnerFixture(scope: CoroutineScope, llm: LlmPort) {
 
     suspend fun run(input: String): List<TaskEvent> {
         val id = runner.submit(TaskRequest(Origin.User, "conversation", input))
+        if (declineRead) {
+            val pending = runner.pendingApprovals.first { it.isNotEmpty() }.values.single()
+            check(runner.resolve(pending.event.approval.id, ApprovalDecision.DENY))
+        }
         return events.first { log -> log.any { it.taskId == id && !it.needsRecovery } }.filter { it.taskId == id }
     }
 
@@ -124,10 +130,11 @@ internal class ToolRunnerFixture(scope: CoroutineScope, llm: LlmPort) {
         override val name: String,
         override val description: String,
         schema: String,
+        private val risk: RiskAssessment = RiskAssessment.READ_ONLY,
         private val output: (JsonObject) -> String,
     ) : Tool {
         override val inputSchema = wireJson.parseToJsonElement(schema).jsonObject
-        override fun assess(args: JsonObject) = RiskAssessment.READ_ONLY
+        override fun assess(args: JsonObject) = risk
         override fun describe(args: JsonObject) = UiText("fixture")
         override suspend fun execute(args: JsonObject, context: ToolContext) = ToolOutcome(output(args))
     }

@@ -32,6 +32,8 @@ The configured model must support structured tool calls on arm64; the provider c
 
 The first Linux runtime download and each file replacement require approval in chat. If you enabled notifications, tapping the approval notification takes you to its card; it cannot approve or decline the action. Leaving chat without killing the process keeps the request available. After process death, unfinished work is marked interrupted and is not replayed.
 
+**Decline** blocks the requested action and any remaining actions in the same batch. The agent can make one text-only reply to suggest an alternative; the decision stays visible in **Log** even if no reply is available. **Stop** cancels the task without asking for an alternative.
+
 Open **Log** in chat to see tool targets, approvals and the full stored output, including after relaunch. A tool's own capture limit still applies.
 
 To delete a chat, open **More actions → Delete** in its conversation list and confirm. Delete is unavailable while the chat has work that is being submitted, queued, running, or waiting for approval. Deleting a project chat removes only that chat's messages, action log and stored outputs. Other chats and the project's files and installed packages stay available.

@@ -1,5 +1,6 @@
 package dev.lusalhi.lumynoid.llm
 
+import dev.lusalhi.lumynoid.core.ApprovalResolution
 import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.LlmChunk
 import dev.lusalhi.lumynoid.core.LlmError
@@ -19,6 +20,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -187,6 +189,57 @@ class AnthropicAdapterTest {
         assertEquals(turns, history.take(turns.size))
         assertEquals(JsonPrimitive("ok"), history[3].jsonObject["content"])
         assertEquals(JsonPrimitive("Ask again"), history[4].jsonObject["content"])
+    }
+
+    @Test
+    fun declineSendsTextTranscriptWithoutToolsAndRejectsAnyFurtherToolUse() = runTest {
+        val toolRound = events(
+            start,
+            toolStart(0, "web_lookup", """{"key":"one"}"""), blockStop(0),
+            toolStart(1, "web_read", """{"limit":2}"""), blockStop(1),
+            stopReason("tool_use"), stop,
+        )
+        for (returnsTool in listOf(false, true)) {
+            val reply = if (returnsTool) toolRound else events(start, delta("I can propose a draft instead."), messageDelta, stop)
+            val responses = ArrayDeque(listOf(toolRound, reply))
+            val engine = MockEngine { respond(responses.removeFirst()) }
+            val adapter = adapter(engine)
+            val fixture = ToolRunnerFixture(backgroundScope, LlmPort { adapter.stream(BASE, MODEL, KEY, it) }, declineRead = true)
+
+            val log = fixture.run("Read the fixture")
+            assertEquals(2, engine.requestHistory.size)
+            val followUp = engine.requestJson(1)
+            assertFalse("tools" in followUp)
+            val turns = followUp.getValue("messages").jsonArray.map { it.jsonObject }
+            assertEquals(listOf("user", "assistant", "user"), turns.map { it.getValue("role").jsonPrimitive.content })
+            val calls = turns[1].transcriptBlocks()
+            val results = turns[2].transcriptBlocks()
+            assertEquals(calls.map { it["id"] }, results.map { it["tool_use_id"] })
+            assertEquals(JsonPrimitive("fixture:one"), results[0]["content"])
+            val denied = results[1].getValue("content").jsonPrimitive.content
+            assertTrue(denied.contains("declined") && denied.contains("not executed"))
+            assertEquals(ApprovalResolution.DENIED, log.filterIsInstance<TaskEvent.ApprovalResolved>().single().decision)
+            assertEquals(1, log.filterIsInstance<TaskEvent.ToolResult>().size)
+            assertEquals(1, log.filterIsInstance<TaskEvent.ApprovalRequested>().size)
+            val answers = log.filterIsInstance<TaskEvent.AssistantMessage>()
+            if (returnsTool) {
+                assertTrue(answers.isEmpty())
+                assertEquals(FailureReason.APPROVAL_DENIED, assertIs<TaskEvent.TaskFailed>(log.last()).reason)
+            } else {
+                assertEquals("I can propose a draft instead.", answers.single().text)
+                assertIs<TaskEvent.TaskFinished>(log.last())
+            }
+        }
+    }
+
+    private fun JsonObject.transcriptBlocks() =
+        Json.parseToJsonElement(getValue("content").jsonPrimitive.content.substringAfter(": ")).jsonArray.map { it.jsonObject }
+
+    @Test
+    fun completeTextRequestRejectsAnAnswerCutOffByTheProvider() = runTest {
+        val engine = MockEngine { respond(events(start, delta("An unfinished"), stopReason("max_tokens"), stop)) }
+        val chunks = adapter(engine).stream(BASE, MODEL, KEY, request.copy(requireCompleteText = true)).toList()
+        assertIs<LlmChunk.Failed>(chunks.last())
     }
 
     @Test

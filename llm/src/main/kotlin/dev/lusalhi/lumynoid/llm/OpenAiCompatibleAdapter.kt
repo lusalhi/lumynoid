@@ -48,7 +48,7 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) : WireAdapter {
             joinUrl(baseUrl, "/chat/completions"),
             wireJson.encodeToString(ChatRequest.serializer(), body),
             auth = { header(HttpHeaders.Authorization, "Bearer $apiKey") },
-        ) { readStream(it) }
+        ) { readStream(it, request.requireCompleteText) }
     }
 
     override suspend fun models(baseUrl: String, apiKey: String): ModelListResult =
@@ -56,7 +56,7 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) : WireAdapter {
             header(HttpHeaders.Authorization, "Bearer $apiKey")
         }
 
-    private suspend fun FlowCollector<LlmChunk>.readStream(response: HttpResponse) {
+    private suspend fun FlowCollector<LlmChunk>.readStream(response: HttpResponse, requireCompleteText: Boolean) {
         var doneMarker = false
         var finishReason: String? = null
         var malformed = false
@@ -107,6 +107,7 @@ class OpenAiCompatibleAdapter(private val client: HttpClient) : WireAdapter {
                 LlmError.MalformedToolCall
             calls.values.any { !it.hasName || parseToolArguments(it.arguments.toString()) == null } ->
                 LlmError.MalformedToolCall
+            requireCompleteText && (finishReason == "length" || finishReason == "content_filter") -> LlmError.Server
             else -> null
         }
         emit(if (error == null) LlmChunk.Done else LlmChunk.Failed(error))

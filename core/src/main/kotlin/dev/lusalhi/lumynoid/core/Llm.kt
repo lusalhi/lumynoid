@@ -11,7 +11,12 @@ data class LlmMessage(
     val toolCallId: String? = null,
 )
 
-data class LlmRequest(val messages: List<LlmMessage>, val tools: List<ToolDefinition> = emptyList())
+data class LlmRequest(
+    val messages: List<LlmMessage>,
+    val tools: List<ToolDefinition> = emptyList(),
+    /** A text-only follow-up must not accept a reply cut short by the provider. */
+    val requireCompleteText: Boolean = false,
+)
 
 /** Errors normalised by the adapters (AD-11). They travel as [LlmChunk.Failed], never as exceptions. */
 sealed interface LlmError {
