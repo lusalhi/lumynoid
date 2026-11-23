@@ -3,7 +3,7 @@ title: 'Upgrade mengadopsi chat dan data proyek Epic 2 tanpa menyalin file'
 type: feature
 ticket: '2'
 created: '2026-11-22'
-status: built
+status: done
 baseline_revision: '62a9ae208fad4acdfcfaaaa29b96c6561856dbfe'
 route: full
 route_source: auto

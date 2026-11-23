@@ -3,7 +3,7 @@ title: 'Instruksi proyek tetap konsisten sampai tugas selesai'
 type: feature
 ticket: '4'
 created: '2026-11-22'
-status: built
+status: done
 baseline_revision: '9fd2b2ed20b9fa06fa9319f125c52316361132ab'
 route: full
 route_source: auto

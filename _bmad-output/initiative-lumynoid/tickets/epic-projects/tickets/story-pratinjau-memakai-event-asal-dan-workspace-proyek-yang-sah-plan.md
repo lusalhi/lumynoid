@@ -3,7 +3,7 @@ title: 'Pratinjau memakai event asal dan workspace proyek yang sah'
 type: feature
 ticket: 3
 created: '2026-11-22'
-status: built
+status: done
 baseline_revision: 'ed6bdf2f0d431691552e022a1155413be9ff495a'
 route: oneshot
 route_source: auto

@@ -28,6 +28,7 @@ Pengguna menyuruh agent mengerjakan tugas nyata di HP, termasuk coding, dan sela
 - R3 (parent R9): Pengguna bisa membuka log aksi yang memuat setiap panggilan tool beserta target dan hasilnya.
 - R4 (parent R10): Instruksi dari output tool tidak dapat memicu aksi yang butuh persetujuan tanpa kartu konfirmasi. Bukti untuk konten halaman web menjadi bagian epic Browsing Web.
 - R5 (parent R11): Pengguna bisa membuka pratinjau file dan halaman HTML hasil kerja agent di dalam app.
+- R6 (parent R8): Setelah pengguna menolak aksi lewat kartu, agent menawarkan alternatif lewat satu balasan teks di chat tanpa menjalankan aksi itu atau tool lain. Penolakan tetap terlihat di log; Stop tetap berarti berhenti.
 
 ## Constraints
 
@@ -41,6 +42,7 @@ Pengguna menyuruh agent mengerjakan tugas nyata di HP, termasuk coding, dan sela
 - Uji memasukkan path di luar folder aktif, perintah bebas, dan paket di luar daftar. Ketiganya ditolak. File konfigurasi dan skrip dari proyek tidak mengubah proses yang dijalankan.
 - Tugas panjang tetap selesai saat layar mati karena berjalan di FGS. Userland dan seluruh proses anak berhenti saat tugas selesai, gagal, dibatalkan, mencapai timeout, atau menunggu persetujuan.
 - Aksi merusak, keuangan, dan pengiriman data keluar berhenti di kartu konfirmasi; uji dengan output tool berisi instruksi palsu tidak bisa melewatinya, dan teks LLM tidak bisa tampil sebagai kartu.
+- Ketuk **Decline** saat agent meminta izin menimpa file uji. File tidak berubah, Log menunjukkan **Declined**, dan agent menawarkan alternatif tanpa meminta izin lagi. Ketuk **Stop** pada percobaan terpisah; tugas berhenti tanpa balasan alternatif.
 - Log aksi menampilkan setiap tool call beserta hasilnya; file dan HTML hasil kerja bisa dipratinjau di app.
 - Dengan `LlmPort` palsu yang mengirim tool call kosong lalu args rusak, runner mengirim satu pesan perbaikan, lalu tugas berakhir `MALFORMED_TOOL_CALL` yang terlihat pengguna dan tercatat di log aksi; tugas yang melewati `MAX_LLM_CALLS` berakhir `BUDGET_EXHAUSTED` (AD-26).
 - Dirilis di GitHub Releases dan diuji terintegrasi dengan chat epic-chat-dan-provider.
@@ -69,3 +71,4 @@ Pengguna menyuruh agent mengerjakan tugas nyata di HP, termasuk coding, dan sela
 - Decision: 2026-11-21 — Replan setelah pengguna melaporkan Samsung SM-S731B API 37 lulus baca/tulis, npm offline, skrip Node, dan cleanup dengan PRoot pada APK target SDK 37. Rilis awal memakai satu APK dengan folder proyek biasa dan operasi coding yang ditentukan aplikasi. [Bukti Spike 2.1](tickets/spike-buktikan-userland-android-dan-batas-isolasinya-plan.md#probe-npm-melalui-proot)
 - Decision: 2026-11-21 — Menggantikan keputusan 2026-11-20 tentang gate isolasi untuk 2.5 dan 2.7. 2.5 memakai hasil kompatibilitas 2.1 dan handoff lifecycle 2.4. Status 2.1 tetap mencatat hambatan shell umum dari scope awal. 2.8 tetap menjadi tracer produk dengan satu workspace stabil per percakapan.
 - Decision: 2026-11-21 — Untuk rilis awal, kontrak tool memakai operasi bertipe dengan input yang diperiksa aplikasi. AD-14 tetap menjadi acuan kemasan dan lifecycle. Profil shell bebas dan jaringan di AD-20 berlaku saat cakupan itu dibuka setelah batasnya terbukti. Penyelarasan AD-14/AD-20 dicatat untuk pembaruan arsitektur. Perlindungan kredensial AD-15 tetap berlaku.
+- Decision: 2026-11-23 — Dari laporan uji v0.4.1, Decline menutup tugas tanpa memberi tahu model. Pemilik memilih satu balasan teks otomatis tanpa tool sebagai follow-up 2.13 sebelum Epic 3 memakai gerbang yang sama. Penerimaan rilis Projects 8.8 tidak berubah; persetujuan per panggilan dan TTL AD-7 tetap berlaku.

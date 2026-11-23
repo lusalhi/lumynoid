@@ -24,7 +24,7 @@ On Android 13+, Lumynoid asks for notification permission the first time you ope
 
 On arm64, coding chat can create and read workspace files, install the bundled npm package offline, and run the built-in JSON formatter. Activity cards show each operation and its result.
 
-Open **Conversations → Projects → New Project**. Chats in the same project share files and installed packages, but not history or logs. **New Chat** outside Projects still answers without coding tools. The in-place upgrade from signed `v0.3.1` still awaits a physical handset check. If you are testing that upgrade, install the new signed APK over `v0.3.1` without clearing app data. Chats with workspace files or installed packages should become separate projects; other chats should stay ordinary.
+Open **Conversations → Projects → New Project**. Chats in the same project share files and installed packages, but not history or logs. **New Chat** outside Projects still answers without coding tools. The in-place upgrade from signed `v0.3.1` to signed `v0.4.1` passed on a physical handset. For that upgrade, install the new signed APK over `v0.3.1` without clearing app data. Chats with workspace files or installed packages become separate projects; other chats stay ordinary.
 
 Open **Instructions** on a project to set or clear shared instructions (up to 2,000 Unicode characters). Running tasks keep the instructions they started with, including after approval or retry. Changes apply when the next task starts. Ordinary chats do not use project instructions.
 

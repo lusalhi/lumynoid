@@ -45,3 +45,4 @@ Pengguna bisa mengandalkan asisten untuk menjalankan tugas pada waktunya, walau 
 - Decision: 2026-11-14 — Replan (AD-2): TaskRunner yang dipanggil alarm kerangkanya dari epic-chat-dan-provider dan loop tool-nya dari epic-agent-shell; epic ini tetap menunggu epic-agent-shell karena `schedule_create` butuh registry tool dan gerbang konfirmasi.
 - Decision: 2026-11-16 — Dari epic-chat-dan-provider: deklarasikan dan minta `POST_NOTIFICATIONS`, supaya notifikasi `task_running` FGS terlihat di Android 13+. Di HP pemilik notifikasi itu tersembunyi, dan Lumynoid tidak muncul di daftar app aktif sistem.
 - Decision: 2026-11-22 — Tugas Terjadwal memakai identitas dan batas kepemilikan data dari Epic 8. Integrasi pembatalan jadwal saat proyek dihapus dimiliki epic ini, bukan syarat rilis Projects.
+- Decision: 2026-11-23 — Story 2.13 mendahului Epic 3. Epic ini memakai perilaku Decline dari TaskRunner bersama, bukan membuat kebijakan approval khusus penjadwal.
