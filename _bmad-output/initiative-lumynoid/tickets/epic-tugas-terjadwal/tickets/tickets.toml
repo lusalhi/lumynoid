@@ -1,0 +1,106 @@
+# Epic 3 — Tugas terjadwal, urutan build yang disetujui 2026-11-23.
+# Paralel dengan Epic 4; migrasi Room dari versi 7 mengikuti aturan di Notes epic.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Tugas sekali dari layar jadwal berjalan saat app tertutup"
+description = "Tracer: buat modul `:scheduler` dengan `SchedulerPort.create` (menerima target proyek opsional; form 3.1 hanya tanpa proyek) dan tabel jadwal lewat migrasi eksplisit. Satu form minimal di layar jadwal membuat tugas `Once` tanpa proyek beserta percakapan hasilnya. Exact alarm memicu receiver yang menjalankan AgentService sebagai foreground service lalu `TaskRunner.submit` dengan origin jadwal dan `runKey`; `runKey` yang sama ditolak. Hasil tampil di percakapan hasil dan sebagai notifikasi hasil yang membukanya. Minta izin alarm tepat waktu sebelum menyimpan jadwal pertama."
+verify = "Di build debug pada HP atau emulator arm64 API 34+ dengan izin notifikasi dan izin alarm sudah diberikan, buat tugas sekali 2 menit ke depan, lalu tutup app dari daftar app terbaru (bukan Force stop, yang membatalkan alarm) dan matikan layar. Pada waktunya notifikasi hasil muncul; mengetuknya membuka percakapan hasil berisi jawaban. Tes JVM mencakup dedupe `runKey` setelah proses dibuat ulang dan migrasi dari versi 7 ke versi berikutnya (aturan nomor di Notes epic)."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-16--penjadwalan-lewat-schedulerport-eksekusi-lewat-taskrunner"]
+covers = ["R1", "R3", "R4", "R6"]
+after = ["2.13"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Jadwal harian dan mingguan tetap terpasang setelah HP restart"
+description = "Tambahkan `Daily` dan `Weekly` dalam waktu lokal dan `zoneId`, dengan alarm berikutnya dihitung saat fire. Pasang ulang alarm pada `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`, `TIME_SET`, `TIMEZONE_CHANGED`, dan perubahan izin alarm tepat waktu. Jadwal yang terlewat mendapat paling banyak satu run susulan. Pemasangan ulang menjadi satu fungsi yang dipakai 3.6 dan 3.7."
+verify = "Tes JVM menghitung waktu berikutnya lintas DST, ganti zona, dan akhir bulan. Di emulator: jadwal harian tetap jalan setelah reboot dan setelah `adb install -r`; mengganti zona waktu emulator menggeser alarm ke jam lokal yang benar; mematikan emulator melewati dua waktu jalan menghasilkan tepat satu run susulan setelah menyala."
+covers = ["R3"]
+after = [1]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Layar tugas terjadwal mengelola jadwal dan proyek tujuannya"
+description = "Kembangkan layar dari 3.1: daftar jadwal dengan waktu jalan berikutnya, buat, ubah, aktif/nonaktif, dan hapus lewat `SchedulerPort`, termasuk pilihan proyek atau tanpa proyek; proyek jadwal tidak bisa diubah setelah dibuat. Percakapan hasil jadwal proyek menjadi anggota proyek itu. Percakapan hasil tidak bisa dihapus sendiri selama masih dirujuk jadwal; penolakan ini berlaku untuk hapus satu chat, bukan cleanup hapus proyek (3.6). Operasi ubah dan hapus di port dipakai tool chat 3.4."
+verify = "Buat jadwal tanpa proyek dan jadwal untuk Project A dari layar; keduanya tampil dengan waktu berikutnya. Ubah jam, nonaktifkan, lalu aktifkan lagi; alarm mengikuti. Run jadwal Project A membaca file proyek itu. Hapus percakapan hasil yang masih dirujuk ditolak; setelah jadwal dihapus, percakapan bisa dihapus."
+covers = ["R1"]
+after = [1, "8.1"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Agent membuat dan mengelola jadwal dari chat setelah persetujuan"
+description = "Daftarkan tool `schedule_create`, `schedule_list`, `schedule_update`, dan `schedule_delete` yang tidak membutuhkan workspace dan memakai `SchedulerPort` dari 3.1–3.3. Buat dan ubah berkelas `PERSISTENT` dengan kartu yang menampilkan teks tugas penuh dan waktunya; hapus berkelas `DESTRUCTIVE` dengan kartu. Tool hanya menjangkau jadwal proyek chat saat ini, atau jadwal tanpa proyek dari chat biasa, dan tidak bisa memindah proyek jadwal. Jadwal dari chat proyek menjadi milik proyek itu. Registry menyembunyikan tool `schedule_*` dari tugas berorigin jadwal."
+verify = "Provider fixture meminta `schedule_create` dari chat Project A: kartu menampilkan teks tugas penuh; Decline tidak menyimpan apa pun dan memberi balasan teks (2.13); Approve menyimpan jadwal yang tampil di layar dengan Project A. Tool list/update/delete bekerja dari chat biasa hanya untuk jadwal tanpa proyek; dari chat Project A, jadwal Project B tidak terlihat. Hapus meminta kartu. Run jadwal dari chat Project A membaca file Project A dan percakapan hasilnya ada di Project A; jadwal dari chat biasa tanpa proyek. Request run terjadwal tidak membawa tool `schedule_*`."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-6--kontrak-tool-dan-registry", "_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-7--gerbang-konfirmasi-milik-runner-default-deny"]
+covers = ["R2"]
+after = [2, 3, "8.1"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Run terjadwal yang menunggu persetujuan atau gagal memberi tahu pengguna"
+description = "Untuk tugas berorigin jadwal, notifikasi `task_approval` membuka kartu di percakapan hasil, dan run yang ditolak, kedaluwarsa (TTL 12 jam), gagal, atau dihentikan memunculkan notifikasi hasil dengan alasannya, termasuk alasan semua provider habis dari 4.1 bila sudah ada. Memakai gerbang dan perilaku Decline yang sama dengan chat; tidak ada izin otomatis."
+verify = "Jadwal Project A dibuat lewat `SchedulerPort` dari fixture; provider fixture membuat run terjadwal itu meminta `shell_replace_file` di Project A saat app tertutup: notifikasi persetujuan membuka kartunya; Decline memberi satu balasan teks dan notifikasi hasil. Run kedua dengan provider yang gagal memunculkan notifikasi gagal dengan alasan. Tes JVM mencakup kedaluwarsa approval untuk origin jadwal."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-22--siklus-approval-dan-pemulihan-crash"]
+covers = ["R4"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Hapus proyek membatalkan jadwalnya"
+description = "Di dalam gerbang penghapusan `ProjectPort.delete`, nonaktifkan semua jadwal proyek dan batalkan alarmnya, lalu hapus jadwal itu sebelum percakapan hasilnya dibersihkan; cleanup tidak terhalang aturan rujukan percakapan hasil dari 3.3; penghapusan tidak selesai bila langkah ini gagal dan dapat diulang. Pembuatan jadwal dan pemasangan ulang alarm (3.2) memakai gerbang lifecycle target, dan fire memeriksa jadwal masih ada serta target aktif saat tugas diterima."
+verify = "Buat dua jadwal untuk Project A dan satu untuk Project B, lalu hapus Project A: jadwal A hilang dari layar dan alarmnya tidak lagi terdaftar (`dumpsys alarm`), jadwal B tetap. Tes JVM: penghapusan yang terputus setelah `DELETING` diulang sampai selesai; jadwal baru dan pemasangan ulang untuk proyek yang sedang dihapus ditolak; alarm basi yang fire tidak membuat tugas."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-27--project-memiliki-workspace-percakapan-memiliki-riwayat"]
+covers = ["R5"]
+after = [2, 3, "8.6"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Onboarding izin, baterai, dan autostart untuk jadwal"
+description = "Saat jadwal pertama dibuat dari layar atau dari chat (3.4), minta izin notifikasi dan izin alarm tepat waktu. Selama izin alarm tepat waktu ditolak, jadwal tampil sebagai dijeda dengan tombol ke Pengaturan dan dipasang ulang otomatis lewat 3.2 setelah izin diberikan. Tambahkan permintaan pengecualian optimasi baterai dan panduan autostart statis untuk Xiaomi/Redmi/POCO, Samsung, Oppo/Realme/OnePlus, Vivo, dan panduan umum, dengan tombol ke halaman pengaturan bila tersedia."
+verify = "Di emulator API 34+ dengan izin alarm dicabut, jadwal baru tampil dijeda dan tidak berjalan; memberi izin di Pengaturan membuatnya aktif dengan waktu berikutnya tanpa membuka form lagi. Dialog izin notifikasi muncul saat jadwal pertama dibuat. Layar panduan menampilkan teks merek sesuai `Build.MANUFACTURER` dan fallback umum; permintaan pengecualian baterai membuka dialog sistem."
+references = ["_bmad-output/initiative-lumynoid/architecture-lumynoid/architecture-lumynoid.md#ad-24--batas-izin-dan-batas-produk"]
+covers = ["R6"]
+after = [2, 3, 4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 8
+type = "story"
+title = "Refactor sweep"
+description = "Rapikan hasil Epic 3 dari plan dan temuan review yang ditunda; cakupan ditetapkan saat story ini dimulai dan hanya cleanup."
+verify = "Suite JVM dan build debug lulus tanpa perubahan perilaku; daftar temuan yang ditunda tercatat selesai atau dipindah ke ticket baru."
+covers = []
+after = [1, 2, 3, 4, 5, 6, 7]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 9
+type = "story"
+title = "APK Epic 3 bertanda tangan lolos uji jadwal di HP"
+description = "Terbitkan APK bertanda tangan dari tag `main`, satu rilis bersama 4.7, karena chat biasa membawa tool `schedule_*` dan membutuhkan fallback tanpa tool dari 4.2, dan jalankan penerimaan pemilik di Samsung `SM-S731B` dengan alur onboarding dari app."
+verify = "Pemilik memasang APK di atas rilis sebelumnya, mengikuti onboarding izin dan baterai, lalu: satu jadwal dari layar dan satu dari chat proyek berjalan tepat waktu dengan app ditutup dari daftar app terbaru (bukan Force stop) dan layar mati, notifikasi hasil membuka percakapan hasil, run yang butuh persetujuan memberi notifikasi, dan menghapus proyek membuat jadwalnya tidak berjalan. Hasil dicatat di plan dengan versi APK."
+covers = ["R1", "R2", "R3", "R4", "R5", "R6"]
+after = [8, "4.2"]
+hitl = true
+risk = "medium"
