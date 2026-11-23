@@ -2,7 +2,7 @@
 
 Lumynoid is an Android app for chatting with an AI model using your own API key. There is no Lumynoid account and no Lumynoid server: the app talks directly to the endpoint you choose (an OpenAI-compatible provider or Anthropic).
 
-> Status: early development. The first releases are pre-releases (`v0.x`).
+> Status: early development. Releases are pre-releases (`v0.x`); the latest is `v0.4.1` (Projects). Scheduled tasks and quota saving (provider fallback, context trimming) are in progress and will ship together in one release.
 
 ## Install
 
@@ -80,7 +80,7 @@ The official signed upgrade is still a separate check in the
 
 ## Checks that gate every change
 
-CI runs on every push and pull request, and these gates fail the build:
+CI runs on every pull request and on pushes to `main`, and these gates fail the build:
 
 | Gate | What it enforces | Run it locally |
 | --- | --- | --- |
@@ -89,6 +89,15 @@ CI runs on every push and pull request, and these gates fail the build:
 | Schema versions | A pull request may not edit an exported Room schema, reuse a version already on the base branch, or claim a version another open pull request claims (AD-19) | `python3 .github/scripts/check_schema_claims.py --base origin/main` |
 | Release tags | A `v*` tag must be on `main`, equal `versionName`, raise `versionCode` over every earlier tag and keep Room schemas on main's migration line; the signed APK must match the committed certificate fingerprint (AD-25) | `python3 .github/scripts/check_release.py --self-test` |
 | Persisted names | Every persisted subtype and enum entry has an explicit snake_case `@SerialName` (AD-19) | `./gradlew :core:test` |
+
+## Contributing
+
+Work is planned as tickets under `_bmad-output/initiative-lumynoid/tickets/`: each epic folder has a `tickets.toml` listing its stories in build order, and each story's plan file carries its status. Several people can build different epics at the same time:
+
+- Branch from the latest `main`, one short-lived branch per story, and open a pull request to `main`. CI must pass before merging.
+- Rebase on `main` often and right before merging. Parallel epics touch the same core files (`TaskRunner.kt`, `Ports.kt`, `TaskEvent.kt`, `LumynoidApp.kt`), so small pull requests keep conflicts small.
+- Room migrations: the first pull request to merge takes the next database version; the other rebases and renumbers its migration. The schema-version gate rejects a pull request that claims a version already on `main` or claimed by another open pull request.
+- Merging to `main` does not release anything. Signed APKs are built only from `v*` tags on `main` by the maintainer (see [docs/release.md](docs/release.md)).
 
 ## License
 
