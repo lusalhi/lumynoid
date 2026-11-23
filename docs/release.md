@@ -87,6 +87,37 @@ A rejected tag can be deleted (`git push origin :refs/tags/vX`, `git tag -d vX`)
 Prove the backup works before you need it: decrypt a backup on a clean machine, run the `keytool -list` command from
 step 3, and confirm the SHA-256 equals the README fingerprint. Repeat for the second backup.
 
+## Projects handset acceptance (Story 8.8)
+
+Use a physical arm64 handset running Epic 2's signed `v0.3.1`. Under separate disposable chats, create
+`upgrade-note.txt` and `upgrade-preview.html` with a visible script marker, install `@lumynoid/json-tools`
+without writing any files, and send an ordinary chat message without using tools. Record the chat names
+and original log entries. Install the signed Projects APK over `v0.3.1` without uninstalling or clearing
+data. The first two chats must become distinct projects; the ordinary chat stays plain. In the
+package-only chat, write a fresh JSON file and format it with the existing package without
+reinstalling. With the handset offline, reopen both old files from their original log events;
+the HTML script marker must appear only after selecting **Enable JavaScript**.
+
+1. Create a disposable project. In chat A, write `tracer.json`, install `@lumynoid/json-tools`, and
+   send a unique chat-only marker. In chat B, read, edit and format `tracer.json` without reinstalling.
+   Relaunch and confirm that both chats see the same files, package and project instructions but not
+   each other's history or log. Try the same file from a second project and a plain chat: neither may
+   see its contents or open its preview, and plain chat must still answer.
+2. Set a distinctive project instruction, then ask chat B to overwrite `tracer.json`. While the
+   approval card is pending, change the instruction from the project screen. Verify that deletion
+   is unavailable while work is pending. Return to the task and approve: the resumed answer should
+   follow the original instruction, and a new turn should follow the updated one. A controlled
+   provider capture, if used, must omit other chats' messages from both requests.
+3. Delete chat A after confirmation. Verify its history and log are gone, and chat B can still use
+   the file and package. Confirm deletion of the disposable project and force-stop Lumynoid during
+   cleanup without clearing its data. On relaunch, look for **Resume deletion**; the marked project
+   must not accept new work or previews. Resume and verify it is gone while the second project,
+   provider and shared runtime still work. If cleanup finishes before the force-stop or deletion
+   never starts, that attempt does not prove recovery; use another disposable fixture to retry.
+
+Record the device, OS, signed APK digests and outcome of each case. Record which cases could not be
+observed separately; a debug or Redroid pass does not replace signed handset acceptance.
+
 ## If the key leaks
 
 v1 does not rotate keys. If it leaks, rotate through an APK Signature Scheme v3 lineage and register the new key in

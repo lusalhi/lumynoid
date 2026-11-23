@@ -53,6 +53,7 @@ internal class CodingTools(
 
     private inner class CodingTool(private val operation: Operation) : Tool {
         override val name = operation.toolName
+        override val requiresWorkspace = true
         override val description = operation.description
         override val inputSchema = buildJsonObject {
             put("type", "object")
@@ -171,7 +172,7 @@ internal class CodingTools(
     private suspend inline fun <T> inWorkspace(context: ToolContext, action: (Path, Job) -> T): T = lock.withLock {
         val job = currentCoroutineContext().job
         job.ensureActive()
-        action(workspace.directory(context.workspaceId), job)
+        action(workspace.directory(checkNotNull(context.workspaceId)), job)
     }
 
     private companion object {

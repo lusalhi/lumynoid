@@ -33,7 +33,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
-import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.userland.WorkspacePreview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,16 +44,16 @@ class ArtifactHtmlActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         var loading by mutableStateOf(true)
         var networkDenied by mutableStateOf(false)
-        var artifact by mutableStateOf<ArtifactIdentity?>(null)
+        var published by mutableStateOf<PublishedArtifact?>(null)
         setContent {
             LumynoidTheme {
                 Surface(Modifier.fillMaxSize()) {
-                    val file = artifact
+                    val file = published
                     if (file != null && networkDenied) {
-                        HtmlFilePreview(file, remember(file.conversationId) { WorkspacePreview(this, file.conversationId) }, ::finish)
+                        HtmlFilePreview(file.artifact, file.workspace, ::finish)
                     } else {
                         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                            PreviewHeader(file?.path.orEmpty(), ::finish)
+                            PreviewHeader(file?.artifact?.path.orEmpty(), ::finish)
                             HorizontalDivider()
                             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                                 when {
@@ -69,20 +68,19 @@ class ArtifactHtmlActivity : ComponentActivity() {
             }
         }
         lifecycleScope.launch {
-            artifact = lookupArtifact()
-            networkDenied = withContext(Dispatchers.IO) { networkSocketsDenied() } && WebView.getCurrentWebViewPackage() != null
+            published = lookupArtifact()
+            networkDenied = published != null &&
+                withContext(Dispatchers.IO) { networkSocketsDenied() } && WebView.getCurrentWebViewPackage() != null
             loading = false
         }
     }
 
-    private suspend fun lookupArtifact(): ArtifactIdentity? {
+    private suspend fun lookupArtifact(): PublishedArtifact? {
         val conversation = intent.getStringExtra(CONVERSATION) ?: return null
         val resultId = intent.getStringExtra(RESULT) ?: return null
         val index = intent.getIntExtra(ARTIFACT_INDEX, -1)
-        if (index < 0) return null
-        val result = (application as LumynoidApp).graph.data.event(conversation, resultId) as? TaskEvent.ToolResult ?: return null
-        val file = result.outcome.artifacts.getOrNull(index) ?: return null
-        return ArtifactIdentity(conversation, resultId, file.path, file.mediaType).takeIf { it.isHtml() }
+        return (application as LumynoidApp).graph.previewArtifact(conversation, resultId, index)
+            ?.takeIf { it.artifact.isHtml() }
     }
 
     companion object {

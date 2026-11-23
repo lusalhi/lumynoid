@@ -110,12 +110,55 @@ interface ProviderAdminPort {
 }
 
 /** [title] is empty until a message names it; the UI then shows a placeholder. */
-data class Conversation(val id: String, val title: String, val createdAt: Long, val lastActivityAt: Long)
+data class Conversation(
+    val id: String,
+    val title: String,
+    val createdAt: Long,
+    val lastActivityAt: Long,
+    val projectId: String? = null,
+)
+
+data class Project(
+    val id: String,
+    val name: String,
+    val workspaceId: String,
+    val instructions: String,
+    val deleting: Boolean = false,
+)
+
+interface ProjectPort {
+    /** Returns null for a blank name. */
+    suspend fun create(name: String): Project?
+    fun observeAll(): Flow<List<Project>>
+    suspend fun saveInstructions(id: String, instructions: String): Boolean
+
+    /**
+     * Removes the project and its owned data, or resumes an interrupted deletion.
+     * Returns false while a member has unfinished work or cleanup is already running.
+     */
+    suspend fun delete(id: String): Boolean
+
+    /** Stored instructions of the active project owning [workspaceId]; null when unavailable. */
+    suspend fun instructionsForWorkspace(workspaceId: String): String?
+
+    companion object {
+        /** The shared storage limit, counted in Unicode code points. */
+        const val MAX_INSTRUCTION_CODE_POINTS = 2_000
+    }
+}
+
+sealed interface ConversationWorkspace {
+    data object Plain : ConversationWorkspace
+    data class Project(val workspaceId: String) : ConversationWorkspace
+}
 
 /** The UI's only way to read and write conversations (AD-23). Messages are written by `TaskRunner` alone. */
 interface ConversationPort {
-    /** Creates a conversation titled from [firstMessage]. */
-    suspend fun create(firstMessage: String): Conversation
+    /** Creates a conversation titled from [firstMessage], optionally belonging to a project. */
+    suspend fun create(firstMessage: String, projectId: String? = null): Conversation
+
+    /** Null means the conversation is missing or its project scope is unavailable, not a plain chat. */
+    suspend fun workspace(id: String): ConversationWorkspace?
 
     /** The conversation with the most recent activity. */
     suspend fun latest(): Conversation?
@@ -133,7 +176,6 @@ interface ConversationPort {
 data class TaskRequest(
     val origin: Origin,
     val conversationId: String,
-    val workspaceId: String,
     val input: String,
 )
 
@@ -159,7 +201,7 @@ data class UnfinishedTask(val taskId: String, val conversationId: String)
 
 /** Event log storage. Only [TaskRunner] may call the write functions (AD-4, AD-5). */
 interface EventRepository {
-    suspend fun createTask(taskId: String, request: TaskRequest, at: Long)
+    suspend fun createTask(taskId: String, request: TaskRequest, at: Long, workspaceId: String?)
     /** Tool, approval and retry audit events must be stored before returning; throw if the conversation is gone. */
     suspend fun append(conversationId: String, event: TaskEvent)
     fun observe(conversationId: String): Flow<List<TaskEvent>>

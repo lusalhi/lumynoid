@@ -3,7 +3,7 @@ title: 'Aksi berisiko menunggu persetujuan tanpa menahan antrean'
 type: feature
 ticket: 4
 created: '2026-11-20'
-status: built
+status: done
 baseline_revision: 1c6caffcbb1dd78a49e7850f26223480f1397a02
 route: full
 route_source: auto

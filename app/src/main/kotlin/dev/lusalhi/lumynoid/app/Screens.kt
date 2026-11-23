@@ -48,7 +48,7 @@ import dev.lusalhi.lumynoid.core.TaskEvent
 @Composable
 internal fun ChatScreen(
     state: ChatState,
-    onSend: (String) -> Unit,
+    onSend: (String, (Boolean) -> Unit) -> Unit,
     onStop: () -> Unit,
     onOpenProvider: () -> Unit,
     onOpenConversations: () -> Unit,
@@ -57,7 +57,9 @@ internal fun ChatScreen(
     onOpenActionLog: () -> Unit,
     onOpenArtifact: (ArtifactIdentity) -> Unit,
 ) {
-    var draft by key(state.conversationId) { rememberSaveable { mutableStateOf("") } }
+    val draftState = key(state.conversationId, state.draftProjectId) { rememberSaveable { mutableStateOf("") } }
+    var draft by draftState
+    var sending by remember(draftState) { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val liveText = state.live?.text.orEmpty()
     val rows = remember(state.events) { chatRows(state.events) }
@@ -93,7 +95,7 @@ internal fun ChatScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                state.title.ifBlank { stringResource(R.string.conversation_untitled) },
+                state.title.ifBlank { state.chatProjectName ?: stringResource(R.string.conversation_untitled) },
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -159,8 +161,15 @@ internal fun ChatScreen(
                     Button(onClick = onStop) { Text(stringResource(R.string.chat_stop)) }
                 } else {
                     Button(
-                        onClick = { onSend(draft); draft = "" },
-                        enabled = draft.isNotBlank(),
+                        onClick = {
+                            val submitted = draft
+                            sending = true
+                            onSend(submitted) { accepted ->
+                                if (accepted && draft == submitted) draft = ""
+                                sending = false
+                            }
+                        },
+                        enabled = draft.isNotBlank() && !sending,
                     ) { Text(stringResource(R.string.chat_send)) }
                 }
             }

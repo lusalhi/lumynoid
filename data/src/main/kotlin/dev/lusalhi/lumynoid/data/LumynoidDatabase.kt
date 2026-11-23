@@ -7,13 +7,14 @@ import androidx.room3.RoomDatabase
 @Database(
     entities = [
         ConversationEntity::class,
+        ProjectEntity::class,
         TaskEntity::class,
         TaskEventEntity::class,
         ProviderConfigEntity::class,
         ModelProfileEntity::class,
         ActiveModelEntity::class,
     ],
-    version = 4,
+    version = 7,
     exportSchema = true,
 )
 internal abstract class LumynoidDatabase : RoomDatabase() {

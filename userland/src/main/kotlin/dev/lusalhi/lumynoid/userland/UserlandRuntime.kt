@@ -72,7 +72,7 @@ class UserlandRuntime internal constructor(
     internal fun startGuest(context: ToolContext, argv: List<String>, cwd: String = "/workspace"): UserlandProcesses.Session =
         launchGuest(
             context, argv, cwd,
-            mapOf(codingWorkspace.directory(context.workspaceId).toString() to "/workspace"),
+            mapOf(codingWorkspace.directory(checkNotNull(context.workspaceId)).toString() to "/workspace"),
             emptyMap(),
         )
 
@@ -132,6 +132,7 @@ class UserlandRuntime internal constructor(
 
     private val setupTool = object : Tool {
         override val name = "shell_runtime_setup"
+        override val requiresWorkspace = true
         override val description = "Install the pinned Linux runtime with user approval. Use only when setup is required."
         override val inputSchema = schema(JsonObject(emptyMap()))
 
@@ -153,6 +154,7 @@ class UserlandRuntime internal constructor(
 
     private val probeTool = object : Tool {
         override val name = "shell_runtime_probe"
+        override val requiresWorkspace = true
         override val description = "Report installed Node and npm versions or list files in the active workspace."
         override val inputSchema = schema(buildJsonObject {
             put("operation", buildJsonObject {
@@ -209,7 +211,22 @@ class UserlandRuntime internal constructor(
 
         private fun installRoot(workspaceRoot: Path): Path = workspaceRoot.resolveSibling("coding-installs")
 
-        /** Removes one idle conversation's workspace and install without initializing the runtime. */
+        /** Read-only upgrade probe. Null means the chat cannot safely be classified yet. */
+        suspend fun legacyWorkspaceHasData(context: Context, id: String): Boolean? =
+            withContext(Dispatchers.IO) { legacyWorkspaceHasData(workspaceRoot(context), id) }
+
+        internal fun legacyWorkspaceHasData(workspaces: Path, id: String): Boolean? {
+            if (!CodingWorkspace.isValidId(id)) return null
+            return try {
+                val files = legacyRootHasData(workspaces, id)
+                val installs = legacyRootHasData(installRoot(workspaces), id, CodingRuntime.INSTALL_STAGE_PREFIX)
+                files || installs
+            } catch (_: IOException) {
+                null
+            }
+        }
+
+        /** Removes one idle workspace and its bundled-package install without starting the runtime. */
         suspend fun deleteWorkspace(context: Context, id: String) = deleteWorkspace(workspaceRoot(context), id)
 
         private suspend fun deleteWorkspace(workspaces: Path, id: String) = withContext(Dispatchers.IO) {

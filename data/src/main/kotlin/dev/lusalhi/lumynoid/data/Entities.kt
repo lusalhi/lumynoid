@@ -2,15 +2,31 @@ package dev.lusalhi.lumynoid.data
 
 import androidx.room3.ColumnInfo
 import androidx.room3.Entity
+import androidx.room3.ForeignKey
 import androidx.room3.Index
 import androidx.room3.PrimaryKey
 
-@Entity(tableName = "conversation")
+@Entity(tableName = "project", indices = [Index("workspace_id", unique = true)])
+internal data class ProjectEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    @ColumnInfo(name = "workspace_id") val workspaceId: String,
+    val instructions: String,
+    @ColumnInfo(defaultValue = "0") val deleting: Boolean = false,
+)
+
+@Entity(
+    tableName = "conversation",
+    foreignKeys = [ForeignKey(entity = ProjectEntity::class, parentColumns = ["id"], childColumns = ["project_id"])],
+    indices = [Index("project_id")],
+)
 internal data class ConversationEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     // Empty until the first message names the conversation; v3 rows are backfilled by MIGRATION_3_4.
     @ColumnInfo(defaultValue = "") val title: String = "",
+    @ColumnInfo(name = "project_id") val projectId: String? = null,
+    @ColumnInfo(name = "legacy_workspace_pending", defaultValue = "0") val legacyWorkspacePending: Boolean = false,
 )
 
 /** A conversation with its computed last activity (last event, else creation). */
@@ -19,13 +35,20 @@ internal data class ConversationRow(
     val title: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "last_activity_at") val lastActivityAt: Long,
+    @ColumnInfo(name = "project_id") val projectId: String?,
+)
+
+internal data class ConversationWorkspaceRow(
+    @ColumnInfo(name = "project_id") val projectId: String?,
+    @ColumnInfo(name = "workspace_id") val workspaceId: String?,
+    @ColumnInfo(name = "legacy_workspace_pending") val legacyWorkspacePending: Boolean,
 )
 
 @Entity(tableName = "task")
 internal data class TaskEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "conversation_id") val conversationId: String,
-    @ColumnInfo(name = "workspace_id") val workspaceId: String,
+    @ColumnInfo(name = "workspace_id") val workspaceId: String?,
     val origin: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
 )

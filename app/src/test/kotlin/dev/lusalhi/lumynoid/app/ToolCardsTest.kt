@@ -54,10 +54,10 @@ class ToolCardsTest {
         assertEquals(artifact, log.artifactIdentities("conversation").single())
         assertTrue(artifact.isHtml())
         assertFalse(artifact.copy(mediaType = "application/json").isHtml())
-        assertTrue(artifact.belongsTo("conversation", events))
-        assertFalse(artifact.belongsTo("another-conversation", events))
-        assertFalse(artifact.copy(resultEventId = "request").belongsTo("conversation", events))
-        assertFalse(artifact.copy(path = "unpublished.html").belongsTo("conversation", events))
+        assertEquals(0, artifact.publishedIndex("conversation", events))
+        assertNull(artifact.publishedIndex("another-conversation", events))
+        assertNull(artifact.copy(resultEventId = "request").publishedIndex("conversation", events))
+        assertNull(artifact.copy(path = "unpublished.html").publishedIndex("conversation", events))
         assertTrue(chat.copy(resultEventId = null).artifactIdentities("conversation").isEmpty())
     }
 

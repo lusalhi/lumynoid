@@ -50,7 +50,7 @@ enum class RiskAssessment {
     @SerialName("denied") DENIED,
 }
 
-data class ToolContext(val taskId: String, val conversationId: String, val workspaceId: String)
+data class ToolContext(val taskId: String, val conversationId: String, val workspaceId: String?)
 
 /** Releases task-owned tool resources before the runner hands the execution slot to another turn. */
 fun interface ToolSessionRelease {
@@ -77,6 +77,7 @@ interface Tool {
     val name: String
     val description: String
     val inputSchema: JsonObject
+    val requiresWorkspace: Boolean get() = false
 
     /** Assess current risk without performing the action. Return [RiskAssessment.DENIED] for invalid arguments. */
     fun assess(args: JsonObject): RiskAssessment
@@ -92,11 +93,12 @@ fun interface ToolProvider {
 class ToolRegistry(private val providers: List<ToolProvider> = emptyList()) {
     internal data class Entry(val definition: ToolDefinition, val tool: Tool)
 
-    internal fun snapshot(): Map<String, Entry> {
+    internal fun snapshot(hasWorkspace: Boolean): Map<String, Entry> {
         if (providers.isEmpty()) return emptyMap()
         return buildMap {
             for (provider in providers) {
                 for (tool in provider.tools()) {
+                    if (!hasWorkspace && tool.requiresWorkspace) continue
                     val name = tool.name
                     require(namePattern.matches(name)) { "Invalid tool name: $name" }
                     require(ownerPrefixes.any { name.startsWith(it) }) { "Missing tool owner prefix: $name" }

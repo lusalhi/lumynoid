@@ -141,9 +141,6 @@ private fun publishedArtifacts(conversationId: String, resultId: String?, outcom
     return outcome?.artifacts?.map { ArtifactIdentity(conversationId, resultId, it.path, it.mediaType) }.orEmpty()
 }
 
-internal fun ArtifactIdentity.belongsTo(conversationId: String?, events: List<TaskEvent>): Boolean =
-    publishedIndex(conversationId, events) != null
-
 internal fun ArtifactIdentity.publishedIndex(conversationId: String?, events: List<TaskEvent>): Int? {
     if (this.conversationId != conversationId) return null
     val result = events.firstOrNull { it is TaskEvent.ToolResult && it.id == resultEventId } as? TaskEvent.ToolResult

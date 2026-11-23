@@ -6,6 +6,7 @@ import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
 import dev.lusalhi.lumynoid.core.ApprovalDecision
+import dev.lusalhi.lumynoid.core.ConversationWorkspace
 import dev.lusalhi.lumynoid.core.EventRepository
 import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.LlmChunk
@@ -54,6 +55,7 @@ import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 internal class UserlandChecks(private val target: Context, private val fixtureAssets: AssetManager) {
@@ -317,6 +319,7 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
     suspend fun codingNpmAndFormatterUseOnlyBundledAssets() = withFixture { fixture ->
         val root = fixture.workspace
         val source = """{"n":9007199254740993,"n":-0,"s":"hello,  world","x":[true,null]}"""
+        val updatedSource = " $source\n"
         val config = "offline=false\nignore-scripts=false\nregistry=https://example.invalid/\n"
         Files.write(root.resolve(".npmrc"), config.toByteArray())
         Files.write(root.resolve("package.json"), """
@@ -334,9 +337,10 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         val runner = fixture.runner(
             mapOf(
                 "install" to listOf(setup),
-                "coding" to listOf(
-                    create("input.json", source),
-                    installPackage,
+                "coding" to listOf(create("input.json", source), installPackage),
+                "second-chat" to listOf(
+                    read("input.json"),
+                    replace("input.json", updatedSource, sha256(source)),
                     format("input.json", "formatted.json"),
                 ),
                 "unknown-npm" to listOf(call("shell_npm_install", "package" to "arbitrary")),
@@ -355,14 +359,24 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
         val coding = fixture.submit(runner, "coding")
         assertTrue(fixture.terminal(coding) is TaskEvent.TaskFinished)
         val results = fixture.resultEvents(coding)
-        assertEquals(3, results.size)
+        assertEquals(2, results.size)
         val created = results[0].outcome
         assertEquals(created.output, listOf(ToolArtifact("input.json", "text/plain")), created.artifacts)
         assertEquals(true, created.succeeded)
         assertEquals(source, root.resolve("input.json").toFile().readText())
         assertEquals(results[1].outcome.output, 0, results[1].outcome.exitCode)
         assertEquals(true, results[1].outcome.succeeded)
-        val replayed = TaskEventJson.decode(TaskEventJson.encode(results[2])) as TaskEvent.ToolResult
+
+        // submit() assigns a new conversation ID while keeping the workspace mapping.
+        val second = fixture.submit(runner, "second-chat")
+        fixture.approve(runner, second)
+        assertTrue(fixture.terminal(second) is TaskEvent.TaskFinished)
+        val followUp = fixture.resultEvents(second)
+        assertEquals(3, followUp.size)
+        val read = checkNotNull(parseToolArguments(followUp[0].outcome.output))
+        assertEquals(source, read.getValue("content").jsonPrimitive.content)
+        assertEquals(updatedSource, root.resolve("input.json").toFile().readText())
+        val replayed = TaskEventJson.decode(TaskEventJson.encode(followUp[2])) as TaskEvent.ToolResult
         assertEquals(replayed.outcome.output, 0, replayed.outcome.exitCode)
         assertEquals(true, replayed.outcome.succeeded)
         assertEquals(listOf(ToolArtifact("formatted.json", "application/json")), replayed.outcome.artifacts)
@@ -756,11 +770,17 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
             return TaskRunner(
                 llm, events, scope, tools = ToolRegistry(listOf(runtime, ToolProvider { fixtureTools.toList() })),
                 toolSessions = runtime,
+                resolveWorkspace = workspaces::get,
             )
         }
 
-        suspend fun submit(runner: TaskRunner, message: String, workspaceId: String = "workspace") =
-            runner.submit(TaskRequest(Origin.User, "$message-${events.nextConversation.incrementAndGet()}", workspaceId, message))
+        private val workspaces = ConcurrentHashMap<String, ConversationWorkspace.Project>()
+
+        suspend fun submit(runner: TaskRunner, message: String, workspaceId: String = "workspace"): String {
+            val conversationId = "$message-${events.nextConversation.incrementAndGet()}"
+            workspaces[conversationId] = ConversationWorkspace.Project(workspaceId)
+            return runner.submit(TaskRequest(Origin.User, conversationId, message))
+        }
 
         suspend fun approval(task: String) =
             events.await(task) { it is TaskEvent.ApprovalRequested } as TaskEvent.ApprovalRequested
@@ -848,7 +868,7 @@ internal class UserlandChecks(private val target: Context, private val fixtureAs
     private class FixtureEvents : EventRepository {
         val nextConversation = AtomicInteger()
         val all = MutableStateFlow<List<Pair<String, TaskEvent>>>(emptyList())
-        override suspend fun createTask(taskId: String, request: TaskRequest, at: Long) = Unit
+        override suspend fun createTask(taskId: String, request: TaskRequest, at: Long, workspaceId: String?) = Unit
         override suspend fun append(conversationId: String, event: TaskEvent) {
             all.update { it + (conversationId to event) }
         }

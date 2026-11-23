@@ -17,6 +17,31 @@
 
     <string name="conversation_untitled">New conversation</string>
     <string name="conversations_title">Conversations</string>
+    <string name="projects_title">Projects</string>
+    <string name="projects_empty">No projects yet.</string>
+    <string name="project_new">New Project</string>
+    <string name="project_untitled">Untitled Project</string>
+    <string name="project_name">Project name</string>
+    <string name="project_create">Create</string>
+    <string name="project_create_failed">Could not create the project.</string>
+    <string name="project_new_conversation">New Conversation</string>
+    <string name="project_instructions">Instructions</string>
+    <string name="project_instructions_title">Project instructions</string>
+    <string name="project_instructions_label">Instructions</string>
+    <string name="project_instructions_help">Sent to the AI at the start of every task in this project.</string>
+    <string name="project_instructions_count">%1$d / %2$d characters</string>
+    <string name="project_instructions_over_limit">Too long. Instructions can be at most %1$d characters.</string>
+    <string name="project_instructions_save_failed">Could not save the instructions. Try again.</string>
+    <string name="project_delete">Delete project</string>
+    <string name="project_delete_title">Delete “%1$s”?</string>
+    <string name="project_delete_body">This permanently removes the project’s conversations, their messages and action logs, its instructions, workspace files, and installed packages. Other projects, your AI providers, and the shared Linux runtime are kept.</string>
+    <string name="project_delete_resume">Resume deletion</string>
+    <string name="project_deleting_status">Deletion unfinished</string>
+    <string name="project_delete_busy">This project isn’t ready to delete. Wait for its running tasks to finish or reopen the app, then try again.</string>
+    <string name="project_delete_failed">Could not delete the project. Try again.</string>
+    <string name="project_more_actions">More actions for %1$s</string>
+    <string name="project_resume_deletion">Resume deletion of %1$s</string>
+    <string name="conversation_new_chat">New Chat</string>
     <string name="conversations_empty">No conversations yet. Send a message to start one.</string>
     <string name="conversations_back">Back</string>
     <string name="conversations_more">More actions</string>
@@ -26,7 +51,8 @@
     <string name="conversation_save">Save</string>
     <string name="conversation_delete">Delete</string>
     <string name="conversation_delete_title">Delete this conversation?</string>
-    <string name="conversation_delete_body">Its messages, action log and stored outputs, and its private project files are permanently removed from this phone and cannot be restored.</string>
+    <string name="conversation_delete_body">This permanently removes the conversation’s messages, action log, and stored outputs.</string>
+    <string name="project_conversation_delete_body">This permanently removes this conversation’s messages, action log, and stored outputs. Other conversations and the project’s files and packages are kept.</string>
     <string name="conversation_cancel">Cancel</string>
 
     <string name="error_auth_failed">The provider did not accept your key. Check it in the AI provider settings.</string>
@@ -42,7 +68,7 @@
     <string name="error_malformed_tool_call">The AI provider returned an invalid tool call after a retry.</string>
     <string name="error_budget_exhausted">This task reached its limit for AI calls. You can change the limit in AI provider settings.</string>
     <string name="task_cancelled">Stopped.</string>
-    <string name="conversation_delete_busy">This conversation still has work in progress. Wait for it to finish, then delete it.</string>
+    <string name="conversation_delete_busy">This conversation isn’t ready to delete. Wait for any running task to finish or reopen the app, then try again.</string>
     <string name="conversation_delete_failed">Could not delete the conversation. Try again.</string>
     <string name="chat_send_failed">Could not send the message. Try again.</string>
 

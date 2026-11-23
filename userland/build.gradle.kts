@@ -90,6 +90,7 @@ kotlin {
 dependencies {
     implementation(project(":core"))
     implementation(libs.ktor.client.core)
+    testImplementation(libs.junit)
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
 }

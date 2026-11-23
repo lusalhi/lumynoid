@@ -129,4 +129,50 @@ class MigrationTest {
         )
         assertEquals(listOf("e1", "e2", "e3"), v4.rows("SELECT id FROM task_event ORDER BY seq").flatten())
     }
+
+    @Test
+    fun v4ProjectMigrationKeepsTasksEventsAndChatIdsWithoutInventingMembership() = runTest {
+        helper.createDatabase(4).use { v4 ->
+            v4.execSQL("INSERT INTO conversation (id, created_at, title) VALUES ('c', 1, 'Old chat')")
+            v4.execSQL("INSERT INTO task (id, conversation_id, workspace_id, origin, created_at) VALUES ('t', 'c', 'legacy', 'user', 2)")
+            v4.execSQL("INSERT INTO task_event (seq, id, task_id, conversation_id, at, payload) VALUES (7, 'e', 't', 'c', 3, 'untouched')")
+        }
+
+        val v5 = helper.runMigrationsAndValidate(5, listOf(MIGRATION_4_5))
+        assertEquals(listOf(listOf("c", "Old chat", null)), v5.rows("SELECT id, title, project_id FROM conversation"))
+        assertEquals(listOf(listOf("t", "c", "legacy")), v5.rows("SELECT id, conversation_id, workspace_id FROM task"))
+        assertEquals(listOf(listOf("7", "e", "t", "c", "untouched")), v5.rows("SELECT seq, id, task_id, conversation_id, payload FROM task_event"))
+        assertEquals(emptyList(), v5.rows("SELECT id FROM project"))
+
+        v5.execSQL("INSERT INTO task (id, conversation_id, workspace_id, origin, created_at) VALUES ('plain', 'c', NULL, 'user', 4)")
+        assertEquals(listOf(listOf<String?>(null)), v5.rows("SELECT workspace_id FROM task WHERE id = 'plain'"))
+    }
+
+    @Test
+    fun v6ProjectsGainAnInactiveDeletionFlagAndKeepTheirData() = runTest {
+        helper.createDatabase(6).use { v6 ->
+            v6.execSQL("INSERT INTO project (id, name, workspace_id, instructions) VALUES ('p', 'Saved project', 'scope', 'Saved instructions')")
+            v6.execSQL(
+                "INSERT INTO conversation (id, created_at, title, project_id, legacy_workspace_pending) " +
+                    "VALUES ('member', 1, 'Member', 'p', 0), ('plain', 2, 'Plain', NULL, 1)",
+            )
+            v6.execSQL("INSERT INTO task (id, conversation_id, workspace_id, origin, created_at) VALUES ('t', 'member', 'scope', 'user', 3)")
+        }
+
+        val v7 = helper.runMigrationsAndValidate(7, listOf(MIGRATION_6_7))
+
+        assertEquals(
+            listOf(listOf("p", "Saved project", "scope", "Saved instructions", "0")),
+            v7.rows("SELECT id, name, workspace_id, instructions, deleting FROM project"),
+        )
+        assertEquals(
+            listOf(listOf("member", "p", "0"), listOf("plain", null, "1")),
+            v7.rows("SELECT id, project_id, legacy_workspace_pending FROM conversation ORDER BY id"),
+        )
+        assertEquals(listOf(listOf("t", "member", "scope")), v7.rows("SELECT id, conversation_id, workspace_id FROM task"))
+
+        // Projects created after the upgrade start active as well.
+        v7.execSQL("INSERT INTO project (id, name, workspace_id, instructions) VALUES ('q', 'Fresh', 'fresh', '')")
+        assertEquals(listOf(listOf("q", "0")), v7.rows("SELECT id, deleting FROM project WHERE id = 'q'"))
+    }
 }

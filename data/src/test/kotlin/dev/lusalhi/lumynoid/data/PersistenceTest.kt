@@ -6,14 +6,19 @@ import dev.lusalhi.lumynoid.core.ActiveModel
 import dev.lusalhi.lumynoid.core.ApprovalDecision
 import dev.lusalhi.lumynoid.core.ApprovalResolution
 import dev.lusalhi.lumynoid.core.Clock
+import dev.lusalhi.lumynoid.core.ConversationWorkspace
 import dev.lusalhi.lumynoid.core.FailureReason
 import dev.lusalhi.lumynoid.core.LlmChunk
+import dev.lusalhi.lumynoid.core.LlmMessage
 import dev.lusalhi.lumynoid.core.LlmPort
+import dev.lusalhi.lumynoid.core.LlmRequest
 import dev.lusalhi.lumynoid.core.ModelProfile
 import dev.lusalhi.lumynoid.core.Origin
+import dev.lusalhi.lumynoid.core.ProjectPort
 import dev.lusalhi.lumynoid.core.ProviderConfig
 import dev.lusalhi.lumynoid.core.ProviderKind
 import dev.lusalhi.lumynoid.core.RiskAssessment
+import dev.lusalhi.lumynoid.core.Role
 import dev.lusalhi.lumynoid.core.SecretRef
 import dev.lusalhi.lumynoid.core.TaskEvent
 import dev.lusalhi.lumynoid.core.TaskEventJson
@@ -35,7 +40,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
-import java.io.IOException
 import java.io.RandomAccessFile
 import java.nio.file.Files
 import java.util.Base64
@@ -45,6 +49,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Runs the real Room schema on a real SQLite file, closing and reopening it like a process restart. */
@@ -61,10 +66,17 @@ class PersistenceTest {
     private fun conversationPort(
         dao: LumynoidDao,
         clock: Clock = Clock { 1L },
+        withLifecycle: suspend (suspend (Set<String>) -> Unit) -> Unit = { action -> action(emptySet()) },
         deleteWhenIdle: suspend (String, suspend () -> Unit) -> Boolean = { _, delete -> delete(); true },
-        deleteWorkspace: suspend (String) -> Unit = {},
     ): RoomConversationPort =
-        RoomConversationPort(dao, UuidV7, clock, EventBlobStore(blobRoot), deleteWhenIdle, deleteWorkspace)
+        RoomConversationPort(dao, UuidV7, clock, EventBlobStore(blobRoot), withLifecycle, deleteWhenIdle)
+
+    private fun projectPort(
+        dao: LumynoidDao,
+        conversations: RoomConversationPort = conversationPort(dao),
+        withLifecycle: suspend (suspend (Set<String>) -> Unit) -> Unit = { action -> action(emptySet()) },
+        deleteWorkspace: suspend (String) -> Unit = {},
+    ): RoomProjectPort = RoomProjectPort(dao, UuidV7, conversations, withLifecycle, deleteWorkspace)
 
     private fun open(file: File): LumynoidDatabase =
         Room.databaseBuilder<LumynoidDatabase>(file.path) { LumynoidDatabase_Impl() }
@@ -74,12 +86,11 @@ class PersistenceTest {
     @Test
     fun conversationAndEventsSurviveClosingAndReopeningTheDatabase() = runTest {
         val file = folder.newFile("lumynoid.db")
-        val request: (String) -> TaskRequest = { TaskRequest(Origin.User, it, "ws", "hello") }
 
         val first = open(file)
         val conversation = conversationPort(first.dao(), Clock { 10L }).create("hello")
         val events = repository(first.dao())
-        events.createTask("t1", request(conversation.id), 10L)
+        events.createTask("t1", TaskRequest(Origin.User, conversation.id, "hello"), 10L, workspaceId = null)
         events.append(conversation.id, TaskEvent.UserMessage("e1", "t1", 10L, Origin.User, "hello"))
         events.append(conversation.id, TaskEvent.AssistantMessage("e2", "t1", 11L, "world"))
         events.append(conversation.id, TaskEvent.TaskFinished("e3", "t1", 12L))
@@ -114,7 +125,7 @@ class PersistenceTest {
         val first = open(file)
         val c = conversationPort(first.dao()).create("x")
         val events = repository(first.dao())
-        events.createTask("t", TaskRequest(Origin.User, c.id, "ws", "x"), 1L)
+        events.createTask("t", TaskRequest(Origin.User, c.id, "x"), 1L, workspaceId = null)
         val call = ToolCall("call", "web_fixture_lookup", "{}")
         val requested = TaskEvent.ToolCallRequested(
             "request", "t", 2L, "", listOf(TaskEvent.RequestedToolCall(call, UiText("card.fixture.lookup"))),
@@ -171,7 +182,7 @@ class PersistenceTest {
             "resolution", "resolved", 4L, request.approval.id, resolvedCall.call.id, ApprovalResolution.APPROVED,
         )
         for (taskId in listOf(waiting.taskId, request.taskId)) {
-            events.createTask(taskId, TaskRequest(Origin.User, conversation.id, "ws", "x"), 1L)
+            events.createTask(taskId, TaskRequest(Origin.User, conversation.id, "x"), 1L, workspaceId = null)
         }
         for (event in listOf(waiting, request, resolution)) events.append(conversation.id, event)
         val rows = first.dao().events(conversation.id)
@@ -192,6 +203,7 @@ class PersistenceTest {
             val runner = TaskRunner(
                 LlmPort { modelCalls++; emptyFlow() }, reopened, backgroundScope,
                 tools = ToolRegistry(listOf(ToolProvider { registrySnapshots++; emptyList() })),
+                resolveWorkspace = conversationPort(second.dao())::workspace,
             )
             runner.pendingConversations.first { it != null }
 
@@ -220,7 +232,7 @@ class PersistenceTest {
         val audit = listOf(rejected, retryRejection, retry, denied)
         val taskIds = setOf(rejected.taskId, retry.taskId, denied.taskId)
         for (taskId in taskIds) {
-            events.createTask(taskId, TaskRequest(Origin.User, conversation.id, "ws", "x"), 1L)
+            events.createTask(taskId, TaskRequest(Origin.User, conversation.id, "x"), 1L, workspaceId = null)
         }
         for (event in audit) events.append(conversation.id, event)
         val rows = first.dao().events(conversation.id)
@@ -239,6 +251,7 @@ class PersistenceTest {
             val runner = TaskRunner(
                 LlmPort { modelCalls++; emptyFlow() }, reopened, backgroundScope,
                 tools = ToolRegistry(listOf(ToolProvider { registrySnapshots++; emptyList() })),
+                resolveWorkspace = conversationPort(second.dao())::workspace,
             )
             runner.pendingConversations.first { it != null }
 
@@ -332,7 +345,7 @@ class PersistenceTest {
         val gone = port.create("gone")
         val kept = port.create("kept")
         for ((c, t) in listOf(gone.id to "t1", kept.id to "t2")) {
-            events.createTask(t, TaskRequest(Origin.User, c, "ws", "x"), 1L)
+            events.createTask(t, TaskRequest(Origin.User, c, "x"), 1L, workspaceId = null)
             events.append(c, TaskEvent.UserMessage("e-$t", t, 2L, Origin.User, "x"))
         }
 
@@ -349,25 +362,35 @@ class PersistenceTest {
     }
 
     @Test
-    fun deleteReclaimsOnlyItsOwnBlobsAndWorkspaceAndSurvivesReopen() = runTest {
+    fun deletingOneProjectChatKeepsSharedFilesAndTheOtherChatsLogAfterReopen() = runTest {
         val file = folder.newFile("lumynoid.db")
         val first = open(file)
-        val workspaceDeletes = mutableListOf<String>()
         var gateOpen = true
         val port = conversationPort(
             first.dao(),
             deleteWhenIdle = { _, delete -> if (gateOpen) { delete(); true } else false },
-            deleteWorkspace = { workspaceDeletes += it },
         )
         val events = repository(first.dao())
-        val a = port.create("a")
-        val b = port.create("b")
+        val projects = projectPort(first.dao(), port)
+        val project = assertNotNull(projects.create("  Shared work  "))
+        assertTrue(projects.saveInstructions(project.id, "Keep the output compact."))
+        assertFalse(projects.saveInstructions(project.id, "x".repeat(2_001)))
+        val a = port.create("a", project.id)
+        val b = port.create("b", project.id)
+        val sharedFile = File(folder.root, "workspaces/${project.workspaceId}/notes.txt").apply {
+            Files.createDirectories(toPath().parent)
+            writeText("project notes")
+        }
+        val packageFile = File(folder.root, "coding-installs/${project.workspaceId}/module.js").apply {
+            Files.createDirectories(toPath().parent)
+            writeText("packaged module")
+        }
         val tail = "END OF FULL TOOL OUTPUT"
         fun result(taskId: String) = TaskEvent.ToolResult(
             "result-$taskId", taskId, 3L, "call-$taskId", ToolOutcome("界".repeat(90_000) + tail),
         )
         for ((c, t) in listOf(a.id to "ta", b.id to "tb")) {
-            events.createTask(t, TaskRequest(Origin.User, c, c, "x"), 1L)
+            events.createTask(t, TaskRequest(Origin.User, c, "x"), 1L, project.workspaceId)
             events.append(c, TaskEvent.ToolCallRequested(
                 "request-$t", t, 2L, "",
                 listOf(TaskEvent.RequestedToolCall(ToolCall("call-$t", "web_fixture_lookup", "{}"), UiText("card.fixture.lookup"))),
@@ -387,14 +410,12 @@ class PersistenceTest {
         // Unfinished work blocks deletion: rows, blobs and workspace stay intact.
         gateOpen = false
         assertFalse(port.delete(a.id))
-        assertEquals(emptyList(), workspaceDeletes)
         assertTrue(blobsA.exists() && blobsB.exists())
         assertEquals(2, first.dao().taskCount())
         assertEquals(3, events.history(a.id).size)
 
         gateOpen = true
         assertTrue(port.delete(a.id))
-        assertEquals(listOf(a.id), workspaceDeletes)
         assertFalse(blobsA.exists())
         assertEquals(1, blobsB.walkTopDown().filter { it.isFile }.count())
         assertEquals(listOf(b.id), port.observeAll().first().map { it.id })
@@ -410,6 +431,16 @@ class PersistenceTest {
             assertTrue(keptResult.outcome.output.endsWith(tail))
             assertFalse(blobsA.exists())
             assertEquals(1, blobsB.walkTopDown().filter { it.isFile }.count())
+            val conversations = conversationPort(second.dao())
+            assertEquals(b.copy(lastActivityAt = 4L), conversations.latest())
+            assertEquals(ConversationWorkspace.Project(project.workspaceId), conversations.workspace(b.id))
+            assertEquals(null, conversations.workspace(a.id))
+            assertEquals(
+                project.copy(name = "Shared work", instructions = "Keep the output compact."),
+                projectPort(second.dao()).observeAll().first().single(),
+            )
+            assertEquals("project notes", sharedFile.readText())
+            assertEquals("packaged module", packageFile.readText())
         } finally {
             second.close()
         }
@@ -424,7 +455,7 @@ class PersistenceTest {
         assertTrue(port.delete(c.id))
 
         assertFailsWith<IllegalStateException> {
-            events.createTask("t1", TaskRequest(Origin.User, c.id, "ws", "x"), 2L)
+            events.createTask("t1", TaskRequest(Origin.User, c.id, "x"), 2L, workspaceId = null)
         }
         events.append(c.id, TaskEvent.UserMessage("e1", "t1", 2L, Origin.User, "x"))
         val call = TaskEvent.RequestedToolCall(ToolCall("call", "web_fixture_lookup", "{}"), UiText("card.fixture.lookup"))
@@ -469,7 +500,8 @@ class PersistenceTest {
         val events = repository(db.dao())
         val c = port.create("x")
         val other = port.create("y")
-        suspend fun create(id: String, conv: String = c.id) = events.createTask(id, TaskRequest(Origin.User, conv, "ws", "x"), 1L)
+        suspend fun create(id: String, conv: String = c.id) =
+            events.createTask(id, TaskRequest(Origin.User, conv, "x"), 1L, workspaceId = null)
         suspend fun add(event: TaskEvent, conv: String = c.id) = events.append(conv, event)
 
         create("none")
@@ -511,59 +543,25 @@ class PersistenceTest {
         val runner = TaskRunner(
             LlmPort { flow { emit(LlmChunk.TextDelta("working")); release.await(); emit(LlmChunk.Done) } },
             events, backgroundScope,
+            resolveWorkspace = conversationPort(db.dao())::workspace,
         )
         runner.pendingConversations.first { it != null }
-        val workspaceDeletes = mutableListOf<String>()
         val port = conversationPort(
             db.dao(),
+            withLifecycle = runner::withConversationLifecycle,
             deleteWhenIdle = runner::deleteWhenIdle,
-            deleteWorkspace = { workspaceDeletes += it },
         )
         val c = port.create("busy")
 
-        runner.submit(TaskRequest(Origin.User, c.id, "ws", "x"))
+        runner.submit(TaskRequest(Origin.User, c.id, "x"))
         runner.active.first { it?.conversationId == c.id }
         assertFalse(port.delete(c.id))
-        assertEquals(emptyList(), workspaceDeletes)
         assertEquals(listOf(c.id), port.observeAll().first().map { it.id })
         assertTrue(events.history(c.id).isNotEmpty())
 
         release.complete(Unit)
         runner.pendingConversations.first { it!!.isEmpty() }
         assertTrue(port.delete(c.id))
-        assertEquals(listOf(c.id), workspaceDeletes)
-        assertEquals(emptyList(), events.history(c.id))
-        assertEquals(0, db.dao().taskCount())
-        db.close()
-    }
-
-    @Test
-    fun failedCleanupKeepsTheConversationReachableForAnIdempotentRetry() = runTest {
-        val db = open(folder.newFile("lumynoid.db"))
-        var failWorkspace = true
-        val workspaceDeletes = mutableListOf<String>()
-        val port = conversationPort(db.dao(), deleteWorkspace = { id ->
-            workspaceDeletes += id
-            if (failWorkspace) throw IOException("workspace still busy")
-        })
-        val events = repository(db.dao())
-        val c = port.create("retry")
-        events.createTask("t", TaskRequest(Origin.User, c.id, c.id, "x"), 1L)
-        val result = TaskEvent.ToolResult("result", "t", 2L, "call", ToolOutcome("界".repeat(90_000)))
-        events.append(c.id, result)
-        events.append(c.id, TaskEvent.TaskFinished("finished", "t", 3L))
-        val blobs = File(blobRoot, Base64.getUrlEncoder().withoutPadding().encodeToString(c.id.encodeToByteArray()))
-        assertEquals(1, blobs.walkTopDown().filter { it.isFile }.count())
-
-        assertFailsWith<IOException> { port.delete(c.id) }
-        assertEquals(listOf(c.id), port.observeAll().first().map { it.id })
-        assertEquals(result, events.history(c.id).first())
-        assertEquals(1, blobs.walkTopDown().filter { it.isFile }.count())
-
-        failWorkspace = false
-        assertTrue(port.delete(c.id))
-        assertEquals(listOf(c.id, c.id), workspaceDeletes)
-        assertFalse(blobs.exists())
         assertEquals(emptyList(), events.history(c.id))
         assertEquals(0, db.dao().taskCount())
         db.close()
@@ -575,7 +573,7 @@ class PersistenceTest {
         val port = conversationPort(db.dao())
         val events = repository(db.dao())
         val c = port.create("guarded")
-        events.createTask("t", TaskRequest(Origin.User, c.id, "ws", "x"), 1L)
+        events.createTask("t", TaskRequest(Origin.User, c.id, "x"), 1L, workspaceId = null)
         events.append(c.id, TaskEvent.TaskFinished("f", "t", 2L))
         val victim = folder.newFolder("victim")
         val kept = File(victim, "kept.txt").apply { writeText("kept") }
@@ -598,6 +596,94 @@ class PersistenceTest {
         assertFalse(leaf.exists())
         assertEquals("kept", kept.readText())
         assertEquals(emptyList(), events.history(c.id))
+        db.close()
+    }
+
+    @Test
+    fun instructionsRoundTripByWorkspaceWithUnicodeLimitsAndClearing() = runTest {
+        val file = folder.newFile("lumynoid.db")
+        val first = open(file)
+        val projects = projectPort(first.dao())
+        val project = assertNotNull(projects.create("Rules"))
+        val other = assertNotNull(projects.create("Other"))
+        assertEquals("", projects.instructionsForWorkspace(project.workspaceId))
+        assertNull(projects.instructionsForWorkspace("no-such-workspace"))
+
+        // Multiline text is stored verbatim, without trimming, and keyed by the unique workspace.
+        val multiline = "  Keep answers short.\nUse metric units.\n\tindented  "
+        assertTrue(projects.saveInstructions(project.id, multiline))
+        assertEquals(multiline, projects.instructionsForWorkspace(project.workspaceId))
+        assertTrue(projects.saveInstructions(other.id, "Other rules"))
+        assertEquals("Other rules", projects.instructionsForWorkspace(other.workspaceId))
+
+        // Exactly 2,000 code points, including supplementary ones, persist in full.
+        val atLimit = "line\n" + "😀".repeat(ProjectPort.MAX_INSTRUCTION_CODE_POINTS - 5)
+        assertEquals(ProjectPort.MAX_INSTRUCTION_CODE_POINTS, atLimit.codePointCount(0, atLimit.length))
+        assertTrue(projects.saveInstructions(project.id, atLimit))
+        assertEquals(atLimit, projects.instructionsForWorkspace(project.workspaceId))
+
+        // One code point over is rejected without touching the stored value.
+        assertFalse(projects.saveInstructions(project.id, atLimit + "𝄞"))
+        assertEquals(atLimit, projects.instructionsForWorkspace(project.workspaceId))
+        first.close()
+
+        val second = open(file)
+        try {
+            val reopened = projectPort(second.dao())
+            assertEquals(atLimit, reopened.instructionsForWorkspace(project.workspaceId))
+            assertEquals(atLimit, reopened.observeAll().first().single { it.id == project.id }.instructions)
+            assertEquals("Other rules", reopened.instructionsForWorkspace(other.workspaceId))
+            assertTrue(reopened.saveInstructions(project.id, ""))
+            assertEquals("", reopened.instructionsForWorkspace(project.workspaceId))
+        } finally {
+            second.close()
+        }
+    }
+
+    @Test
+    fun theRunnerSendsStoredProjectInstructionsAndRefreshesThemOnlyForNewTasks() = runTest {
+        val db = open(folder.newFile("lumynoid.db"))
+        val projects = projectPort(db.dao())
+        val conversations = conversationPort(db.dao())
+        val events = repository(db.dao())
+        val project = assertNotNull(projects.create("Rules"))
+        assertTrue(projects.saveInstructions(project.id, "Keep answers short.\nUse metric units."))
+        val requests = mutableListOf<LlmRequest>()
+        val runner = TaskRunner(
+            LlmPort { sent ->
+                requests += sent
+                flow { emit(LlmChunk.TextDelta("ok")); emit(LlmChunk.Done) }
+            },
+            events, backgroundScope,
+            resolveWorkspace = conversations::workspace,
+            instructionsForWorkspace = projects::instructionsForWorkspace,
+        )
+        runner.pendingConversations.first { it != null }
+        val projectChat = conversations.create("first", project.id)
+        val plainChat = conversations.create("ordinary")
+
+        suspend fun turn(conversationId: String, input: String) {
+            runner.submit(TaskRequest(Origin.User, conversationId, input))
+            runner.pendingConversations.first { it!!.isEmpty() }
+        }
+        turn(projectChat.id, "hello")
+        turn(plainChat.id, "hi")
+        assertTrue(projects.saveInstructions(project.id, "Updated rules"))
+        turn(projectChat.id, "again")
+
+        assertEquals(
+            listOf(LlmMessage(Role.SYSTEM, "Keep answers short.\nUse metric units."), LlmMessage(Role.USER, "hello")),
+            requests[0].messages,
+        )
+        assertEquals(listOf(LlmMessage(Role.USER, "hi")), requests[1].messages)
+        assertEquals(
+            listOf(
+                LlmMessage(Role.SYSTEM, "Updated rules"),
+                LlmMessage(Role.USER, "hello"), LlmMessage(Role.ASSISTANT, "ok"),
+                LlmMessage(Role.USER, "again"),
+            ),
+            requests[2].messages,
+        )
         db.close()
     }
 }

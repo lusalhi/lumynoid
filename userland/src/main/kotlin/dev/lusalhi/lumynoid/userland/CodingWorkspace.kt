@@ -6,6 +6,7 @@ import java.nio.file.FileAlreadyExistsException
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption
@@ -126,6 +127,39 @@ internal class CodingWorkspace(private val root: Path) {
             return components
         }
     }
+}
+
+/** Absence is distinct from an unreadable or invalid root. Never follow links or create a path. */
+internal fun legacyRootHasData(root: Path, id: String, ignoredDirectoryPrefix: String? = null): Boolean {
+    if (!directoryExists(root)) return false
+    val directory = root.resolve(id)
+    if (!directoryExists(directory)) return false
+
+    var found = false
+    Files.walkFileTree(directory, object : SimpleFileVisitor<Path>() {
+        override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
+            if (ignoredDirectoryPrefix != null && dir.parent == directory && dir.fileName.toString().startsWith(ignoredDirectoryPrefix)) {
+                FileVisitResult.SKIP_SUBTREE
+            } else {
+                FileVisitResult.CONTINUE
+            }
+
+        override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+            found = true
+            return FileVisitResult.TERMINATE
+        }
+    })
+    return found
+}
+
+private fun directoryExists(path: Path): Boolean {
+    val attrs = try {
+        Files.readAttributes(path, BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+    } catch (_: NoSuchFileException) {
+        return false
+    }
+    if (!attrs.isDirectory) throw IOException("Invalid legacy workspace directory")
+    return true
 }
 
 /** Deletes one idle workspace-owned tree. A missing tree needs no cleanup. */
