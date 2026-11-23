@@ -24,7 +24,7 @@ Pengguna bisa mengandalkan asisten untuk menjalankan tugas pada waktunya, walau 
 ## Done when
 
 - Tugas sekali dan berulang bisa dibuat lewat chat dan lewat layar tugas terjadwal, dan tampil di layar itu.
-- Tugas harian berjalan tepat waktu dengan app tertutup dan layar mati setiap hari selama 7 hari, di satu HP Xiaomi dan satu HP Samsung yang disiapkan lewat panduan di app.
+- Pada uji HP rilis epic, satu tugas terjadwal berjalan tepat waktu dengan app tertutup dan layar mati di HP pemilik (Samsung `SM-S731B`).
 - Hasil tugas muncul sebagai notifikasi dan di percakapan.
 - Jadwal dari chat proyek berjalan di workspace proyek asal dan hasilnya tetap di proyek itu. Setelah proyek dihapus, jadwal terkait tidak berjalan lagi.
 - Onboarding pengecualian optimasi baterai dan panduan autostart per merek tersedia di app.
@@ -45,4 +45,6 @@ Pengguna bisa mengandalkan asisten untuk menjalankan tugas pada waktunya, walau 
 - Decision: 2026-11-14 — Replan (AD-2): TaskRunner yang dipanggil alarm kerangkanya dari epic-chat-dan-provider dan loop tool-nya dari epic-agent-shell; epic ini tetap menunggu epic-agent-shell karena `schedule_create` butuh registry tool dan gerbang konfirmasi.
 - Decision: 2026-11-16 — Dari epic-chat-dan-provider: deklarasikan dan minta `POST_NOTIFICATIONS`, supaya notifikasi `task_running` FGS terlihat di Android 13+. Di HP pemilik notifikasi itu tersembunyi, dan Lumynoid tidak muncul di daftar app aktif sistem.
 - Decision: 2026-11-22 — Tugas Terjadwal memakai identitas dan batas kepemilikan data dari Epic 8. Integrasi pembatalan jadwal saat proyek dihapus dimiliki epic ini, bukan syarat rilis Projects.
+- Decision: 2026-11-23 — Pemilik menghapus uji daya tahan 7 hari di Xiaomi dan Samsung dari epic ini dan dari initiative. Pemilik menerima bahwa ketepatan waktu di HP yang agresif mematikan app (terutama Xiaomi) tidak dibuktikan di v1. Bukti tersisa hanya satu tugas tepat waktu dengan app tertutup pada uji HP rilis epic.
+- Decision: 2026-11-23 — Epic 3 dan Epic 4 dikerjakan paralel. Migrasi Room mulai dari versi 7: lane yang merge lebih dulu memakai versi berikutnya, lane lain rebase dan menomori ulang migrasinya sebelum merge. Epic 4 tidak mengubah signature `TaskRunner.submit`. Rilis kedua epic boleh digabung dalam satu APK.
 - Decision: 2026-11-23 — Story 2.13 mendahului Epic 3. Epic ini memakai perilaku Decline dari TaskRunner bersama, bukan membuat kebijakan approval khusus penjadwal.

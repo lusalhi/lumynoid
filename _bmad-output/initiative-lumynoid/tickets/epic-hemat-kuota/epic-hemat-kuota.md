@@ -44,4 +44,5 @@ Pengguna dengan key gratis tetap bisa menyelesaikan beberapa tugas sehari dan ta
 ## Notes
 
 - Decision: 2026-11-14 — Penanganan tool call kosong/rusak pindah ke epic-agent-shell (AD-26: ditegakkan runner); epic ini tetap memegang retry karena limit dan kuota lewat router.
+- Decision: 2026-11-23 — Epic 4 dikerjakan paralel dengan Epic 3. Migrasi Room mulai dari versi 7: lane yang merge lebih dulu memakai versi berikutnya, lane lain rebase dan menomori ulang migrasinya sebelum merge. Epic ini tidak mengubah signature `TaskRunner.submit`, titik yang dipanggil alarm Epic 3. Rilis kedua epic boleh digabung dalam satu APK.
 - Decision: 2026-11-22 — Pemangkasan menggunakan sumber instruksi proyek dan batas riwayat per percakapan yang ditetapkan Epic 8, tanpa mendefinisikan ulang kepemilikan konteks.

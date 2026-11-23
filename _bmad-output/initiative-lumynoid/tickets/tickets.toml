@@ -28,7 +28,7 @@ after = [{ epic = 2, needs = "workspace, artefak/log, dan APK bertanda tangan Ep
 id = 3
 slug = "epic-tugas-terjadwal"
 title = "Tugas terjadwal jalan tepat waktu saat app tertutup"
-description = "Pengguna membuat tugas sekali atau berulang lewat chat atau layar tugas; exact alarm memanggil TaskRunner tanpa mengubah loop-nya. Hasil muncul sebagai notifikasi dan di percakapan. Epic ini mengikat jadwal serta hasilnya ke proyek asal dan memasang pembatalan ketika proyek dihapus. Onboarding pengecualian baterai dan panduan autostart tersedia; uji 7 hari di Xiaomi dan Samsung lulus."
+description = "Pengguna membuat tugas sekali atau berulang lewat chat atau layar tugas; exact alarm memanggil TaskRunner tanpa mengubah loop-nya. Hasil muncul sebagai notifikasi dan di percakapan. Epic ini mengikat jadwal serta hasilnya ke proyek asal dan memasang pembatalan ketika proyek dihapus. Onboarding pengecualian baterai dan panduan autostart tersedia; satu tugas berjalan tepat waktu dengan app tertutup di HP pemilik."
 covers = ["R6"]
 after = [
   { epic = 2, needs = "loop tool call dan gerbang konfirmasi di TaskRunner, termasuk balasan teks setelah Decline (2.13), agar tugas agent memakai perilaku yang sama tanpa layar chat terbuka" },
@@ -76,7 +76,7 @@ description = "Penguji awam menyelesaikan chat, tugas lewat tool coding di proye
 covers = ["R1"]
 after = [
   { epic = 8, needs = "Projects lulus uji migrasi dan alur dua chat untuk sesi penguji awam" },
-  { epic = 3, needs = "tugas terjadwal yang lulus uji 7 hari, untuk sesi penguji awam" },
+  { epic = 3, needs = "tugas terjadwal yang berjalan dengan app tertutup, untuk sesi penguji awam" },
   { epic = 4, needs = "rotasi kuota, agar penguji awam bisa memakai key gratis" },
   { epic = 5, needs = "browsing web, untuk sesi penguji awam" },
   { epic = 6, needs = "skill pihak ketiga, untuk set fitur v1 yang lengkap sebelum rilis v1" },
