@@ -28,7 +28,7 @@ context:
 
 ## Implementation Notes
 
-Oneshot: the code change is release metadata in `app/build.gradle.kts`. Signing, publishing, and device testing use the existing workflow and upgrade procedure. No signing secrets are needed locally. The current branch contains Epic 2; `main` is still at the `v0.2.1` baseline. As in 1.12, leave outward steps owner-gated; do not substitute a debug or unsigned APK for handset acceptance.
+Oneshot: the code change is release metadata in `app/build.gradle.kts`. Signing and publishing use the existing owner-gated workflow. A debug or unsigned APK cannot substitute for the official signed install and upgrade; the separate handset diagnostic is evidence for runtime teardown and boundary checks, not for the signed Chat UI.
 
 The retained TaskRunner report has 40 passing tests, including one audited repair before `MALFORMED_TOOL_CALL` and the 20-call limit before `BUDGET_EXHAUSTED`. The tag workflow reruns the JVM tests against the release revision.
 
@@ -68,6 +68,8 @@ Release recovery: `v0.3.0` was tagged on `main`, but [GitHub Actions failed befo
 Published release: [GitHub Actions run 44994487467](https://github.com/lusalhi/lumynoid/actions/runs/44994487467) passed `verify`, `build`, and `publish`. All eight files listed in `SHA256SUMS` matched. Independently verified the registered certificate, package `dev.lusalhi.lumynoid`, `v0.3.1` (code 5), target API 37, arm64-only ABI, 16 KiB alignment, and the APK-pinned rootfs. The published native archives match their source hashes and contain their notices; the patch matches the tag, which contains the build script, supervisor source, and talloc cross-build answers. Signed APK SHA-256: `815c57331583028f860722e19a5ded6aed4da8d8b53a6f29385e6228ba39ba08`.
 
 Handset evidence (owner report): Samsung, Android API 37. All five requested checks passed on the signed `v0.3.1` APK: upgrade preserving old chat and plain streaming, runtime setup, screen-off coding and reading the formatted output in a later turn, deny/approve, and persistent Log with offline HTML preview. Exact Samsung model was not provided.
+
+The upgrade report did not separately confirm that saved provider configuration was retained. The Projects signed upgrade checklist now requires an explicit before/after provider check.
 
 Handset diagnostic evidence (owner report): Lumynoid Test `2.7.1`, debug APK SHA-256 `42c978d03d96d7dd67c1b02d8b7b5172941f2dc147a5b6b68b47798c247dd563`, passed 8/8 on the Samsung API 37 handset. The separate fixture covers runtime teardown, workspace and coding boundaries, and the current approval requirement with forged tool output. It does not exercise the signed app's Chat UI.
 

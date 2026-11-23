@@ -51,7 +51,7 @@ jobs:
         run: ./gradlew :app:checkDependencyPolicy
 
       - name: JVM tests (include the persisted-name check)
-        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest
+        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest :userland:testDebugUnitTest
 
       - name: Build the debug and instrumentation APKs and pinned rootfs
         run: ./gradlew :app:assembleDebug :userland:assembleDebugAndroidTest :userland:buildUserlandRootfs
@@ -83,6 +83,7 @@ jobs:
             llm/build/reports/tests
             data/build/reports/tests
             app/build/reports/tests
+            userland/build/reports/tests
 
   schema-claims:
     # One Room schema version, claimed once (AD-19). Needs the PR's own history, so it only runs on pull requests.

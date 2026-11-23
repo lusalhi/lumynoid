@@ -24,7 +24,7 @@ On Android 13+, Lumynoid asks for notification permission the first time you ope
 
 On arm64, coding chat can create and read workspace files, install the bundled npm package offline, and run the built-in JSON formatter. Activity cards show each operation and its result.
 
-In the Projects debug build, open **Conversations → Projects → New Project**. Chats created inside the project share files and installed packages, but their histories and logs stay separate. **New Chat** outside Projects still answers without coding tools. The signed Epic 2 baseline (`v0.3.1`) uses per-chat workspaces; use a clean debug install to try Projects until upgrade support is ready.
+Open **Conversations → Projects → New Project**. Chats in the same project share files and installed packages, but not history or logs. **New Chat** outside Projects still answers without coding tools. The in-place upgrade from signed `v0.3.1` still awaits a physical handset check. If you are testing that upgrade, install the new signed APK over `v0.3.1` without clearing app data. Chats with workspace files or installed packages should become separate projects; other chats should stay ordinary.
 
 Open **Instructions** on a project to set or clear shared instructions (up to 2,000 Unicode characters). Running tasks keep the instructions they started with, including after approval or retry. Changes apply when the next task starts. Ordinary chats do not use project instructions.
 
@@ -72,8 +72,9 @@ Build `./gradlew :app:assembleProjectsCheck` and install
 `app/build/outputs/apk/projectsCheck/app-projectsCheck.apk` on an arm64 phone.
 Open **Lumynoid Projects Test**, then tap **Jalankan semua tes**. The APK ships its fixture data and
 runtime, needs no provider credentials, and runs under a separate package without changing Lumynoid's data.
-The report covers Stories 8.1–8.8 with fixtures; the official signed upgrade still follows
-the [Projects handset acceptance runbook](docs/release.md#projects-handset-acceptance-story-88).
+The APK runs six fixture scenarios (8.1–8.6); 8.7 and the fixture portion of 8.8 summarize those results.
+The official signed upgrade is still a separate check in the
+[Projects handset acceptance runbook](docs/release.md#projects-handset-acceptance-story-88).
 
 ## Checks that gate every change
 

@@ -24,6 +24,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -73,7 +74,14 @@ internal fun <T : Any> expectNotNull(value: T?, observation: String): T {
 }
 
 internal suspend inline fun <reified E : Throwable> expectThrows(observation: String, block: suspend () -> Unit) {
-    val error = runCatching { block() }.exceptionOrNull()
+    val error = try {
+        block()
+        null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        e
+    }
     if (error !is E) {
         val actual = error?.let { "${it::class.java.simpleName}: ${it.message}" } ?: "success"
         throw AssertionError("Failed observation: $observation — expected ${E::class.java.simpleName} but was $actual")

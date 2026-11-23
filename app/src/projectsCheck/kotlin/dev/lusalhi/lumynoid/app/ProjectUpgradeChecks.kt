@@ -396,16 +396,26 @@ internal suspend fun checkProjectPreview(context: Context) {
             expect(findText(view, "Workspace page marker") > 0) { "The static HTML marker did not render with scripts off" }
             expectEqual(0, findText(view, "Preview script marker"), "A script ran without opt-in")
         }
-        withOfflinePreview(context, html.artifact.path, javascript = true, read = html.workspace::read) { view ->
+        val blockedExternalUrl = CompletableDeferred<String>()
+        withOfflinePreview(
+            context,
+            html.artifact.path,
+            javascript = true,
+            read = html.workspace::read,
+            onNavigationBlocked = { url -> blockedExternalUrl.complete(url) },
+        ) { view ->
             expect(withContext(Dispatchers.Main) { view.settings.javaScriptEnabled }) { "Opt-in did not enable JavaScript" }
             bounded(10_000, "the opted-in script to run") {
                 while (evaluate(view, "document.getElementById('status')?.textContent") != "\"Preview script marker\"") delay(50)
             }
             expect(findText(view, "Preview script marker") > 0) { "The opted-in script marker did not render" }
-            // An external link cannot navigate the sandboxed preview (no egress, no location change).
-            val before = evaluate(view, "location.href")
+            val locationBeforeClick = evaluate(view, "location.href")
             evaluate(view, "document.getElementById('outside').click()")
-            expectEqual(before, evaluate(view, "location.href"), "external navigation changed the preview location")
+            val deniedUrl = bounded(10_000, "the production delegate to deny the external link") {
+                blockedExternalUrl.await()
+            }
+            expectEqual("https://outside.invalid/page", deniedUrl, "external navigation denied by production delegate")
+            expectEqual(locationBeforeClick, evaluate(view, "location.href"), "external link did not change the preview location")
         }
 
         // A wrong conversation reveals nothing: the result event is scoped to its own conversation.
@@ -468,12 +478,19 @@ private suspend fun withOfflinePreview(
     path: String,
     javascript: Boolean,
     read: (String) -> ByteArray?,
+    onNavigationBlocked: (String) -> Unit = {},
     block: suspend (WebView) -> Unit,
 ) {
     val unavailable = CompletableDeferred<Unit>()
     val loaded = CompletableDeferred<Unit>()
     val view = withContext(Dispatchers.Main) {
-        createOfflinePreviewWebView(context, path, javascript, read) { unavailable.complete(Unit) }.also { v ->
+        createOfflinePreviewWebView(
+            context,
+            path,
+            javascript,
+            read,
+            onNavigationBlocked = onNavigationBlocked,
+        ) { unavailable.complete(Unit) }.also { v ->
             v.webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView, newProgress: Int) {
                     if (newProgress == 100) loaded.complete(Unit)

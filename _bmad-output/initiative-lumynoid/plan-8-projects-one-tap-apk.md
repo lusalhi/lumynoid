@@ -69,9 +69,12 @@ Deliver one installable Android APK that runs Epic Projects 8.1–8.8 checks fro
 ## Verification
 
 - `./gradlew --offline :app:assembleProjectsCheck` — inspect package ID and arm64 APK, then install only the diagnostic on the available Android target.
-- Launch from its launcher, tap once and observe the per-story report; record any device/runtime limits and APK checksum. Inspect normal packaged variants to confirm they exclude diagnostic assets/classes if needed to prove isolation.
+- Launch from its launcher, tap once and observe the per-story report; record device/runtime limits and APK checksum.
+- Inspect normal debug and release APK listings and DEX: no diagnostic launcher, exported v4 schema or embedded rootfs fixture.
 
 **Observed:** Gradle assembled the standalone arm64 APK. `aapt2`, `apksigner` and `zipalign` confirmed the diagnostic package and launcher, debug signature and alignment. The packaged v4 schema matched the Room export byte-for-byte; the packaged rootfs matched its pinned SHA-256.
+
+The [PR #8 debug APK](https://github.com/lusalhi/lumynoid/actions/runs/45109138343) was independently inspected: no diagnostic activity, schema or rootfs fixture. The official signed release APK will be inspected after publication.
 
 On isolated Redroid arm64 API 34, one tap produced **6 passed, 0 failed**. A second tap in the same installation started a fresh run and again produced **6 passed, 0 failed**. The report showed 8.7 and fixture 8.8 as passed; official signed 8.8 remained **Perlu uji manual**.
 

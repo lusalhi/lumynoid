@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -31,12 +32,15 @@ class ProjectChatSubmissionTest {
             "Run on a disposable debug install, never with a real provider."
         }
         val project = checkNotNull(graph.data.projects.create("Queued project sends"))
-        val activity = instrumentation.startActivitySync(
-            Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        ) as MainActivity
+        var activity: MainActivity? = null
+        var testFailure: Throwable? = null
         try {
+            val opened = instrumentation.startActivitySync(
+                Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            ) as MainActivity
+            activity = opened
             lateinit var model: ChatViewModel
-            instrumentation.runOnMainSync { model = ViewModelProvider(activity)[ChatViewModel::class.java] }
+            instrumentation.runOnMainSync { model = ViewModelProvider(opened)[ChatViewModel::class.java] }
             withTimeout(15_000) { model.state.first { it.screen == Screen.CHAT && it.providerConfigured } }
             instrumentation.runOnMainSync {
                 model.newProjectConversation(project.id)
@@ -54,8 +58,30 @@ class ProjectChatSubmissionTest {
                 assertEquals(listOf("First draft message", "Second draft message"), inputs)
                 assertEquals(chat.id, graph.data.conversations.observeAll().first().single { it.projectId == project.id }.id)
             }
+        } catch (failure: Throwable) {
+            testFailure = failure
+            throw failure
         } finally {
-            instrumentation.runOnMainSync { activity.finish() }
+            runCatching {
+                try {
+                    activity?.let { opened ->
+                        instrumentation.runOnMainSync { opened.finish() }
+                    }
+                    instrumentation.waitForIdleSync()
+                    withTimeoutOrNull(15_000) {
+                        graph.runner.pendingConversations.first { pending ->
+                            pending != null && graph.data.conversations.observeAll().first()
+                                .filter { it.projectId == project.id }
+                                .none { it.id in pending }
+                        }
+                    }
+                } finally {
+                    check(graph.data.projects.delete(project.id)) { "Could not delete the project chat fixture." }
+                }
+            }.onFailure { cleanupFailure ->
+                val original = testFailure ?: throw cleanupFailure
+                original.addSuppressed(cleanupFailure)
+            }
         }
     }
 }

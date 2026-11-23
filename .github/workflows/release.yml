@@ -83,7 +83,7 @@ jobs:
         run: ./gradlew :app:checkDependencyPolicy
 
       - name: JVM tests
-        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest
+        run: ./gradlew :core:test :llm:test :data:testDebugUnitTest :app:testDebugUnitTest :userland:testDebugUnitTest
 
       - name: Build and stage the pinned rootfs
         run: ./gradlew :userland:buildUserlandRootfs

@@ -70,7 +70,7 @@ class OfflinePreviewWebViewTest {
         val unavailable = CountDownLatch(1)
         lateinit var view: WebView
         instrumentation.runOnMainSync {
-            view = createOfflinePreviewWebView(context, "missing.html", false, { null }, unavailable::countDown)
+            view = createOfflinePreviewWebView(context, "missing.html", false, { null }, onUnavailable = unavailable::countDown)
         }
         try {
             assertTrue("A missing document must not display a blank success", unavailable.await(10, SECONDS))
@@ -83,7 +83,7 @@ class OfflinePreviewWebViewTest {
         val unavailable = CountDownLatch(1)
         lateinit var view: WebView
         instrumentation.runOnMainSync {
-            view = createOfflinePreviewWebView(context, path, javascript, read, unavailable::countDown)
+            view = createOfflinePreviewWebView(context, path, javascript, read, onUnavailable = unavailable::countDown)
         }
         try {
             action(view)

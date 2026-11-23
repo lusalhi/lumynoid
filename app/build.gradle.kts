@@ -19,8 +19,8 @@ android {
         applicationId = "dev.lusalhi.lumynoid"
         minSdk = 29
         targetSdk = 37
-        versionCode = 6
-        versionName = "v0.4.0"
+        versionCode = 7
+        versionName = "v0.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
