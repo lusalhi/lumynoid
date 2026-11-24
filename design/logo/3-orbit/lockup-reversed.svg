@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 539 136" width="1078" height="272" role="img" aria-label="Lumynoid — Orbit (Konsep 3) — lockup untuk latar gelap">
+<title>Lumynoid — Orbit (Konsep 3) — lockup untuk latar gelap</title>
+<defs><radialGradient id="po" cx="34%" cy="28%" r="86%"><stop offset="0" stop-color="#FFF0D2"/><stop offset=".3" stop-color="#FFB67E"/><stop offset=".68" stop-color="#FF6F78"/><stop offset="1" stop-color="#E23F86"/></radialGradient></defs><g transform="translate(-6 8) scale(1.2)">
+<defs>
+<radialGradient id="khalo"><stop offset="0" stop-color="#FF7A59" stop-opacity=".1"/><stop offset=".55" stop-color="#FF5F9E" stop-opacity=".03"/><stop offset="1" stop-color="#FF5FA8" stop-opacity="0"/></radialGradient>
+<radialGradient id="korb" cx="34%" cy="28%" r="86%"><stop offset="0" stop-color="#FFF6E4"/><stop offset=".28" stop-color="#FFC98C"/><stop offset=".64" stop-color="#FF7E6A"/><stop offset="1" stop-color="#E6417F"/></radialGradient>
+</defs>
+<circle cx="50" cy="50" r="50" fill="url(#khalo)"/>
+<path d="M-44,0A44,13.5 0 0 1 44,0" fill="none" stroke-width="7.5" stroke-linecap="round" stroke="#7A58F0" transform="translate(50 50) rotate(-22)"/>
+<circle cx="50" cy="50" r="31" fill="url(#korb)"/>
+<path d="M-44,0A44,13.5 0 0 0 44,0" fill="none" stroke-width="7.5" stroke-linecap="round" stroke="#9A7CF6" transform="translate(50 50) rotate(-22)"/></g>
+<g transform="translate(142 94) scale(1.18)"><g fill="none" stroke="#FFF4EA" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+<path d="M0,-44V0 M21,-30V-12.5A12.5,12.5 0 0 0 46,-12.5V-30 M67,0V-17.5A12.5,12.5 0 0 1 92,-17.5V0 M92,-17.5A12.5,12.5 0 0 1 117,-17.5V0 M138,-30V-12.5A12.5,12.5 0 0 0 163,-12.5V-30 M163,0V16 M184,0V-17.5A12.5,12.5 0 0 1 209,-17.5V0 M277.8,0V-30 M327.6,-44V0"/>
+<circle cx="312.2" cy="-15" r="15.4"/>
+<path d="M-23.2,0A23.2,6.6 0 0 1 23.2,0" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#8E6CF5" transform="translate(243.4 -15) rotate(-22)"/>
+<circle cx="243.4" cy="-15" r="14.8" fill="url(#po)"/>
+<path d="M-23.2,0A23.2,6.6 0 0 0 23.2,0" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#DCCFFF" transform="translate(243.4 -15) rotate(-22)"/>
+<circle cx="277.8" cy="-42.5" r="4.34" fill="#FFF4EA" stroke="none"/>
+</g></g>
+</svg>

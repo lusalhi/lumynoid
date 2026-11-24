@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="740" viewBox="0 0 1600 740">
+<title>Lumynoid — sketsa flat &amp; minimal tanpa huruf</title>
+<defs>
+<symbol id="a" viewBox="0 0 100 100"><g fill="currentColor">
+<circle cx="41" cy="61" r="33"/>
+<circle cx="76" cy="25" r="17.2" fill="var(--ac)"/>
+</g></symbol>
+<symbol id="b" viewBox="0 0 100 100"><g fill="currentColor" stroke-linecap="round">
+<circle cx="37" cy="59" r="30" stroke="none"/>
+<path d="M65.3,30.7L76.6,19.4M77,59L91,59" fill="none" stroke="currentColor" stroke-width="9"/>
+</g></symbol>
+<symbol id="c" viewBox="0 0 100 100"><g fill="currentColor">
+<path fill-rule="evenodd" d="M24,0H76A24,24 0 0 1 100,24V80H0V24A24,24 0 0 1 24,0ZM20,80A30,30 0 0 1 80,80Z"/>
+<path d="M0,86H100V93A7,7 0 0 1 93,100H7A7,7 0 0 1 0,93Z"/>
+<path d="M20,80A30,30 0 0 1 80,80Z" fill="var(--sun)"/>
+</g></symbol>
+<symbol id="d" viewBox="0 0 100 100"><g fill="currentColor">
+<circle cx="38" cy="62" r="32"/>
+<rect x="44" y="12" width="50" height="50" rx="12" fill="var(--ac)"/>
+</g></symbol>
+<symbol id="e" viewBox="0 0 100 100"><g fill="currentColor">
+<path d="M19.6,19.6A40,40 0 0 1 80.4,80.4Z" transform="translate(2.2 -2.2)"/>
+<path d="M19.6,19.6A40,40 0 0 0 80.4,80.4Z" fill="var(--ac)" transform="translate(-2.2 2.2)"/>
+</g></symbol>
+<symbol id="f" viewBox="0 0 100 100"><path fill="currentColor" fill-rule="evenodd" d="M10,50A40,40 0 1 1 90,50A40,40 0 1 1 10,50ZM51,36A13,13 0 1 0 77,36A13,13 0 1 0 51,36Z"/></symbol>
+<symbol id="g" viewBox="0 0 100 100"><g fill="currentColor">
+<rect x="12" y="6" width="76" height="76" rx="26"/>
+<circle cx="22" cy="86" r="8.5" fill="var(--ac)"/>
+</g></symbol>
+<symbol id="h" viewBox="0 0 100 100"><g stroke="currentColor" stroke-width="9" stroke-linecap="round" fill="none">
+<path d="M25,54V18M37.5,63.5L63,38M47,76H83"/>
+<circle cx="25" cy="76" r="10" fill="var(--ac)" stroke="none"/>
+</g></symbol>
+</defs>
+<style>
+text{font-family:"Segoe UI",system-ui,sans-serif}
+.t{font-size:30px;font-weight:600;fill:#111}
+.s{font-size:16px;fill:#555}
+.k{font-size:26px;font-weight:600;fill:#111}
+.n{font-size:17px;fill:#333}
+.d{font-size:14px;fill:#777}
+</style>
+<rect width="1600" height="740" fill="#fff"/>
+<text class="t" x="40" y="50">Lumynoid — sketsa flat &amp; minimal, tanpa huruf</text>
+<text class="s" x="40" y="76">Hitam = warna utama, biru = warna aksen (contoh). Tiap sel: bentuk besar, versi putih di ubin gelap, versi dua warna, lalu 28 px dan 16 px.</text>
+<g stroke="#E6E8EE"><path d="M0,90H1600M0,400H1600M400,90V720M800,90V720M1200,90V720"/></g>
+
+<!-- A -->
+<use href="#a" x="20" y="120" width="170" height="170" color="#111" style="--ac:#111"/>
+<rect x="215" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#a" x="250" y="125" width="95" height="95" color="#fff" style="--ac:#fff"/>
+<rect x="215" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#a" x="228" y="258" width="80" height="80" color="#111" style="--ac:#3A5BF0"/>
+<use href="#a" x="335" y="262" width="28" height="28" color="#111" style="--ac:#111"/>
+<use href="#a" x="341" y="306" width="16" height="16" color="#111" style="--ac:#111"/>
+<text class="k" x="20" y="392">A</text><text class="n" x="56" y="392">Dua lingkaran</text><text class="d" x="20" y="416">cahaya besar + pendamping kecil, seperti gelembung chat</text>
+
+<!-- B -->
+<use href="#b" x="420" y="120" width="170" height="170" color="#111"/>
+<rect x="615" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#b" x="650" y="125" width="95" height="95" color="#fff"/>
+<rect x="615" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#b" x="628" y="258" width="80" height="80" color="#111"/>
+<use href="#b" x="735" y="262" width="28" height="28" color="#111"/>
+<use href="#b" x="741" y="306" width="16" height="16" color="#111"/>
+<text class="k" x="420" y="392">B</text><text class="n" x="456" y="392">Kilau</text><text class="d" x="420" y="416">lingkaran dengan dua sinar pendek</text>
+
+<!-- C -->
+<use href="#c" x="820" y="120" width="170" height="170" color="#111" style="--sun:none"/>
+<rect x="1015" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#c" x="1050" y="125" width="95" height="95" color="#fff" style="--sun:none"/>
+<rect x="1015" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#c" x="1028" y="258" width="80" height="80" color="#111" style="--sun:#3A5BF0"/>
+<use href="#c" x="1135" y="262" width="28" height="28" color="#111" style="--sun:none"/>
+<use href="#c" x="1141" y="306" width="16" height="16" color="#111" style="--sun:none"/>
+<text class="k" x="820" y="392">C</text><text class="n" x="856" y="392">Fajar</text><text class="d" x="820" y="416">matahari terbit dilubangkan dari ubin, langsung jadi ikon</text>
+
+<!-- D -->
+<use href="#d" x="1220" y="120" width="170" height="170" color="#111" style="--ac:#111"/>
+<rect x="1415" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#d" x="1450" y="125" width="95" height="95" color="#fff" style="--ac:#fff"/>
+<rect x="1415" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#d" x="1428" y="258" width="80" height="80" color="#111" style="--ac:#3A5BF0"/>
+<use href="#d" x="1535" y="262" width="28" height="28" color="#111" style="--ac:#111"/>
+<use href="#d" x="1541" y="306" width="16" height="16" color="#111" style="--ac:#111"/>
+<text class="k" x="1220" y="392">D</text><text class="n" x="1256" y="392">Irisan</text><text class="d" x="1220" y="416">lingkaran dan kotak saling tumpang</text>
+
+<!-- E -->
+<use href="#e" x="20" y="430" width="170" height="170" color="#111" style="--ac:#111"/>
+<rect x="215" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#e" x="250" y="435" width="95" height="95" color="#fff" style="--ac:#fff"/>
+<rect x="215" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#e" x="228" y="568" width="80" height="80" color="#111" style="--ac:#3A5BF0"/>
+<use href="#e" x="335" y="572" width="28" height="28" color="#111" style="--ac:#111"/>
+<use href="#e" x="341" y="616" width="16" height="16" color="#111" style="--ac:#111"/>
+<text class="k" x="20" y="702">E</text><text class="n" x="56" y="702">Belah</text><text class="d" x="20" y="726">lingkaran terbelah dua secara diagonal</text>
+
+<!-- F -->
+<use href="#f" x="420" y="430" width="170" height="170" color="#111"/>
+<rect x="615" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#f" x="650" y="435" width="95" height="95" color="#fff"/>
+<rect x="615" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#f" x="628" y="568" width="80" height="80" color="#111"/>
+<use href="#f" x="735" y="572" width="28" height="28" color="#111"/>
+<use href="#f" x="741" y="616" width="16" height="16" color="#111"/>
+<text class="k" x="420" y="702">F</text><text class="n" x="456" y="702">Cincin</text><text class="d" x="420" y="726">cincin tebal dengan lubang di pinggir</text>
+
+<!-- G -->
+<use href="#g" x="820" y="430" width="170" height="170" color="#111" style="--ac:#111"/>
+<rect x="1015" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#g" x="1050" y="435" width="95" height="95" color="#fff" style="--ac:#fff"/>
+<rect x="1015" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#g" x="1028" y="568" width="80" height="80" color="#111" style="--ac:#3A5BF0"/>
+<use href="#g" x="1135" y="572" width="28" height="28" color="#111" style="--ac:#111"/>
+<use href="#g" x="1141" y="616" width="16" height="16" color="#111" style="--ac:#111"/>
+<text class="k" x="820" y="702">G</text><text class="n" x="856" y="702">Gelembung titik</text><text class="d" x="820" y="726">kotak bulat dengan titik sebagai ekor</text>
+
+<!-- H -->
+<use href="#h" x="1220" y="430" width="170" height="170" color="#111" style="--ac:#111"/>
+<rect x="1415" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#h" x="1450" y="435" width="95" height="95" color="#fff" style="--ac:#fff"/>
+<rect x="1415" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#h" x="1428" y="568" width="80" height="80" color="#111" style="--ac:#3A5BF0"/>
+<use href="#h" x="1535" y="572" width="28" height="28" color="#111" style="--ac:#111"/>
+<use href="#h" x="1541" y="616" width="16" height="16" color="#111" style="--ac:#111"/>
+<text class="k" x="1220" y="702">H</text><text class="n" x="1256" y="702">Tiga sinar</text><text class="d" x="1220" y="726">titik cahaya dengan tiga garis sinar</text>
+</svg>

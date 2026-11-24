@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 136" width="1040" height="272" role="img" aria-label="Lumynoid — Lumen (Konsep 1) — lockup">
+<title>Lumynoid — Lumen (Konsep 1) — lockup</title>
+<defs></defs><g transform="translate(4 18) scale(1)">
+<defs>
+<radialGradient id="khalo"><stop offset="0" stop-color="#FFAE3C" stop-opacity=".6"/><stop offset=".52" stop-color="#FFA83A" stop-opacity=".2"/><stop offset="1" stop-color="#FFA63A" stop-opacity="0"/></radialGradient>
+<radialGradient id="klit" gradientUnits="userSpaceOnUse" cx="69" cy="34" r="84"><stop offset="0" stop-color="#4A5BF5"/><stop offset=".48" stop-color="#2A35B4"/><stop offset="1" stop-color="#141A62"/></radialGradient>
+<radialGradient id="korb" cx="36%" cy="30%" r="78%"><stop offset="0" stop-color="#FFFBEE"/><stop offset=".32" stop-color="#FFE071"/><stop offset=".72" stop-color="#FFAB3F"/><stop offset="1" stop-color="#F0792B"/></radialGradient>
+</defs>
+<circle cx="69" cy="34" r="30" fill="url(#khalo)"/>
+<path d="M16,26a13,13 0 0 1 26,0V55Q42,61 48,61H68a13,13 0 0 1 0,26H29a13,13 0 0 1-13,-13Z" fill="url(#klit)"/>
+<circle cx="69" cy="34" r="15" fill="url(#korb)"/></g>
+<g transform="translate(122 94) scale(1.18)"><g fill="none" stroke="#1B2478" stroke-width="7.8" stroke-linecap="round" stroke-linejoin="round">
+<path d="M0,-44V0 M21,-30V-12.5A12.5,12.5 0 0 0 46,-12.5V-30 M67,0V-17.5A12.5,12.5 0 0 1 92,-17.5V0 M92,-17.5A12.5,12.5 0 0 1 117,-17.5V0 M138,-30V-12.5A12.5,12.5 0 0 0 163,-12.5V-30 M163,0V16 M184,0V-17.5A12.5,12.5 0 0 1 209,-17.5V0 M277.8,0V-30 M327.6,-44V0"/>
+<circle cx="312.2" cy="-15" r="15.4"/>
+<circle cx="243.4" cy="-15" r="15.4"/>
+<circle cx="277.8" cy="-42.5" r="4.84" fill="#1B2478" stroke="none"/>
+</g></g>
+</svg>

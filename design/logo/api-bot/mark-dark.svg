@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="12.8 4.0 74.4 93.6" width="372" height="468" role="img" aria-label="Lumynoid">
+<!-- Lumynoid mark. Colors follow the landing page tokens: flame = dark/signal (#ff5c9a), visor = text (light) / on-signal (dark), eyes = on-signal. -->
+<path d="M50,6C37.2,25.2 14.8,34.8 14.8,60.4A35.2,35.2 0 0 0 85.2,60.4C85.2,44.4 75.6,38 69.2,25.2C66,38 56.4,41.2 56.4,31.6C56.4,23.6 56.4,15.6 50,6Z" fill="#ff5c9a"/><path d="M40,60H60A10,10 0 0 1 60,80H40A10,10 0 0 1 40,60Z" fill="#2a0012"/><path d="M43,63A3,3 0 0 1 46,66V74A3,3 0 0 1 40,74V66A3,3 0 0 1 43,63Z" fill="#ffffff"/><path d="M57,63A3,3 0 0 1 60,66V74A3,3 0 0 1 54,74V66A3,3 0 0 1 57,63Z" fill="#ffffff"/>
+</svg>

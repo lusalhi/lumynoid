@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 551 136" width="1102" height="272" role="img" aria-label="Lumynoid — Lumyn (Konsep 2) — lockup">
+<title>Lumynoid — Lumyn (Konsep 2) — lockup</title>
+<defs></defs><g transform="translate(-7 -12) scale(1.4)">
+<defs>
+<radialGradient id="kglow"><stop offset="0" stop-color="#4DF5B5" stop-opacity=".8"/><stop offset=".5" stop-color="#4DF5B5" stop-opacity=".32"/><stop offset="1" stop-color="#4DF5B5" stop-opacity="0"/></radialGradient>
+<linearGradient id="khead" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C6E8DB"/></linearGradient>
+<linearGradient id="kear" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#DDF2EA"/><stop offset="1" stop-color="#93C9B9"/></linearGradient>
+<linearGradient id="kvisor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0C262B"/><stop offset="1" stop-color="#05171A"/></linearGradient>
+<radialGradient id="kbulb" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#E9FFF5"/><stop offset=".5" stop-color="#6BFBC5"/><stop offset="1" stop-color="#22D995"/></radialGradient>
+<clipPath id="kvc"><path d="M36,49H64A13,13 0 0 1 64,75H36A13,13 0 0 1 36,49Z"/></clipPath>
+</defs>
+<circle cx="50" cy="15" r="19" fill="url(#kglow)"/>
+<rect x="7" y="49" width="9" height="26" rx="4.5" fill="url(#kear)" />
+<rect x="84" y="49" width="9" height="26" rx="4.5" fill="url(#kear)" />
+<rect x="47.5" y="21" width="5" height="15" rx="2.5" fill="url(#kear)"/>
+<path d="M88,62C88,78.32 85.86,81.77 81.34,85.1C76.83,88.42 72.15,90 50,90C27.85,90 23.17,88.42 18.66,85.1C14.14,81.77 12,78.32 12,62C12,45.68 14.14,42.23 18.66,38.9C23.17,35.58 27.85,34 50,34C72.15,34 76.83,35.58 81.34,38.9C85.86,42.23 88,45.68 88,62Z" fill="url(#khead)" />
+<path d="M36,49H64A13,13 0 0 1 64,75H36A13,13 0 0 1 36,49Z" fill="url(#kvisor)"/>
+<g clip-path="url(#kvc)">
+<circle cx="39" cy="62" r="17" fill="url(#kglow)"/>
+<circle cx="61" cy="62" r="17" fill="url(#kglow)"/>
+</g>
+<rect x="34" y="54.5" width="10" height="15" rx="5" fill="#5BFBC1"/>
+<rect x="56" y="54.5" width="10" height="15" rx="5" fill="#5BFBC1"/>
+<circle cx="50" cy="15" r="7" fill="url(#kbulb)"/></g>
+<g transform="translate(153.2 94) scale(1.18)"><g fill="none" stroke="#08332F" stroke-width="8.6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M0,-44V0 M21,-30V-12.5A12.5,12.5 0 0 0 46,-12.5V-30 M67,0V-17.5A12.5,12.5 0 0 1 92,-17.5V0 M92,-17.5A12.5,12.5 0 0 1 117,-17.5V0 M138,-30V-12.5A12.5,12.5 0 0 0 163,-12.5V-30 M163,0V16 M184,0V-17.5A12.5,12.5 0 0 1 209,-17.5V0 M277.8,0V-30 M327.6,-44V0"/>
+<circle cx="312.2" cy="-15" r="15.4"/>
+<circle cx="243.4" cy="-15" r="15.4"/>
+<circle cx="277.8" cy="-42.5" r="5.33" fill="#08332F" stroke="none"/>
+</g></g>
+</svg>

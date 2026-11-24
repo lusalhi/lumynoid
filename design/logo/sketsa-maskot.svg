@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="740" viewBox="0 0 1600 740">
+<title>Lumynoid — sketsa maskot flat</title>
+<defs>
+<symbol id="a" viewBox="0 0 100 100"><g fill="currentColor">
+<rect x="4" y="52" width="10" height="18" rx="5"/>
+<rect x="86" y="52" width="10" height="18" rx="5"/>
+<rect x="47.5" y="16" width="5" height="18" rx="2.5"/>
+<circle cx="50" cy="13" r="7" fill="var(--ac)"/>
+<rect x="12" y="30" width="76" height="60" rx="22"/>
+<rect x="24" y="50" width="52" height="20" rx="10" fill="var(--bg)"/>
+<rect x="36" y="54" width="8" height="12" rx="4" fill="var(--ac)"/>
+<rect x="56" y="54" width="8" height="12" rx="4" fill="var(--ac)"/>
+</g></symbol>
+<symbol id="b" viewBox="0 0 100 100"><g fill="currentColor">
+<circle cx="50" cy="40" r="30" fill="var(--ac)"/>
+<rect x="38" y="52" width="24" height="26" fill="var(--ac)"/>
+<rect x="34" y="80" width="32" height="6" rx="3"/>
+<rect x="38" y="89" width="24" height="6" rx="3"/>
+<circle cx="40" cy="38" r="6" fill="var(--bg)"/>
+<circle cx="60" cy="38" r="6" fill="var(--bg)"/>
+<path d="M40,50Q50,60 60,50" fill="none" stroke="var(--bg)" stroke-width="5" stroke-linecap="round"/>
+</g></symbol>
+<symbol id="c" viewBox="0 0 100 100"><g fill="currentColor">
+<ellipse cx="54" cy="34" rx="22" ry="9" transform="rotate(-22 54 34)"/>
+<path d="M18,45Q12,36 8,34M24,44Q22,32 20,28" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+<ellipse cx="46" cy="58" rx="24" ry="15"/>
+<circle cx="72" cy="62" r="14" fill="var(--ac)"/>
+<circle cx="24" cy="54" r="11"/>
+<circle cx="21" cy="51" r="2.5" fill="var(--bg)"/>
+</g></symbol>
+<symbol id="d" viewBox="0 0 100 100"><g fill="currentColor">
+<rect x="12" y="10" width="76" height="68" rx="24"/>
+<circle cx="22" cy="86" r="9" fill="var(--ac)"/>
+<rect x="36" y="30" width="9" height="20" rx="4.5" fill="var(--bg)"/>
+<rect x="55" y="30" width="9" height="20" rx="4.5" fill="var(--bg)"/>
+</g></symbol>
+<symbol id="e" viewBox="0 0 100 100"><g fill="currentColor">
+<path d="M20,34L20,8L44,20Z"/>
+<path d="M80,34L80,8L56,20Z"/>
+<rect x="16" y="20" width="68" height="70" rx="30"/>
+<circle cx="36" cy="48" r="13" fill="var(--bg)"/>
+<circle cx="64" cy="48" r="13" fill="var(--bg)"/>
+<circle cx="36" cy="48" r="6" fill="var(--ac)"/>
+<circle cx="64" cy="48" r="6" fill="var(--ac)"/>
+<path d="M44,60L56,60L50,70Z" fill="var(--bg)"/>
+</g></symbol>
+<symbol id="f" viewBox="0 0 100 100"><g fill="currentColor">
+<rect x="47.5" y="14" width="5" height="18" rx="2.5"/>
+<circle cx="50" cy="11" r="6.5" fill="var(--ac)"/>
+<ellipse cx="50" cy="60" rx="36" ry="32"/>
+<circle cx="40" cy="56" r="6" fill="var(--bg)"/>
+<circle cx="60" cy="56" r="6" fill="var(--bg)"/>
+<path d="M43,68Q50,75 57,68" fill="none" stroke="var(--bg)" stroke-width="4.5" stroke-linecap="round"/>
+</g></symbol>
+<symbol id="g" viewBox="0 0 100 100"><g fill="currentColor">
+<rect x="48" y="4" width="4" height="12" rx="2"/>
+<circle cx="50" cy="5" r="5" fill="var(--ac)"/>
+<rect x="20" y="14" width="60" height="42" rx="18"/>
+<rect x="30" y="25" width="40" height="20" rx="10" fill="var(--bg)"/>
+<rect x="39" y="29" width="7" height="12" rx="3.5" fill="var(--ac)"/>
+<rect x="54" y="29" width="7" height="12" rx="3.5" fill="var(--ac)"/>
+<rect x="42" y="54" width="16" height="6"/>
+<rect x="28" y="58" width="44" height="36" rx="14"/>
+<rect x="18" y="64" width="9" height="20" rx="4.5"/>
+<rect x="73" y="64" width="9" height="20" rx="4.5"/>
+<circle cx="50" cy="76" r="6" fill="var(--ac)"/>
+</g></symbol>
+<symbol id="h" viewBox="0 0 100 100"><g fill="currentColor">
+<path d="M85,52L95,52M74.75,76.75L81.82,83.82M50,87L50,97M25.25,76.75L18.18,83.82M15,52L5,52M25.25,27.25L18.18,20.18M50,17L50,7M74.75,27.25L81.82,20.18" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
+<circle cx="50" cy="52" r="28" fill="var(--ac)"/>
+<circle cx="41" cy="48" r="4.5" fill="var(--bg)"/>
+<circle cx="59" cy="48" r="4.5" fill="var(--bg)"/>
+<path d="M41,58Q50,67 59,58" fill="none" stroke="var(--bg)" stroke-width="4.5" stroke-linecap="round"/>
+</g></symbol>
+</defs>
+<style>
+text{font-family:"Segoe UI",system-ui,sans-serif}
+.t{font-size:30px;font-weight:600;fill:#111}
+.s{font-size:16px;fill:#555}
+.k{font-size:26px;font-weight:600;fill:#111}
+.n{font-size:17px;fill:#333}
+.d{font-size:14px;fill:#777}
+</style>
+<rect width="1600" height="740" fill="#fff"/>
+<text class="t" x="40" y="50">Lumynoid — sketsa maskot flat</text>
+<text class="s" x="40" y="76">Hitam = warna utama, biru = warna aksen (contoh). Tiap sel: bentuk besar, versi putih di ubin gelap, versi dua warna, lalu 28 px dan 16 px.</text>
+<g stroke="#E6E8EE"><path d="M0,90H1600M0,400H1600M400,90V740M800,90V740M1200,90V740"/></g>
+
+<use href="#a" x="20" y="120" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="215" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#a" x="250" y="125" width="95" height="95" color="#fff" style="--ac:#3A5BF0;--bg:#111"/>
+<rect x="215" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#a" x="228" y="258" width="80" height="80" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#a" x="335" y="262" width="28" height="28" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#a" x="341" y="306" width="16" height="16" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<text class="k" x="20" y="392">A</text><text class="n" x="56" y="392">Visor bot</text><text class="d" x="20" y="416">kepala kotak, satu visor, dua mata</text>
+
+<use href="#b" x="420" y="120" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="615" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#b" x="650" y="125" width="95" height="95" color="#fff" style="--ac:#3A5BF0;--bg:#111"/>
+<rect x="615" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#b" x="628" y="258" width="80" height="80" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#b" x="735" y="262" width="28" height="28" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#b" x="741" y="306" width="16" height="16" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<text class="k" x="420" y="392">B</text><text class="n" x="456" y="392">Bohlam</text><text class="d" x="420" y="416">karakter bohlam dengan wajah tersenyum</text>
+
+<use href="#c" x="820" y="120" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="1015" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#c" x="1050" y="125" width="95" height="95" color="#fff" style="--ac:#3A5BF0;--bg:#111"/>
+<rect x="1015" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#c" x="1028" y="258" width="80" height="80" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#c" x="1135" y="262" width="28" height="28" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#c" x="1141" y="306" width="16" height="16" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<text class="k" x="820" y="392">C</text><text class="n" x="856" y="392">Kunang</text><text class="d" x="820" y="416">kunang-kunang dengan ekor bercahaya</text>
+
+<use href="#d" x="1220" y="120" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="1415" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#d" x="1450" y="125" width="95" height="95" color="#fff" style="--ac:#3A5BF0;--bg:#111"/>
+<rect x="1415" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#d" x="1428" y="258" width="80" height="80" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#d" x="1535" y="262" width="28" height="28" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#d" x="1541" y="306" width="16" height="16" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<text class="k" x="1220" y="392">D</text><text class="n" x="1256" y="392">Gelembung hidup</text><text class="d" x="1220" y="416">gelembung chat sebagai kepala</text>
+
+<use href="#e" x="20" y="430" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="215" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#e" x="250" y="435" width="95" height="95" color="#fff" style="--ac:#3A5BF0;--bg:#111"/>
+<rect x="215" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#e" x="228" y="568" width="80" height="80" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#e" x="335" y="572" width="28" height="28" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#e" x="341" y="616" width="16" height="16" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<text class="k" x="20" y="702">E</text><text class="n" x="56" y="702">Burung hantu</text><text class="d" x="20" y="726">burung hantu geometris dengan mata besar</text>
+
+<use href="#f" x="420" y="430" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="615" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#f" x="650" y="435" width="95" height="95" color="#fff" style="--ac:#3A5BF0;--bg:#111"/>
+<rect x="615" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#f" x="628" y="568" width="80" height="80" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#f" x="735" y="572" width="28" height="28" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#f" x="741" y="616" width="16" height="16" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<text class="k" x="420" y="702">F</text><text class="n" x="456" y="702">Bulet</text><text class="d" x="420" y="726">makhluk bulat dengan antena kecil</text>
+
+<use href="#g" x="820" y="430" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="1015" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#g" x="1050" y="435" width="95" height="95" color="#fff" style="--ac:#3A5BF0;--bg:#111"/>
+<rect x="1015" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#g" x="1028" y="568" width="80" height="80" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#g" x="1135" y="572" width="28" height="28" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#g" x="1141" y="616" width="16" height="16" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<text class="k" x="820" y="702">G</text><text class="n" x="856" y="702">Bot kecil</text><text class="d" x="820" y="726">robot dengan kepala, badan, dan tangan</text>
+
+<use href="#h" x="1220" y="430" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="1415" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#h" x="1450" y="435" width="95" height="95" color="#fff" style="--ac:#3A5BF0;--bg:#111"/>
+<rect x="1415" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#h" x="1428" y="568" width="80" height="80" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#h" x="1535" y="572" width="28" height="28" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<use href="#h" x="1541" y="616" width="16" height="16" color="#111" style="--ac:#3A5BF0;--bg:#fff"/>
+<text class="k" x="1220" y="702">H</text><text class="n" x="1256" y="702">Matahari</text><text class="d" x="1220" y="726">matahari dengan wajah ceria</text>
+</svg>

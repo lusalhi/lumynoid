@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 347.1 86" width="694.2" height="172" role="img" aria-label="Lumynoid — Orbit (Konsep 3) — wordmark untuk latar gelap">
+<title>Lumynoid — Orbit (Konsep 3) — wordmark untuk latar gelap</title>
+<defs><radialGradient id="po" cx="34%" cy="28%" r="86%"><stop offset="0" stop-color="#FFF0D2"/><stop offset=".3" stop-color="#FFB67E"/><stop offset=".68" stop-color="#FF6F78"/><stop offset="1" stop-color="#E23F86"/></radialGradient></defs><g transform="translate(8 56)"><g fill="none" stroke="#FFF4EA" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+<path d="M0,-44V0 M21,-30V-12.5A12.5,12.5 0 0 0 46,-12.5V-30 M67,0V-17.5A12.5,12.5 0 0 1 92,-17.5V0 M92,-17.5A12.5,12.5 0 0 1 117,-17.5V0 M138,-30V-12.5A12.5,12.5 0 0 0 163,-12.5V-30 M163,0V16 M184,0V-17.5A12.5,12.5 0 0 1 209,-17.5V0 M277.8,0V-30 M327.6,-44V0"/>
+<circle cx="312.2" cy="-15" r="15.4"/>
+<path d="M-23.2,0A23.2,6.6 0 0 1 23.2,0" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#8E6CF5" transform="translate(243.4 -15) rotate(-22)"/>
+<circle cx="243.4" cy="-15" r="14.8" fill="url(#po)"/>
+<path d="M-23.2,0A23.2,6.6 0 0 0 23.2,0" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#DCCFFF" transform="translate(243.4 -15) rotate(-22)"/>
+<circle cx="277.8" cy="-42.5" r="4.34" fill="#FFF4EA" stroke="none"/>
+</g></g>
+</svg>

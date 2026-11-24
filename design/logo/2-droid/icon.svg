@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512" role="img" aria-label="Lumynoid — Lumyn (Konsep 2) — ikon aplikasi">
+<title>Lumynoid — Lumyn (Konsep 2) — ikon aplikasi</title>
+
+<defs><radialGradient id="ibg" cx=".5" cy=".38" r=".8"><stop offset="0" stop-color="#0F4E46"/><stop offset=".6" stop-color="#07312E"/><stop offset="1" stop-color="#031B1D"/></radialGradient><clipPath id="imask"><path d="M90,54C90,80.81 88.56,82.12 85.34,85.34C82.12,88.56 80.81,90 54,90C27.19,90 25.88,88.56 22.66,85.34C19.44,82.12 18,80.81 18,54C18,27.19 19.44,25.88 22.66,22.66C25.88,19.44 27.19,18 54,18C80.81,18 82.12,19.44 85.34,22.66C88.56,25.88 90,27.19 90,54Z"/></clipPath></defs>
+<g clip-path="url(#imask)"><rect width="108" height="108" fill="url(#ibg)"/><g transform="translate(19 19) scale(0.7)">
+<defs>
+<radialGradient id="iglow"><stop offset="0" stop-color="#4DF5B5" stop-opacity=".8"/><stop offset=".5" stop-color="#4DF5B5" stop-opacity=".32"/><stop offset="1" stop-color="#4DF5B5" stop-opacity="0"/></radialGradient>
+<linearGradient id="ihead" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C6E8DB"/></linearGradient>
+<linearGradient id="iear" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#DDF2EA"/><stop offset="1" stop-color="#93C9B9"/></linearGradient>
+<linearGradient id="ivisor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0C262B"/><stop offset="1" stop-color="#05171A"/></linearGradient>
+<radialGradient id="ibulb" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#E9FFF5"/><stop offset=".5" stop-color="#6BFBC5"/><stop offset="1" stop-color="#22D995"/></radialGradient>
+<clipPath id="ivc"><path d="M36,49H64A13,13 0 0 1 64,75H36A13,13 0 0 1 36,49Z"/></clipPath>
+</defs>
+<circle cx="50" cy="15" r="19" fill="url(#iglow)"/>
+<rect x="7" y="49" width="9" height="26" rx="4.5" fill="url(#iear)" stroke="#7FB8A7" stroke-width="1.3"/>
+<rect x="84" y="49" width="9" height="26" rx="4.5" fill="url(#iear)" stroke="#7FB8A7" stroke-width="1.3"/>
+<rect x="47.5" y="21" width="5" height="15" rx="2.5" fill="url(#iear)"/>
+<path d="M88,62C88,78.32 85.86,81.77 81.34,85.1C76.83,88.42 72.15,90 50,90C27.85,90 23.17,88.42 18.66,85.1C14.14,81.77 12,78.32 12,62C12,45.68 14.14,42.23 18.66,38.9C23.17,35.58 27.85,34 50,34C72.15,34 76.83,35.58 81.34,38.9C85.86,42.23 88,45.68 88,62Z" fill="url(#ihead)" stroke="#7FB8A7" stroke-width="1.3"/>
+<path d="M36,49H64A13,13 0 0 1 64,75H36A13,13 0 0 1 36,49Z" fill="url(#ivisor)"/>
+<g clip-path="url(#ivc)">
+<circle cx="39" cy="62" r="17" fill="url(#iglow)"/>
+<circle cx="61" cy="62" r="17" fill="url(#iglow)"/>
+</g>
+<rect x="34" y="54.5" width="10" height="15" rx="5" fill="#5BFBC1"/>
+<rect x="56" y="54.5" width="10" height="15" rx="5" fill="#5BFBC1"/>
+<circle cx="50" cy="15" r="7" fill="url(#ibulb)"/></g></g><path d="M90,54C90,80.81 88.56,82.12 85.34,85.34C82.12,88.56 80.81,90 54,90C27.19,90 25.88,88.56 22.66,85.34C19.44,82.12 18,80.81 18,54C18,27.19 19.44,25.88 22.66,22.66C25.88,19.44 27.19,18 54,18C80.81,18 82.12,19.44 85.34,22.66C88.56,25.88 90,27.19 90,54Z" fill="none" stroke="#FFFFFF" stroke-opacity=".1" stroke-width="1.2"/>
+</svg>

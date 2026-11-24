@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="740" viewBox="0 0 1600 740">
+<title>Lumynoid — sketsa robot api flat</title>
+<defs>
+<g id="flame">
+<path fill="var(--ac)" d="M50,46C42,58 28,64 28,80A22,22 0 0 0 72,80C72,70 66,66 62,58C60,66 54,68 54,62C54,57 54,52 50,46Z"/>
+<path fill="var(--bg)" d="M50,70C45,76 40,78 40,84A10,10 0 0 0 60,84C60,78 55,76 50,70Z"/>
+</g>
+<symbol id="a" viewBox="0 0 100 100"><g fill="currentColor">
+<use href="#flame" transform="translate(12.5,-27) scale(0.75)"/>
+<rect x="6" y="60" width="9" height="16" rx="4.5"/>
+<rect x="85" y="60" width="9" height="16" rx="4.5"/>
+<rect x="14" y="38" width="72" height="56" rx="22"/>
+<rect x="26" y="54" width="48" height="24" rx="12" fill="var(--bg)"/>
+<rect x="38" y="58" width="8" height="16" rx="4" fill="var(--ac)"/>
+<rect x="54" y="58" width="8" height="16" rx="4" fill="var(--ac)"/>
+</g></symbol>
+<symbol id="b" viewBox="0 0 100 100"><g fill="currentColor">
+<use href="#flame" transform="translate(10,-28.8) scale(0.8)"/>
+<rect x="24" y="44" width="52" height="52" rx="20"/>
+<circle cx="40" cy="70" r="6" fill="var(--bg)"/>
+<circle cx="60" cy="70" r="6" fill="var(--bg)"/>
+<path d="M41,80Q50,88 59,80" fill="none" stroke="var(--bg)" stroke-width="4.5" stroke-linecap="round"/>
+</g></symbol>
+<symbol id="c" viewBox="0 0 100 100"><g>
+<use href="#flame" transform="translate(-30,-67.6) scale(1.6)"/>
+<rect x="30" y="60" width="40" height="20" rx="10" fill="var(--bg)"/>
+<rect x="40" y="63" width="6" height="14" rx="3" fill="currentColor"/>
+<rect x="54" y="63" width="6" height="14" rx="3" fill="currentColor"/>
+</g></symbol>
+<symbol id="d" viewBox="0 0 100 100"><g fill="currentColor">
+<rect x="42" y="50" width="16" height="10"/>
+<rect x="8" y="64" width="9" height="22" rx="4.5"/>
+<rect x="83" y="64" width="9" height="22" rx="4.5"/>
+<rect x="22" y="14" width="56" height="38" rx="16"/>
+<rect x="30" y="24" width="40" height="18" rx="9" fill="var(--bg)"/>
+<rect x="40" y="27" width="6" height="12" rx="3" fill="var(--ac)"/>
+<rect x="54" y="27" width="6" height="12" rx="3" fill="var(--ac)"/>
+<rect x="18" y="58" width="64" height="40" rx="16"/>
+<circle cx="50" cy="78" r="15" fill="var(--bg)"/>
+<use href="#flame" transform="translate(30,47.6) scale(0.4)"/>
+</g></symbol>
+<symbol id="e" viewBox="0 0 100 100"><g fill="currentColor">
+<use href="#flame" transform="translate(16,-29.3) scale(0.68)"/>
+<rect x="44" y="70" width="12" height="28" rx="6"/>
+<circle cx="50" cy="56" r="20"/>
+<circle cx="43" cy="52" r="4.5" fill="var(--bg)"/>
+<circle cx="57" cy="52" r="4.5" fill="var(--bg)"/>
+<path d="M45,62Q50,67 55,62" fill="none" stroke="var(--bg)" stroke-width="3.5" stroke-linecap="round"/>
+</g></symbol>
+<symbol id="f" viewBox="0 0 100 100"><g fill="currentColor">
+<use href="#flame" transform="translate(60.1,37.1) rotate(40) scale(0.8) translate(-50,-102)"/>
+<circle cx="44" cy="60" r="28"/>
+<circle cx="35" cy="56" r="6" fill="var(--bg)"/>
+<circle cx="53" cy="56" r="6" fill="var(--bg)"/>
+<path d="M36,68Q44,75 52,68" fill="none" stroke="var(--bg)" stroke-width="4.5" stroke-linecap="round"/>
+</g></symbol>
+<symbol id="g" viewBox="0 0 100 100"><g fill="currentColor">
+<use href="#flame" transform="translate(25,-17) scale(0.5)"/>
+<rect x="48.5" y="30" width="3" height="14" rx="1.5"/>
+<rect x="14" y="40" width="72" height="56" rx="22"/>
+<rect x="36" y="58" width="8" height="16" rx="4" fill="var(--bg)"/>
+<rect x="56" y="58" width="8" height="16" rx="4" fill="var(--bg)"/>
+</g></symbol>
+<symbol id="h" viewBox="0 0 100 100"><g>
+<use href="#flame" transform="translate(-30,-67.6) scale(1.6)"/>
+<circle cx="42" cy="74" r="5" fill="var(--bg)"/>
+<circle cx="58" cy="74" r="5" fill="var(--bg)"/>
+<path d="M43,84Q50,91 57,84" fill="none" stroke="var(--bg)" stroke-width="4" stroke-linecap="round"/>
+</g></symbol>
+</defs>
+<style>
+text{font-family:"Segoe UI",system-ui,sans-serif}
+.t{font-size:30px;font-weight:600;fill:#111}
+.s{font-size:16px;fill:#555}
+.k{font-size:26px;font-weight:600;fill:#111}
+.n{font-size:17px;fill:#333}
+.d{font-size:14px;fill:#777}
+</style>
+<rect width="1600" height="740" fill="#fff"/>
+<text class="t" x="40" y="50">Lumynoid — sketsa robot api flat</text>
+<text class="s" x="40" y="76">Hitam = badan robot, oranye = api. Tiap sel: bentuk besar dalam satu warna, versi di ubin gelap, versi dua warna, lalu 28 px dan 16 px.</text>
+<g stroke="#E6E8EE"><path d="M0,90H1600M0,400H1600M400,90V740M800,90V740M1200,90V740"/></g>
+
+<use href="#a" x="20" y="120" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="215" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#a" x="250" y="125" width="95" height="95" color="#fff" style="--ac:#F26B1D;--bg:#111"/>
+<rect x="215" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#a" x="228" y="258" width="80" height="80" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#a" x="335" y="262" width="28" height="28" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#a" x="341" y="306" width="16" height="16" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<text class="k" x="20" y="392">A</text><text class="n" x="56" y="392">Kepala api</text><text class="d" x="20" y="416">kepala robot bervisor, dengan api di atasnya</text>
+
+<use href="#b" x="420" y="120" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="615" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#b" x="650" y="125" width="95" height="95" color="#fff" style="--ac:#F26B1D;--bg:#111"/>
+<rect x="615" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#b" x="628" y="258" width="80" height="80" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#b" x="735" y="262" width="28" height="28" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#b" x="741" y="306" width="16" height="16" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<text class="k" x="420" y="392">B</text><text class="n" x="456" y="392">Badan api</text><text class="d" x="420" y="416">badan kapsul bermata dua, seperti lilin menyala</text>
+
+<use href="#c" x="820" y="120" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="1015" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#c" x="1050" y="125" width="95" height="95" color="#fff" style="--ac:#F26B1D;--bg:#111"/>
+<rect x="1015" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#c" x="1028" y="258" width="80" height="80" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#c" x="1135" y="262" width="28" height="28" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#c" x="1141" y="306" width="16" height="16" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<text class="k" x="820" y="392">C</text><text class="n" x="856" y="392">Api-bot</text><text class="d" x="820" y="416">seluruh kepala berbentuk api, bermuka visor</text>
+
+<use href="#d" x="1220" y="120" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="1415" y="110" width="165" height="125" rx="16" fill="#111"/>
+<use href="#d" x="1450" y="125" width="95" height="95" color="#fff" style="--ac:#F26B1D;--bg:#111"/>
+<rect x="1415" y="250" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#d" x="1428" y="258" width="80" height="80" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#d" x="1535" y="262" width="28" height="28" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#d" x="1541" y="306" width="16" height="16" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<text class="k" x="1220" y="392">D</text><text class="n" x="1256" y="392">Tungku</text><text class="d" x="1220" y="416">robot dengan jendela api di perutnya</text>
+
+<use href="#e" x="20" y="430" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="215" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#e" x="250" y="435" width="95" height="95" color="#fff" style="--ac:#F26B1D;--bg:#111"/>
+<rect x="215" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#e" x="228" y="568" width="80" height="80" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#e" x="335" y="572" width="28" height="28" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#e" x="341" y="616" width="16" height="16" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<text class="k" x="20" y="702">E</text><text class="n" x="56" y="702">Korek</text><text class="d" x="20" y="726">robot seperti batang korek api</text>
+
+<use href="#f" x="420" y="430" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="615" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#f" x="650" y="435" width="95" height="95" color="#fff" style="--ac:#F26B1D;--bg:#111"/>
+<rect x="615" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#f" x="628" y="568" width="80" height="80" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#f" x="735" y="572" width="28" height="28" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#f" x="741" y="616" width="16" height="16" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<text class="k" x="420" y="702">F</text><text class="n" x="456" y="702">Ekor api</text><text class="d" x="420" y="726">kepala bulat dengan api menyamping ke atas</text>
+
+<use href="#g" x="820" y="430" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="1015" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#g" x="1050" y="435" width="95" height="95" color="#fff" style="--ac:#F26B1D;--bg:#111"/>
+<rect x="1015" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#g" x="1028" y="568" width="80" height="80" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#g" x="1135" y="572" width="28" height="28" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#g" x="1141" y="616" width="16" height="16" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<text class="k" x="820" y="702">G</text><text class="n" x="856" y="702">Antena api</text><text class="d" x="820" y="726">api kecil di ujung antena</text>
+
+<use href="#h" x="1220" y="430" width="170" height="170" color="#111" style="--ac:#111;--bg:#fff"/>
+<rect x="1415" y="420" width="165" height="125" rx="16" fill="#111"/>
+<use href="#h" x="1450" y="435" width="95" height="95" color="#fff" style="--ac:#F26B1D;--bg:#111"/>
+<rect x="1415" y="560" width="165" height="96" rx="16" fill="#F3F4F8"/>
+<use href="#h" x="1428" y="568" width="80" height="80" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#h" x="1535" y="572" width="28" height="28" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<use href="#h" x="1541" y="616" width="16" height="16" color="#111" style="--ac:#F26B1D;--bg:#fff"/>
+<text class="k" x="1220" y="702">H</text><text class="n" x="1256" y="702">Api senyum</text><text class="d" x="1220" y="726">api polos bermata dua, tanpa bagian robot</text>
+</svg>

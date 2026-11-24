@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" role="img" aria-label="Lumynoid — Orbit (Konsep 3)">
+<title>Lumynoid — Orbit (Konsep 3)</title>
+
+<defs>
+<radialGradient id="mhalo"><stop offset="0" stop-color="#FF7A59" stop-opacity=".48"/><stop offset=".55" stop-color="#FF5F9E" stop-opacity=".16"/><stop offset="1" stop-color="#FF5FA8" stop-opacity="0"/></radialGradient>
+<radialGradient id="morb" cx="34%" cy="28%" r="86%"><stop offset="0" stop-color="#FFF6E4"/><stop offset=".28" stop-color="#FFC98C"/><stop offset=".64" stop-color="#FF7E6A"/><stop offset="1" stop-color="#E6417F"/></radialGradient>
+</defs>
+<circle cx="50" cy="50" r="50" fill="url(#mhalo)"/>
+<path d="M-44,0A44,13.5 0 0 1 44,0" fill="none" stroke-width="7.5" stroke-linecap="round" stroke="#A98BFF" transform="translate(50 50) rotate(-22)"/>
+<circle cx="50" cy="50" r="31" fill="url(#morb)"/>
+<path d="M-44,0A44,13.5 0 0 0 44,0" fill="none" stroke-width="7.5" stroke-linecap="round" stroke="#E6D9FF" transform="translate(50 50) rotate(-22)"/>
+</svg>

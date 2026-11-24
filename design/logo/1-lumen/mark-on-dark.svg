@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" role="img" aria-label="Lumynoid — Lumen (Konsep 1), untuk latar gelap">
+<title>Lumynoid — Lumen (Konsep 1), untuk latar gelap</title>
+
+<defs>
+<radialGradient id="mhalo"><stop offset="0" stop-color="#FFAE3C" stop-opacity=".6"/><stop offset=".52" stop-color="#FFA83A" stop-opacity=".2"/><stop offset="1" stop-color="#FFA63A" stop-opacity="0"/></radialGradient>
+<radialGradient id="mlit" gradientUnits="userSpaceOnUse" cx="69" cy="34" r="84"><stop offset="0" stop-color="#D5DBFF"/><stop offset=".48" stop-color="#8DA2FF"/><stop offset="1" stop-color="#5E7CFF"/></radialGradient>
+<radialGradient id="morb" cx="36%" cy="30%" r="78%"><stop offset="0" stop-color="#FFFBEE"/><stop offset=".32" stop-color="#FFE071"/><stop offset=".72" stop-color="#FFAB3F"/><stop offset="1" stop-color="#F0792B"/></radialGradient>
+</defs>
+<circle cx="69" cy="34" r="30" fill="url(#mhalo)"/>
+<path d="M16,26a13,13 0 0 1 26,0V55Q42,61 48,61H68a13,13 0 0 1 0,26H29a13,13 0 0 1-13,-13Z" fill="url(#mlit)"/>
+<circle cx="69" cy="34" r="15" fill="url(#morb)"/>
+</svg>
